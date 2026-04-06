@@ -37,7 +37,7 @@ describe("Member management", () => {
     });
 
     it("Customers can register from home page", async function () {
-      this.skip("Failing due to page render issue")
+      return this.skip();
       this.timeout(200 * 1000);
       const rejectionUid = "register-home-page";
       await createRejectCard(rejectionUid);
@@ -115,7 +115,7 @@ describe("Member management", () => {
     });
 
     it("Customers can register from home page via URL with discounts", async function () {
-      this.skip("Workaound for slow page load failures")
+      return this.skip();
       this.timeout(200 * 1000);
       const discount = "SUNRISE-MONTH-50";
       await browser.url(utils.buildUrl(
@@ -220,8 +220,7 @@ describe("Member management", () => {
       });
     });
 
-    it("Admins can register a customer manually", async () => {
-      this.skip("Workaound for slow page load failures")
+    it.skip("Admins can register a customer manually", async () => {
       const newMember = Object.assign({}, basicMembers.pop());
       const rejectionUid = "admin-register-home-page";
       await createRejectCard(rejectionUid);

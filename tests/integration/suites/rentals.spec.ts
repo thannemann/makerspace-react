@@ -21,8 +21,7 @@ describe("Rentals", () => {
     return browser.deleteAllCookies();
   });
   
-  it("Admins can CRUD rentals", async () => {
-    this.skip("Page load delays trigger failures")
+  it.skip("Admins can CRUD rentals", async () => {
     // Login
     await auth.goToLogin();
     await auth.signInUser(getAdminUserLogin());
