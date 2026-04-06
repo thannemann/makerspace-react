@@ -35,7 +35,7 @@ describe("Membership", () => {
   });
 
   it("Members can create a membership, change payment methods and cancel their membership", async () => {
-    pending("Page load delays trigger failures")
+    this.skip("Page load delays trigger failures")
     await auth.goToLogin();
     await auth.signInUser(getBasicUserLogin());
     await header.navigateTo(header.links.settings);
@@ -141,7 +141,7 @@ describe("Membership", () => {
   });
 
   it("Members can cancel a membership and sign back up", async () => {
-    pending("Page load delays trigger failures")
+    this.skip("Page load delays trigger failures")
     const rejectionUid = "member-sign-back-up";
     await createRejectCard(rejectionUid);
     const newMember = buildTestMember("cancel-sign-up");
@@ -275,7 +275,7 @@ describe("Membership", () => {
   });
 
   it("Members can sign up after cancelling a Braintree membership via Braintree", async () => {
-    pending("Page load delays trigger failures")
+    this.skip("Page load delays trigger failures")
     const rejectionUid = "braintree-member-sign-back-up";
     await createRejectCard(rejectionUid);
     const newMember = buildTestMember("braintree-cancel-sign-up");
@@ -382,7 +382,7 @@ describe("Membership", () => {
   });
 
   it("Members can sign up after canceling a PayPal membership via PayPal", async () => {
-    pending("Unknown Paypal membership issue in rendered page")
+    this.skip("Unknown Paypal membership issue in rendered page")
     await auth.goToLogin();
     await auth.signInUser(payPalMember);
     await utils.waitForPageToMatch(Routing.Profile);
@@ -453,7 +453,7 @@ describe("Membership", () => {
   });
 
   it("Admins can cancel a membership", async function () {
-    pending("Admin cancel is failing due to page load time")
+    this.skip("Admin cancel is failing due to page load time")
     this.timeout(300 * 1000);
     await auth.goToLogin();
     await auth.signInUser(getBasicUserLogin());
