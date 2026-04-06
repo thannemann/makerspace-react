@@ -21,7 +21,7 @@ describe("Rentals", () => {
     return browser.deleteAllCookies();
   });
   
-  it.skip("Admins can CRUD rentals", async () => {
+  xit("Admins can CRUD rentals", async () => {
     // Login
     await auth.goToLogin();
     await auth.signInUser(getAdminUserLogin());
