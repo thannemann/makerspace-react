@@ -36,7 +36,7 @@ describe("Member management", () => {
       }
     });
 
-    xit("Customers can register from home page", async function () {
+    it("Customers can register from home page", async function () {
       this.timeout(200 * 1000);
       const rejectionUid = "register-home-page";
       await createRejectCard(rejectionUid);
@@ -113,7 +113,7 @@ describe("Member management", () => {
       });
     });
 
-    xit("Customers can register from home page via URL with discounts", async function () {
+    it("Customers can register from home page via URL with discounts", async function () {
       this.timeout(200 * 1000);
       const discount = "SUNRISE-MONTH-50";
       await browser.url(utils.buildUrl(
@@ -218,7 +218,7 @@ describe("Member management", () => {
       });
     });
 
-    xit("Admins can register a customer manually", async () => {
+    it("Admins can register a customer manually", async () => {
       const newMember = Object.assign({}, basicMembers.pop());
       const rejectionUid = "admin-register-home-page";
       await createRejectCard(rejectionUid);
