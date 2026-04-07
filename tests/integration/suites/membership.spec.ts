@@ -34,7 +34,7 @@ describe("Membership", () => {
     }
   });
 
-  xit("Members can create a membership, change payment methods and cancel their membership", async () => {
+  it("Members can create a membership, change payment methods and cancel their membership", async () => {
     await auth.goToLogin();
     await auth.signInUser(getBasicUserLogin());
     await header.navigateTo(header.links.settings);
@@ -139,7 +139,7 @@ describe("Membership", () => {
     expect(await utils.isElementDisplayed(settingsPO.subscriptionDetails.status)).to.be.false;
   });
 
-  xit("Members can cancel a membership and sign back up", async () => {
+  it("Members can cancel a membership and sign back up", async () => {
     const rejectionUid = "member-sign-back-up";
     await createRejectCard(rejectionUid);
     const newMember = buildTestMember("cancel-sign-up");
@@ -272,7 +272,7 @@ describe("Membership", () => {
     await utils.waitForPageToMatch(Routing.Profile);
   });
 
-  xit("Members can sign up after cancelling a Braintree membership via Braintree", async () => {
+  it("Members can sign up after cancelling a Braintree membership via Braintree", async () => {
     const rejectionUid = "braintree-member-sign-back-up";
     await createRejectCard(rejectionUid);
     const newMember = buildTestMember("braintree-cancel-sign-up");
@@ -378,7 +378,7 @@ describe("Membership", () => {
     await utils.waitForPageToMatch(Routing.Profile);
   });
 
-  xit("Members can sign up after canceling a PayPal membership via PayPal", async () => {
+  it("Members can sign up after canceling a PayPal membership via PayPal", async () => {
     await auth.goToLogin();
     await auth.signInUser(payPalMember);
     await utils.waitForPageToMatch(Routing.Profile);
@@ -448,7 +448,7 @@ describe("Membership", () => {
     } as any);
   });
 
-  xit("Admins can cancel a membership", async function () {
+  it("Admins can cancel a membership", async function () {
     this.timeout(300 * 1000);
     await auth.goToLogin();
     await auth.signInUser(getBasicUserLogin());
