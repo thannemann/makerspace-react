@@ -33,7 +33,6 @@ exports.config = {
     connectionRetryCount: 3,
     services: [
         "selenium-standalone",
-        "devtools",
         ...process.env.STATIC_SERVER ? [
             ['static-server', {
                 folders: [
@@ -54,7 +53,6 @@ exports.config = {
         "goog:chromeOptions": {
             args: [
                 "--disable-features=IsolateOrigins,site-per-process",
-                "--auto-open-devtools-for-tabs",
                 "--disable-dev-shm-usage",
                 "--disable-site-isolation-trials",
                 ...process.env.HEADLESS ? [
