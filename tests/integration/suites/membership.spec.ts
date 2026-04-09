@@ -179,10 +179,13 @@ afterEach(async () => {
     // Logout
     await header.navigateTo(header.links.logout);
     await utils.waitForVisible(header.loginLink);
+    
     // Login as Admin
     await auth.goToLogin();
+    await utils.waitForVisible(auth.loginModal.emailInput, 120000);
     await auth.signInUser(getAdminUserLogin());
     await utils.waitForPageToMatch(Routing.Profile);
+    
     // View new member's profile
     await browser.url(memberProfileUrl);
     await utils.waitForPageToMatch(Routing.Profile);
