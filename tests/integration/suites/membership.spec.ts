@@ -182,7 +182,7 @@ afterEach(async () => {
     
     // Login as Admin
     await auth.goToLogin();
-    await utils.waitForVisible(auth.loginModal.emailInput, 120000);
+    await utils.getElementById(auth.loginModal.emailInput, 120000);
     await auth.signInUser(getAdminUserLogin());
     await utils.waitForPageToMatch(Routing.Profile);
     
