@@ -26,13 +26,17 @@ describe("Membership", () => {
     return browser.url(utils.buildUrl());
   });
 
-  afterEach(async () => {
-    const displayed = await utils.isElementDisplayed(header.links.logout);
-    if (displayed) {
-      await header.navigateTo(header.links.logout);
-      await utils.waitForVisible(header.loginLink);
-    }
-  });
+afterEach(async () => {  
+  try {
+    await browser.url(utils.buildUrl());
+    await browser.pause(1000);
+    await header.navigateTo(header.links.logout);
+    await utils.waitForVisible(header.loginLink);
+  } catch (e) {
+    // not logged in or navigation failed, ignore
+  }
+});
+
 
   it("Members can create a membership, change payment methods and cancel their membership", async () => {
     await auth.goToLogin();
