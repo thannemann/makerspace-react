@@ -509,7 +509,7 @@ describe("Membership", () => {
     await browser.waitUntil(async () => {
       const rows = await subscriptionPO.getAllRows();
       return rows.length > 0;
-    }, { timeout: 120000, interval: 1000 }, "Subscriptions table never loaded rows");
+    }, 120000, "Subscriptions table never loaded rows");
 
     // Find and cancel subscription
     const name = await subscriptionPO.getColumnTextByIndex(0, "memberName");
@@ -522,7 +522,7 @@ describe("Membership", () => {
     await browser.waitUntil(async () => {
       const loading = await browser.$$(subscriptionPO.getLoadingId());
       return loading.length === 0;
-    }, { timeout: 120000, interval: 1000 }, "Subscriptions table loading never disappeared after cancel");
+    }, 120000, "Subscriptions table loading never disappeared after cancel");
 
     const rows = await subscriptionPO.getAllRows();
     await Promise.all(rows.map((row, index) => {
