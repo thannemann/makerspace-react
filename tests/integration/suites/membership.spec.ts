@@ -385,7 +385,8 @@ afterEach(async () => {
     await utils.waitForPageToMatch(Routing.Profile);
   });
 
-  xit("Members can sign up after canceling a PayPal membership via PayPal", async () => {
+  
+it("Members can sign up after canceling a PayPal membership via PayPal", async () => {
     await auth.goToLogin();
     await auth.signInUser(payPalMember);
     await utils.waitForPageToMatch(Routing.Profile);
@@ -407,8 +408,13 @@ afterEach(async () => {
     // PayPal details displayed
     await utils.waitForNotVisible(settingsPO.nonSubscriptionDetails.loading);
     expect(await utils.isElementDisplayed(settingsPO.nonSubscriptionDetails.status)).to.be.true;
-    expect(await utils.getElementText(settingsPO.nonSubscriptionDetails.membershipType)).to.contain("PayPal");
 
+    // Debug: log membership type and take screenshot before assertion
+    const membershipType = await utils.getElementText(settingsPO.nonSubscriptionDetails.membershipType);
+    console.log(`DEBUG membershipType: ${membershipType}`);
+    await browser.saveScreenshot(`./tmp/screenshots/paypal_debug_${Date.now()}.png`);
+
+    expect(await utils.getElementText(settingsPO.nonSubscriptionDetails.membershipType)).to.contain("PayPal");
     await cancelMemberSubscription(payPalMember.email, true);
 
     // Go to profile (force new session)
