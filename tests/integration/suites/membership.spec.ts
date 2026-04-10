@@ -387,83 +387,210 @@ afterEach(async () => {
 
 it("Members can sign up after canceling a PayPal membership via PayPal", async function () {
     this.retries(0);
+
+    console.log("PAYPAL TEST: starting test");
+    console.log(`PAYPAL TEST: payPalMember email=${payPalMember?.email}`);
+
     await auth.goToLogin();
+    console.log("PAYPAL TEST: after auth.goToLogin");
+
     await auth.signInUser(payPalMember);
+    console.log("PAYPAL TEST: after auth.signInUser");
+
     await utils.waitForPageToMatch(Routing.Profile);
+    console.log(`PAYPAL TEST: matched profile page, currentUrl=${await browser.getUrl()}`);
 
     const memberProfileUrl = await browser.getUrl();
+    console.log(`PAYPAL TEST: memberProfileUrl=${memberProfileUrl}`);
 
     const startingExpiration = await utils.getElementText(memberPO.memberDetail.expiration);
+    console.log(`PAYPAL TEST: startingExpiration raw='${startingExpiration}'`);
+
     const startingAsMs: number = dateToTime(startingExpiration);
+    console.log(`PAYPAL TEST: startingExpiration ms=${startingAsMs}`);
+
     await memberPO.verifyProfileInfo({ // Verify user sees same expiration time
       ...payPalMember,
       expirationTime: startingAsMs
     } as any);
+    console.log("PAYPAL TEST: initial memberPO.verifyProfileInfo passed");
 
     // Go to settings to start a new membership
+    console.log("PAYPAL TEST: navigating to settings");
     await header.navigateTo(header.links.settings);
     await utils.waitForPageToMatch(settingsPO.pageUrl);
+    console.log(`PAYPAL TEST: matched settings page, currentUrl=${await browser.getUrl()}`);
+
     await settingsPO.waitForLoad();
+    console.log("PAYPAL TEST: settingsPO.waitForLoad complete");
+
     await settingsPO.goToMembershipSettings();
+    console.log("PAYPAL TEST: settingsPO.goToMembershipSettings complete");
 
     // PayPal details displayed
+    console.log("PAYPAL TEST: waiting for nonSubscriptionDetails.loading to disappear");
     await utils.waitForNotVisible(settingsPO.nonSubscriptionDetails.loading);
+    console.log("PAYPAL TEST: nonSubscriptionDetails.loading disappeared");
+
+    const preCancelNonSubStatusDisplayed = await utils.isElementDisplayed(settingsPO.nonSubscriptionDetails.status);
+    const preCancelSubStatusDisplayed = await utils.isElementDisplayed(settingsPO.subscriptionDetails.status);
+    console.log(`PAYPAL TEST: pre-cancel nonSubscription status displayed=${preCancelNonSubStatusDisplayed}`);
+    console.log(`PAYPAL TEST: pre-cancel subscription status displayed=${preCancelSubStatusDisplayed}`);
+
     expect(await utils.isElementDisplayed(settingsPO.nonSubscriptionDetails.status)).to.be.true;
 
+    console.log("PAYPAL TEST: waiting for membershipType to include PayPal");
     await browser.waitUntil(async () => {
       const type = await utils.getElementText(settingsPO.nonSubscriptionDetails.membershipType);
+      console.log(`PAYPAL TEST: polling membershipType='${type}'`);
       return type.includes("PayPal");
     }, 30000, "Membership type never showed PayPal");
+    console.log("PAYPAL TEST: membershipType includes PayPal");
 
     const membershipType = await utils.getElementText(settingsPO.nonSubscriptionDetails.membershipType);
-    console.log(`DEBUG membershipType: ${membershipType}`);
-    await browser.saveScreenshot(`./tmp/screenshots/paypal_debug_${Date.now()}.png`);
+    console.log(`PAYPAL TEST: pre-cancel membershipType='${membershipType}'`);
+
+    await browser.saveScreenshot(`./tmp/screenshots/paypal_pre_cancel_${Date.now()}.png`);
+    console.log("PAYPAL TEST: saved screenshot paypal_pre_cancel");
 
     expect(membershipType).to.contain("PayPal");
+
+    console.log(`PAYPAL TEST: before cancelMemberSubscription email=${payPalMember.email} paypalFlag=true`);
     await cancelMemberSubscription(payPalMember.email, true);
+    console.log("PAYPAL TEST: after cancelMemberSubscription");
+
+    await browser.saveScreenshot(`./tmp/screenshots/paypal_post_cancel_call_${Date.now()}.png`);
+    console.log("PAYPAL TEST: saved screenshot paypal_post_cancel_call");
 
     // Go to profile (force new session)
+    console.log(`PAYPAL TEST: navigating back to memberProfileUrl=${memberProfileUrl}`);
     await browser.url(memberProfileUrl);
     await utils.waitForPageToMatch(Routing.Profile);
+    console.log(`PAYPAL TEST: returned to profile page, currentUrl=${await browser.getUrl()}`);
+
     await memberPO.verifyProfileInfo({ // Verify user sees same expiration time
       ...payPalMember,
       expirationTime: startingAsMs
     } as any);
+    console.log("PAYPAL TEST: post-cancel memberPO.verifyProfileInfo passed");
+
+    await browser.saveScreenshot(`./tmp/screenshots/paypal_profile_after_cancel_${Date.now()}.png`);
+    console.log("PAYPAL TEST: saved screenshot paypal_profile_after_cancel");
 
     // Go to settings to start a new membership
+    console.log("PAYPAL TEST: navigating back to settings after cancel");
     await header.navigateTo(header.links.settings);
     await utils.waitForPageToMatch(settingsPO.pageUrl);
+    console.log(`PAYPAL TEST: matched settings page after cancel, currentUrl=${await browser.getUrl()}`);
+
     await settingsPO.waitForLoad();
+    console.log("PAYPAL TEST: settingsPO.waitForLoad complete after cancel");
+
     await settingsPO.goToMembershipSettings();
+    console.log("PAYPAL TEST: settingsPO.goToMembershipSettings complete after cancel");
+
+    console.log("PAYPAL TEST: waiting for nonSubscriptionDetails.loading to disappear after cancel");
+    await utils.waitForNotVisible(settingsPO.nonSubscriptionDetails.loading);
+    console.log("PAYPAL TEST: nonSubscriptionDetails.loading disappeared after cancel");
+
+    const postCancelNonSubStatusDisplayed = await utils.isElementDisplayed(settingsPO.nonSubscriptionDetails.status);
+    const postCancelSubStatusDisplayed = await utils.isElementDisplayed(settingsPO.subscriptionDetails.status);
+    const postCancelMembershipType = await utils.getElementText(settingsPO.nonSubscriptionDetails.membershipType);
+    const postCancelCreateVisible = await utils.isElementDisplayed(settingsPO.nonSubscriptionDetails.createSubscription);
+
+    console.log(`PAYPAL TEST: post-cancel nonSubscription status displayed=${postCancelNonSubStatusDisplayed}`);
+    console.log(`PAYPAL TEST: post-cancel subscription status displayed=${postCancelSubStatusDisplayed}`);
+    console.log(`PAYPAL TEST: post-cancel membershipType='${postCancelMembershipType}'`);
+    console.log(`PAYPAL TEST: post-cancel createSubscription visible=${postCancelCreateVisible}`);
+
+    await browser.saveScreenshot(`./tmp/screenshots/paypal_settings_after_cancel_${Date.now()}.png`);
+    console.log("PAYPAL TEST: saved screenshot paypal_settings_after_cancel");
+
     // Select a new membership and pay for it
+    console.log("PAYPAL TEST: before click createSubscription");
     await utils.clickElement(settingsPO.nonSubscriptionDetails.createSubscription);
+    console.log("PAYPAL TEST: after click createSubscription");
+
+    console.log("PAYPAL TEST: waiting for membershipSelectForm.loading to disappear");
     await utils.waitForNotVisible(signup.membershipSelectForm.loading);
+    console.log("PAYPAL TEST: membershipSelectForm.loading disappeared");
+
+    console.log(`PAYPAL TEST: selecting membership option invoiceOptionIds.monthly=${invoiceOptionIds.monthly}`);
     await signup.selectMembershipOption(invoiceOptionIds.monthly, false);
+    console.log("PAYPAL TEST: membership option selected");
+
+    console.log("PAYPAL TEST: before signup.goNext from membership selection");
     await signup.goNext();
+    console.log("PAYPAL TEST: after signup.goNext from membership selection");
 
     // Add a payment method
+    console.log("PAYPAL TEST: waiting for paymentMethodFormSelect.loading to disappear");
     await utils.waitForNotVisible(paymentMethods.paymentMethodFormSelect.loading);
-    expect((await paymentMethods.getPaymentMethods()).length).to.eql(0);
-    await utils.clickElement(paymentMethods.paymentMethodAccordian.creditCard);
-    await utils.waitForNotVisible(paymentMethods.paymentMethodFormSelect.loading);
+    console.log("PAYPAL TEST: paymentMethodFormSelect.loading disappeared");
 
+    const paymentMethodCountBeforeAdd = (await paymentMethods.getPaymentMethods()).length;
+    console.log(`PAYPAL TEST: payment methods count before add=${paymentMethodCountBeforeAdd}`);
+
+    expect((await paymentMethods.getPaymentMethods()).length).to.eql(0);
+
+    console.log("PAYPAL TEST: before click credit card accordion");
+    await utils.clickElement(paymentMethods.paymentMethodAccordian.creditCard);
+    console.log("PAYPAL TEST: after click credit card accordion");
+
+    console.log("PAYPAL TEST: waiting again for paymentMethodFormSelect.loading to disappear");
+    await utils.waitForNotVisible(paymentMethods.paymentMethodFormSelect.loading);
+    console.log("PAYPAL TEST: paymentMethodFormSelect.loading disappeared after credit card click");
+
+    console.log("PAYPAL TEST: waiting for creditCard.creditCardForm.loading to disappear");
     await utils.waitForNotVisible(creditCard.creditCardForm.loading);
+    console.log("PAYPAL TEST: creditCard.creditCardForm.loading disappeared");
+
+    console.log("PAYPAL TEST: filling credit card form");
     await creditCard.fillInput("cardNumber", newVisa.number);
     await creditCard.fillInput("csv", newVisa.csv);
     await creditCard.fillInput("expirationDate", newVisa.expiration);
     await creditCard.fillInput("postalCode", newVisa.postalCode);
     await creditCard.fillInput("cardholderName", newVisa.name);
+    console.log("PAYPAL TEST: credit card form filled");
+
+    await browser.saveScreenshot(`./tmp/screenshots/paypal_card_form_filled_${Date.now()}.png`);
+    console.log("PAYPAL TEST: saved screenshot paypal_card_form_filled");
+
+    console.log("PAYPAL TEST: before signup.goNext from payment details");
     await signup.goNext();
+    console.log("PAYPAL TEST: after signup.goNext from payment details");
+
+    console.log("PAYPAL TEST: waiting for credit card accordion to disappear");
     await utils.waitForNotVisible(paymentMethods.paymentMethodAccordian.creditCard);
+    console.log("PAYPAL TEST: credit card accordion disappeared");
+
     // Accept recurring payment authorization
+    console.log("PAYPAL TEST: waiting for authAgreementCheckbox");
     await utils.waitForVisible(checkoutPo.authAgreementCheckbox);
+    console.log("PAYPAL TEST: authAgreementCheckbox visible");
+
+    console.log("PAYPAL TEST: clicking authAgreementCheckbox");
     await utils.clickElement(checkoutPo.authAgreementCheckbox);
+    console.log("PAYPAL TEST: clicked authAgreementCheckbox");
+
+    await browser.saveScreenshot(`./tmp/screenshots/paypal_before_final_submit_${Date.now()}.png`);
+    console.log("PAYPAL TEST: saved screenshot paypal_before_final_submit");
+
+    console.log("PAYPAL TEST: before final signup.goNext");
     await signup.goNext();
+    console.log("PAYPAL TEST: after final signup.goNext");
+
     await utils.waitForPageToMatch(Routing.Profile);
+    console.log(`PAYPAL TEST: final profile page matched, currentUrl=${await browser.getUrl()}`);
+
     await memberPO.verifyProfileInfo({ // Verify user sees updated expiration time
       ...payPalMember,
       expirationTime: moment(startingAsMs).add(1, "months").valueOf()
     } as any);
+    console.log("PAYPAL TEST: final memberPO.verifyProfileInfo passed");
+
+    await browser.saveScreenshot(`./tmp/screenshots/paypal_test_complete_${Date.now()}.png`);
+    console.log("PAYPAL TEST: saved screenshot paypal_test_complete");
   });
 
   it("Admins can cancel a membership", async function () {
