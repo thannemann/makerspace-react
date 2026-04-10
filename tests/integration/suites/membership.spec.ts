@@ -534,7 +534,7 @@ afterEach(async () => {
     const rows = await subscriptionPO.getAllRows();
     await Promise.all(rows.map((row, index) => {
       return new Promise(async (resolve) => {
-        const memberName = await subscriptionPO.getColumnByIndex(index, "memberName");
+        const memberName = await subscriptionPO.getColumnTextByIndex(index, "memberName");
         expect(memberName).not.to.eql(name);
         resolve();
       });
