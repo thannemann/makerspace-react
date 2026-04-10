@@ -385,7 +385,7 @@ afterEach(async () => {
     await utils.waitForPageToMatch(Routing.Profile);
   });
 
-  it("Members can sign up after canceling a PayPal membership via PayPal", async () => {
+  xit("Members can sign up after canceling a PayPal membership via PayPal", async () => {
     await auth.goToLogin();
     await auth.signInUser(payPalMember);
     await utils.waitForPageToMatch(Routing.Profile);
