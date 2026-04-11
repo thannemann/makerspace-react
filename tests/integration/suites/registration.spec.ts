@@ -100,7 +100,7 @@ describe("Member management", () => {
       await browser.waitUntil(async () => {
         const loadedCard = await utils.getElementText(memberPO.accessCardForm.importConfirmation);
         return rejectionUid === loadedCard;
-      }, { timeout: 30000, timeoutMsg: `Received rejection card, expected ${rejectionUid}` });
+      }, 30000, `Rejection card never loaded, expected ${rejectionUid}`);
       await utils.clickElement(memberPO.accessCardForm.idVerification);
       await utils.clickElement(memberPO.accessCardForm.submit);
       expect(await utils.isElementDisplayed(memberPO.accessCardForm.error)).to.be.false;
@@ -205,7 +205,7 @@ describe("Member management", () => {
       await browser.waitUntil(async () => {
         const loadedCard = await utils.getElementText(memberPO.accessCardForm.importConfirmation);
         return rejectionUid === loadedCard;
-      }, { timeout: 30000, timeoutMsg: `Received rejection card, expected ${rejectionUid}` });
+      }, 30000, `Rejection card never loaded, expected ${rejectionUid}`);
       await utils.clickElement(memberPO.accessCardForm.idVerification);
       await utils.clickElement(memberPO.accessCardForm.submit);
       expect(await utils.isElementDisplayed(memberPO.accessCardForm.error)).to.be.false;
@@ -268,7 +268,7 @@ describe("Member management", () => {
       await browser.waitUntil(async () => {
         const loadedCard = await utils.getElementText(memberPO.accessCardForm.importConfirmation);
         return rejectionUid === loadedCard;
-      }, { timeout: 30000, timeoutMsg: `Received rejection card, expected ${rejectionUid}` });
+      }, 30000, `Rejection card never loaded, expected ${rejectionUid}`);
       await utils.clickElement(memberPO.accessCardForm.submit);
       expect(await utils.isElementDisplayed(memberPO.accessCardForm.error)).to.be.false;
       await utils.waitForNotVisible(memberPO.accessCardForm.submit);
