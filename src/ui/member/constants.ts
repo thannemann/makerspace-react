@@ -117,7 +117,8 @@ export const fields = (admin: boolean, member?: Partial<Member>): FormFields => 
 
 export const MemberRoleOptions = {
   [MemberRole.Member]: "Member",
-  [MemberRole.Admin]: "Admin"
+  [MemberRole.Admin]: "Admin",
+  "resource_manager": "Resource Manager",
 }
 
 export const membershipDetails = {

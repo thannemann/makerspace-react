@@ -3,7 +3,7 @@ import moment from "moment";
 import { LoginMember } from "../../pageObjects/auth";
 import utils from "../../pageObjects/common";
 import header from "../../pageObjects/header";
-import { basicUser, adminUser, defaultMembers } from "../../constants/member";
+import { basicUser, adminUser, resourceManagerUser, defaultMembers } from "../../constants/member";
 import memberPo, { defaultQueryParams } from "../../pageObjects/member";
 import renewalPO from "../../pageObjects/renewalForm";
 import { autoLogin } from "../autoLogin";
@@ -24,20 +24,64 @@ describe("Members page", () => {
   describe("Basic User", () => {
     beforeEach(() => {
       return autoLogin(mocker, basicUser).then(async () => {
-        mocker.listMembers_200({}, defaultMembers);
+        // Backend returns only the current user's record for regular members
+        mocker.listMembers_200({}, [basicUser]);
         await header.navigateTo(header.links.members);
       });
     });
-    it("Loads a list of members", async () => {
-      mocker.listMembers_200({}, defaultMembers, { unlimited: true });
-      await memberPo.verifyListView(defaultMembers, memberPo.fieldEvaluator);
-      await verifyRouting(defaultMembers[0]);
+
+    it("Loads a list showing only themselves", async () => {
+      mocker.listMembers_200({}, [basicUser], { unlimited: true });
+      await memberPo.verifyListView([basicUser], memberPo.fieldEvaluator);
     });
-    it("Does not have an option to create or renew a new member", async () => {
+
+    it("Does not have an option to create or renew a member", async () => {
       expect(await utils.isElementDisplayed(memberPo.membersList.createMemberButton)).to.be.false;
       expect(await utils.isElementDisplayed(memberPo.membersList.renewMemberButton)).to.be.false;
     });
+
+    it("Does not display the search input", async () => {
+      expect(await utils.isElementDisplayed(memberPo.membersList.searchInput)).to.be.false;
+    });
   });
+
+  describe("Resource Manager User", () => {
+    beforeEach(() => {
+      return autoLogin(mocker, resourceManagerUser).then(async () => {
+        mocker.listMembers_200({}, defaultMembers);
+        await header.navigateTo(header.links.members);
+        await utils.waitForPageLoad(memberPo.membersListUrl);
+      });
+    });
+
+    it("Loads the full list of members", async () => {
+      mocker.listMembers_200({}, defaultMembers, { unlimited: true });
+      await memberPo.verifyListView(defaultMembers, memberPo.fieldEvaluator);
+    });
+
+    it("Can navigate to a member's profile", async () => {
+      mocker.listMembers_200({}, defaultMembers, { unlimited: true });
+      await verifyRouting(defaultMembers[1]);
+    });
+
+    it("Does not have an option to create a new member", async () => {
+      expect(await utils.isElementDisplayed(memberPo.membersList.createMemberButton)).to.be.false;
+    });
+
+    it("Does not have an option to renew a member", async () => {
+      expect(await utils.isElementDisplayed(memberPo.membersList.renewMemberButton)).to.be.false;
+    });
+
+    it("Has access to the search input", async () => {
+      expect(await utils.isElementDisplayed(memberPo.membersList.searchInput)).to.be.true;
+    });
+
+    it("Displays the read-only Resource Manager notice", async () => {
+      const notice = await utils.getElementText("[data-testid='rm-notice']");
+      expect(notice).to.include("read-only");
+    });
+  });
+
   describe("Admin User", () => {
     beforeEach(() => {
       return autoLogin(mocker, adminUser).then(async () => {
@@ -46,11 +90,13 @@ describe("Members page", () => {
         await utils.waitForPageLoad(memberPo.membersListUrl);
       });
     });
+
     it("Loads a list of members", async () => {
       mocker.listMembers_200({}, defaultMembers, { unlimited: true });
       await memberPo.verifyListView(defaultMembers, memberPo.fieldEvaluator);
       await verifyRouting(defaultMembers[0]);
     });
+
     it("Creating a new member", async () => {
       const newMemberId = "new_new";
       const newMember: NewMember = {
@@ -131,6 +177,6 @@ describe("Members page", () => {
       await utils.clickElement(renewalPO.renewalForm.submit);
       await utils.waitForNotVisible(renewalPO.renewalForm.submit);
       await memberPo.verifyFields((updatedMember as any), memberPo.fieldEvaluator);
-    })
+    });
   });
 });

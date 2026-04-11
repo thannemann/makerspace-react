@@ -30,4 +30,5 @@ export interface SignUpForm {
 
 export type AuthMember = Member & {
   isAdmin: boolean;
+  isResourceManager: boolean;
 };
