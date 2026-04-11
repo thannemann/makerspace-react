@@ -31,8 +31,11 @@ exports.config = {
     bail: 0,
     connectionRetryTimeout: 90 * 1000,
     connectionRetryCount: 3,
+    ...(process.env.SELENIUM_REMOTE_URL && { hostname: new URL(process.env.SELENIUM_REMOTE_URL).hostname }),
+    ...(process.env.SELENIUM_REMOTE_URL && { port: parseInt(new URL(process.env.SELENIUM_REMOTE_URL).port) || 4444 }),
+    ...(process.env.SELENIUM_REMOTE_URL && { path: new URL(process.env.SELENIUM_REMOTE_URL).pathname }),
     services: [
-        "selenium-standalone",
+        ...(!process.env.SELENIUM_REMOTE_URL ? ["selenium-standalone"] : []),
         ...process.env.STATIC_SERVER ? [
             ['static-server', {
                 folders: [
