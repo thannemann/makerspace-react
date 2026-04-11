@@ -1,14 +1,24 @@
-import isObject from "lodash-es/isObject";
 import { MemberSummary, Member, MemberRole } from "makerspace-ts-api-client";
-import { Routing } from "app/constants";
+import { RenewalEntity } from "ui/common/RenewalForm";
+import { Properties } from "app/entities/member";
 import { timeToDate } from "ui/utils/timeToDate";
+import { Routing } from "app/constants";
+import { isObject } from "util";
+
+export const memberToRenewal = (member: Member | MemberSummary): RenewalEntity => {
+  return {
+    id: member[Properties.Id],
+    name: `${member[Properties.Firstname]} ${member[Properties.Lastname]}`,
+    expiration: member[Properties.Expiration],
+  }
+}
 
 export const memberIsAdmin = (member: Member | MemberSummary): boolean => {
   return member && member.role && member.role.includes(MemberRole.Admin);
 }
 
 export const memberIsResourceManager = (member: Member | MemberSummary): boolean => {
-  return member && member.role === "resource_manager";
+  return member && (member.role as string) === "resource_manager";
 }
 
 export const displayMemberExpiration = (member: Member | MemberSummary | number) => {
