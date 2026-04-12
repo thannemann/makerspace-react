@@ -22,8 +22,9 @@ import { useQueryContext, withQueryContext } from "../common/Filters/QueryContex
 const rowId = (rental: Rental) => rental.id;
 
 const RentalsList: React.FC<{ member?: Member }> = ({ member }) => {
-  const { currentUser: { id, isAdmin } } = useAuthState();
-  const asAdmin = isAdmin && id !== (member && member.id);
+  const { currentUser: { id, isAdmin, isResourceManager } } = useAuthState();
+  const canManage = isAdmin || isResourceManager;
+  const asAdmin = canManage && id !== (member && member.id);
 
   const fields: Column<Rental>[] = [
     {
@@ -71,10 +72,10 @@ const RentalsList: React.FC<{ member?: Member }> = ({ member }) => {
   const adminListRentalsResponse = useReadTransaction(adminListRentals, {
     ...params,
     ...member && { memberId: member.id }
-  }, !isAdmin);
-  const listRentalsResposne = useReadTransaction(listRentals, {}, isAdmin, "rentals-list");
+  }, !canManage);
+  const listRentalsResposne = useReadTransaction(listRentals, {}, canManage, "rentals-list");
 
-  const { isRequesting, data: rentals = [], response, refresh, error } = isAdmin
+  const { isRequesting, data: rentals = [], response, refresh, error } = canManage
     ? adminListRentalsResponse
     : listRentalsResposne;
 
@@ -96,12 +97,14 @@ const RentalsList: React.FC<{ member?: Member }> = ({ member }) => {
   return (
     <Grid container spacing={3} justify="center">
       <Grid item md={member ? 12 : 10} xs={12}>
-        {isAdmin && (
+        {canManage && (
           <Grid>
             <CreateRental onCreate={onRenew} member={member} />
             <EditRental rental={selectedRental} onUpdate={onEdit} />
             <RenewRental rental={selectedRental} onRenew={onRenew} />
-            <DeleteRentalModal rental={selectedRental} onDelete={onDelete} />
+            {isAdmin && (
+              <DeleteRentalModal rental={selectedRental} onDelete={onDelete} />
+            )}
           </Grid>
         )}
 
