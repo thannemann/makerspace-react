@@ -114,7 +114,7 @@ class Header extends React.Component<Props, State> {
         >
           {this.renderMenuNavLink(profileUrl, "My Profile", "profile")}
           {this.renderMenuNavLink(Routing.Members, "Members", "members")}
-          {memberIsAdmin(currentUser) && this.renderMenuNavLink(Routing.Rentals, "Rentals", "rentals")}
+          {(memberIsAdmin(currentUser) || currentUser.isResourceManager) && this.renderMenuNavLink(Routing.Rentals, "Rentals", "rentals")}
           {billingEnabled && memberIsAdmin(currentUser) && this.renderMenuNavLink(Routing.Billing, "Billing", "billing")}
           {earnedMembershipEnabled && this.renderMenuNavLink(Routing.EarnedMemberships, "Earned Memberships", "earnedMembership")}
           {this.renderMenuNavLink(Routing.Settings.replace(Routing.PathPlaceholder.MemberId, currentUser.id), "Account Settings", "settings")}
