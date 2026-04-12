@@ -103,6 +103,7 @@ const MemberSearchInput: React.FC<Props> = ({
       onChange={updateSelection}
       isDisabled={disabled}
       loadOptions={loadMembers.current}
+      defaultOptions={true}  // Load members on dropdown open without needing to type first
       getFormRef={getFormRef}
     />
   )
