@@ -174,9 +174,8 @@ class ReportRequirementFieldset extends React.Component<OwnProps, State> {
             value,
             label: value
           }}
-          // Exclude the current user from the member search results
-          // so members cannot tag themselves in their own earned membership reports
           excludeIds={[currentUserId]}
+          excludeExpired={true}
         />
       </Grid>
     )

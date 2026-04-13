@@ -104,6 +104,7 @@ class RentalForm extends React.Component<OwnProps, { contractOnFile: boolean }> 
               name={rentalFields.memberId.name}
               placeholder={rentalFields.memberId.placeholder}
               getFormRef={() => this.formRef}
+              excludeExpired={true}
               initialSelection={rental && { value: rental.memberId, label: rental.memberName, id: rental.memberId }}
             />
           </Grid>
