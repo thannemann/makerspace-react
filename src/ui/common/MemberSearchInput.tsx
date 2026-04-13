@@ -12,11 +12,12 @@ interface Props  {
   creatable?: boolean;
   initialSelection?: SelectOption;
   disabled?: boolean;
+  excludeIds?: string[]; // IDs to exclude from results e.g. current user in EM reports
   onChange?(selection: SelectOption): void;
   getFormRef?(): Form;
 }
 
-async function searchMemberOptions(searchValue: string) {
+async function searchMemberOptions(searchValue: string, excludeIds: string[] = []) {
   const membersResponse = await listMembers({ search: searchValue });
   let memberOptions = [] as SelectOption[];
   if (isApiErrorResponse(membersResponse)) {
@@ -24,11 +25,13 @@ async function searchMemberOptions(searchValue: string) {
     message({ body: { message: JSON.stringify(membersResponse.error) }})
   } else {
     const members = membersResponse.data;
-    memberOptions = members.map(member => ({
-      value: member.id,
-      label: `${member.firstname} ${member.lastname}`,
-      id: member.id
-    }));
+    memberOptions = members
+      .filter(member => !excludeIds.includes(member.id))
+      .map(member => ({
+        value: member.id,
+        label: `${member.firstname} ${member.lastname}`,
+        id: member.id
+      }));
   }
   return memberOptions;
 }
@@ -43,11 +46,22 @@ const MemberSearchInput: React.FC<Props> = ({
   getFormRef,
   placeholder,
   initialSelection,
+  excludeIds = [],
 }) => {
   // Track field value
   const [selection, setSelection] = React.useState<SelectOption>(initialSelection);
   const componentRef = React.useRef<MemberSearchComponent>(creatable ? AsyncCreatableSelect : AsyncSelectFixed);
-  const loadMembers = React.useRef<(search: string) => Promise<SelectOption[]>>(AwesomeDebouncePromise(searchMemberOptions, 250));
+
+  // Rebuild loadMembers if excludeIds changes so the filter stays current
+  const loadMembers = React.useRef<(search: string) => Promise<SelectOption[]>>(
+    AwesomeDebouncePromise((search: string) => searchMemberOptions(search, excludeIds), 250)
+  );
+  React.useEffect(() => {
+    loadMembers.current = AwesomeDebouncePromise(
+      (search: string) => searchMemberOptions(search, excludeIds),
+      250
+    );
+  }, [JSON.stringify(excludeIds)]);
 
   // Determine select component
   React.useEffect(() => {
@@ -103,7 +117,7 @@ const MemberSearchInput: React.FC<Props> = ({
       onChange={updateSelection}
       isDisabled={disabled}
       loadOptions={loadMembers.current}
-      defaultOptions={true}  // Load members on dropdown open without needing to type first
+      //defaultOptions={true}
       getFormRef={getFormRef}
     />
   )

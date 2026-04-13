@@ -15,6 +15,7 @@ import {
   NewReportRequirement,
 } from "makerspace-ts-api-client";
 import MemberSearchInput from "ui/common/MemberSearchInput";
+import { useAuthState } from "ui/reducer/hooks";
 
 interface OwnProps {
   requirement: Requirement;
@@ -103,7 +104,7 @@ class ReportRequirementFieldset extends React.Component<OwnProps, State> {
       return reportRequirement;
     }, reportRequirement);
 
-    // Set error in first memebr input if no members for a strict reporting requirement
+    // Set error in first member input if no members for a strict reporting requirement
     if (requirement.strict && !reportRequirement.memberIds.length) {
       const memberIdField = fields.memberId;
       const fieldNames = Object.keys(reportRequirementValues);
@@ -155,7 +156,7 @@ class ReportRequirementFieldset extends React.Component<OwnProps, State> {
     return `${fields.memberId.name}-${index}`;
   }
 
-  private renderMemberRow = (index: number) => {
+  private renderMemberRow = (index: number, currentUserId: string) => {
     const { requirement, index: requirementIndex, reportRequirement, disabled } = this.props;
     const fieldName = this.getMemberInputName(index);
     const fields = reportRequirementFields(requirement, requirementIndex);
@@ -173,6 +174,9 @@ class ReportRequirementFieldset extends React.Component<OwnProps, State> {
             value,
             label: value
           }}
+          // Exclude the current user from the member search results
+          // so members cannot tag themselves in their own earned membership reports
+          excludeIds={[currentUserId]}
         />
       </Grid>
     )
@@ -183,61 +187,70 @@ class ReportRequirementFieldset extends React.Component<OwnProps, State> {
     const fields = reportRequirementFields(requirement, index);
     const requirementFormId = `${formPrefix}-${index}`;
     return (
-      <Form
-        ref={this.setFormRef}
-        id={requirementFormId}
-      >
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <FormLabel>{fields.reportedCount.label}</FormLabel>
-            <Select
-              fullWidth
-              required
-              value={reportRequirement && reportRequirement.reportedCount || 0}
-              disabled={disabled}
-              name={`${fields.reportedCount.name}`}
-              id={`${fields.reportedCount.name}`}
-              placeholder={fields.reportedCount.placeholder}
-            >
-              {range(0, 12).map(i => <MenuItem key={i} value={String(i)}>{String(i)}</MenuItem>)}
-            </Select>
-          </Grid>
-          <Grid item xs={12}>
-            {range(0, this.state.memberCount).map(index =>
-              <Grid key={`member-${index}`} container spacing={3}>
-                <Grid item xs={12}>
-                  {this.renderMemberRow(index)}
-                </Grid>
+      <AuthStateConsumer>
+        {({ currentUser }) => (
+          <Form
+            ref={this.setFormRef}
+            id={requirementFormId}
+          >
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <FormLabel>{fields.reportedCount.label}</FormLabel>
+                <Select
+                  fullWidth
+                  required
+                  value={reportRequirement && reportRequirement.reportedCount || 0}
+                  disabled={disabled}
+                  name={`${fields.reportedCount.name}`}
+                  id={`${fields.reportedCount.name}`}
+                  placeholder={fields.reportedCount.placeholder}
+                >
+                  {range(0, 12).map(i => <MenuItem key={i} value={String(i)}>{String(i)}</MenuItem>)}
+                </Select>
+              </Grid>
+              <Grid item xs={12}>
+                {range(0, this.state.memberCount).map(index =>
+                  <Grid key={`member-${index}`} container spacing={3}>
+                    <Grid item xs={12}>
+                      {this.renderMemberRow(index, currentUser.id)}
+                    </Grid>
+                  </Grid >
+                )}
               </Grid >
-            )}
-          </Grid >
-          {!disabled && (
-            <Grid item xs={12}>
-              <ButtonRow
-                actionButtons={[
-                  {
-                    color: "default",
-                    id: `${requirementFormId}-add-member-row`,
-                    variant: "outlined",
-                    onClick: this.addMemberRow,
-                    label: "Add Member",
-                  },
-                  ...this.state.memberCount > 1 ? [{
-                    color: "secondary",
-                    id: `${requirementFormId}-remove-member-row`,
-                    variant: "outlined",
-                    onClick: this.removeMemberRow,
-                    label: "Remove Member",
-                  }] : []
-                ] as ActionButtonProps[]}
-              />
+              {!disabled && (
+                <Grid item xs={12}>
+                  <ButtonRow
+                    actionButtons={[
+                      {
+                        color: "default",
+                        id: `${requirementFormId}-add-member-row`,
+                        variant: "outlined",
+                        onClick: this.addMemberRow,
+                        label: "Add Member",
+                      },
+                      ...this.state.memberCount > 1 ? [{
+                        color: "secondary",
+                        id: `${requirementFormId}-remove-member-row`,
+                        variant: "outlined",
+                        onClick: this.removeMemberRow,
+                        label: "Remove Member",
+                      }] : []
+                    ] as ActionButtonProps[]}
+                  />
+                </Grid >
+              )}
             </Grid >
-          )}
-        </Grid >
-      </Form>
-
+          </Form>
+        )}
+      </AuthStateConsumer>
     );
   }
 }
+
+// Functional wrapper to provide auth state to the class component
+const AuthStateConsumer: React.FC<{ children: (state: { currentUser: { id: string } }) => React.ReactNode }> = ({ children }) => {
+  const { currentUser } = useAuthState();
+  return <>{children({ currentUser })}</>;
+};
 
 export default ReportRequirementFieldset;
