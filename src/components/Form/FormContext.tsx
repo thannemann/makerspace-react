@@ -55,10 +55,14 @@ export const FormContextProvider: React.FC<Props> = ({ onSubmit, children, valid
 
   const formContext = React.useMemo<FormContext>(() => {
     const validate = () => {
-      const specificErrors = Object.entries(fieldRegistration).reduce((errors, [fieldName, fieldValidator]) => {
-        const fieldError = fieldValidator.validator?.(formState.values[fieldName]);
-        return { ...errors, ...fieldError && { [fieldName]: fieldError }};
-      }, {});
+      // Filter out undefined entries — fields set to undefined during cleanup
+      // can cause "Cannot read properties of undefined (reading 'validator')" crashes
+      const specificErrors = Object.entries(fieldRegistration)
+        .filter(([_, fieldValidator]) => !!fieldValidator)
+        .reduce((errors, [fieldName, fieldValidator]) => {
+          const fieldError = fieldValidator.validator?.(formState.values[fieldName]);
+          return { ...errors, ...fieldError && { [fieldName]: fieldError }};
+        }, {});
 
       return {
         ...validator?.(formState.values) || {},
