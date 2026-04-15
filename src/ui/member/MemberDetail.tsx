@@ -21,6 +21,7 @@ import { useAuthState } from "../reducer/hooks";
 import EditMember from "./EditMember";
 import RenewMember from "./RenewMember";
 import NotificationModal, { Notification } from "./NotificationModal";
+import AdminChangePasswordModal from "./AdminChangePasswordModal";
 import PreviewMemberContract from "../documents/PreviewMemberContract";
 import { SubRoutes } from "ui/settings/SettingsContainer";
 import { SubscriptionFilter } from "../subscriptions/SubscriptionFilters";
@@ -143,7 +144,8 @@ const MemberProfile: React.FC = () => {
           ...isAdmin ? [
             <EditMember member={member} key="edit-member" onEdit={refreshMember}/>,
             <RenewMember member={member} key="renew-member" onRenew={refreshMember}/>,
-            <AccessCardForm memberId={memberId} key="card-form"/>
+            <AccessCardForm memberId={memberId} key="card-form"/>,
+            <AdminChangePasswordModal member={member} key="change-password"/>
           ] : []
         ]}
         information={(
