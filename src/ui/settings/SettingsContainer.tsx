@@ -19,17 +19,23 @@ import SubscriptionSettings from "ui/settings/SubscriptionSettings";
 import useSubresourcePath from "ui/hooks/useSubresourcePath";
 import { useDispatch } from "react-redux";
 import { loginUserAction } from "ui/auth/actions";
+import ChangePasswordForm from "ui/member/ChangePasswordForm";
 
 export enum SubRoutes {
   Profile = "profile",
   Subscriptions = "subscriptions",
   PaymentMethods = "payment-methods",
+  Security = "security",
 }
 
 const SettingsContainer: React.FC = () => {
   const { currentUser: { id: currentUserId }, permissions } = useAuthState();
   const billingEnabled = !!permissions[Whitelists.billing];
   const dispatch = useDispatch();
+
+  const { match: { params: { memberId: routeMemberId, resource }} } = useReactRouter<{ memberId: string, resource: string }>();
+  // Use the route memberId (supports admin viewing another member's settings)
+  const targetMemberId = routeMemberId || currentUserId;
 
   React.useEffect(() => {
     dispatch(loginUserAction());
@@ -38,10 +44,8 @@ const SettingsContainer: React.FC = () => {
   const [selectedIndex, setIndex] = React.useState(0);
   const {
     isRequesting: loadingMember,
-    data: member = { id: currentUserId } as Member,
-  } = useReadTransaction(getMember, { id: currentUserId });
-
-  const { match: { params: { resource }} } = useReactRouter<{ resource: string }>();
+    data: member = { id: targetMemberId } as Member,
+  } = useReadTransaction(getMember, { id: targetMemberId });
   const changeResource = useSubresourcePath(Object.values(SubRoutes));
   React.useEffect(() => {
     switch(resource) {
@@ -50,6 +54,9 @@ const SettingsContainer: React.FC = () => {
         break;
       case SubRoutes.PaymentMethods:
         setIndex(2);
+        break;
+      case SubRoutes.Security:
+        setIndex(3);
         break;
       default:
         setIndex(0);
@@ -78,6 +85,9 @@ const SettingsContainer: React.FC = () => {
               </ListItem>
             </>
           )}
+          <ListItem button selected={selectedIndex === 3} onClick={onSelectItem(3, "security")}>
+            <ListItemText id="settings-security" primary="Password" />
+          </ListItem>
         </List>
       </Grid>
       <Grid item md={8} sm={7} xs={12}>
@@ -100,6 +110,9 @@ const SettingsContainer: React.FC = () => {
                 )}
                 {selectedIndex === 2 && (
                   <PaymentMethodsContainer title="Manage Payment Methods" managingMethods={true} />
+                )}
+                {selectedIndex === 3 && (
+                  <ChangePasswordForm memberId={targetMemberId} memberEmail={member.email} />
                 )}
               </Grid>
             </Grid>
