@@ -22,6 +22,7 @@ import EditMember from "./EditMember";
 import RenewMember from "./RenewMember";
 import NotificationModal, { Notification } from "./NotificationModal";
 import AdminChangePasswordModal from "./AdminChangePasswordModal";
+import HouseholdModal from "./HouseholdModal";
 import PreviewMemberContract from "../documents/PreviewMemberContract";
 import { SubRoutes } from "ui/settings/SettingsContainer";
 import { SubscriptionFilter } from "../subscriptions/SubscriptionFilters";
@@ -145,7 +146,8 @@ const MemberProfile: React.FC = () => {
             <EditMember member={member} key="edit-member" onEdit={refreshMember}/>,
             <RenewMember member={member} key="renew-member" onRenew={refreshMember}/>,
             <AccessCardForm memberId={memberId} key="card-form"/>,
-            <AdminChangePasswordModal member={member} key="change-password"/>
+            <AdminChangePasswordModal member={member} key="change-password"/>,
+            <HouseholdModal member={member} key="household" onUpdate={refreshMember}/>
           ] : []
         ]}
         information={(
@@ -190,6 +192,19 @@ const MemberProfile: React.FC = () => {
             {member.notes && <KeyValueItem label="Notes">
               <div id="member-detail-notes" className="preformatted">{member.notes}</div>
             </KeyValueItem>}
+            {((member as any).groupName || isAdmin) && (
+              <KeyValueItem label="Household">
+                {(member as any).householdRole === "primary" && (
+                  <span id="member-detail-household-role">Primary Member</span>
+                )}
+                {(member as any).householdRole === "secondary" && (
+                  <span id="member-detail-household-role">Secondary Member</span>
+                )}
+                {!(member as any).groupName && isAdmin && (
+                  <span id="member-detail-household-role" style={{ color: "grey" }}>None</span>
+                )}
+              </KeyValueItem>
+            )}
             {isOwnProfile && <PreviewMemberContract />}
           </>
         )}
