@@ -21,9 +21,28 @@ import { PasswordInput } from "components/Form/inputs/PasswordInput";
 import { SelectInput } from "components/Form/inputs/SelectInput";
 import { PhoneInput } from "components/Form/inputs/PhoneInput";
 import { Form } from "components/Form/Form";
-import { FormState } from "components/Form/FormContext";
+import { FormState, useFormValues } from "components/Form/FormContext";
 import { CollectionOf } from "app/interfaces";
 import { useAuthState } from "ui/reducer/hooks";
+
+// Confirm email field that validates against the email field value
+const ConfirmEmailField: React.FC = () => {
+  const values = useFormValues();
+  const emailValue = values[SignUpFields.email.name] as string;
+  return (
+    <EmailInput
+      required={true}
+      label={SignUpFields.confirmEmail.label}
+      fieldName={SignUpFields.confirmEmail.name}
+      placeholder={SignUpFields.confirmEmail.placeholder}
+      validate={(val: string) => {
+        if (!val) return "Required";
+        if (val !== emailValue) return "Email addresses do not match";
+        return undefined;
+      }}
+    />
+  );
+};
 
 export const MemberInfoStep: React.FC = ({ children }) => {
   const { isOpen: emailNoteOpen, openModal: openEmailNote, closeModal: closeEmailNote } = useModal();
@@ -108,6 +127,9 @@ export const MemberInfoStep: React.FC = ({ children }) => {
                   fieldName={SignUpFields.email.name}
                   placeholder={SignUpFields.email.placeholder}
                 />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ConfirmEmailField />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <PasswordInput 
