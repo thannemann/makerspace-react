@@ -2,6 +2,7 @@ import * as React from "react";
 
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
+import LinearProgress from "@material-ui/core/LinearProgress";
 import VisibilityOff from "@material-ui/icons/VisibilityOff";
 import Visibility from "@material-ui/icons/Visibility";
 import { FormField } from "../FormField";
@@ -11,6 +12,20 @@ interface Props extends InputProps<string> {
   autoComplete?: string;
 }
 
+const scorePassword = (pw: string): number => {
+  if (!pw) return 0;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  return Math.min(score, 4);
+};
+
+const strengthLabel = ["Too short", "Weak", "Fair", "Good", "Strong"];
+const strengthColor = ["#f44336", "#ff9800", "#ffeb3b", "#8bc34a", "#4caf50"];
+
 export const PasswordInput = ({ 
   label, 
   fieldName, 
@@ -19,7 +34,10 @@ export const PasswordInput = ({
   ...props
 }: Props): JSX.Element => {
   const [mask, setMask] = React.useState(true);
+  const [password, setPassword] = React.useState("");
   const toggleMask = React.useCallback(() => setMask(curr => !curr), [setMask]);
+
+  const strength = scorePassword(password);
 
   return (
     <FormField
@@ -28,29 +46,46 @@ export const PasswordInput = ({
       {...props}
     >
       {(value, onChange, error) => (
-        <TextField
-          fullWidth
-          required
-          value={value}
-          onChange={onChange}
-          label={label}
-          name={fieldName}
-          error={!!error}
-          disabled={!!disabled}
-          id={fieldName}
-          placeholder={placeholder}
-          type={mask ? 'password' : 'text'}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                {mask ? 
-                  <Visibility style={{cursor: 'pointer'}} onClick={toggleMask} /> :
-                  <VisibilityOff style={{cursor: 'pointer'}} onClick={toggleMask} />
-                }
-              </InputAdornment>
-            ),
-          }}
-        />
+        <>
+          <TextField
+            fullWidth
+            required
+            value={value}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              onChange(e as React.ChangeEvent<HTMLInputElement>);
+            }}
+            label={label}
+            name={fieldName}
+            error={!!error}
+            disabled={!!disabled}
+            id={fieldName}
+            placeholder={placeholder}
+            type={mask ? 'password' : 'text'}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  {mask ? 
+                    <Visibility style={{cursor: 'pointer'}} onClick={toggleMask} /> :
+                    <VisibilityOff style={{cursor: 'pointer'}} onClick={toggleMask} />
+                  }
+                </InputAdornment>
+              ),
+            }}
+          />
+          {value && (
+            <>
+              <LinearProgress
+                variant="determinate"
+                value={(strength / 4) * 100}
+                style={{ marginTop: 8, backgroundColor: "#e0e0e0" }}
+              />
+              <span style={{ color: strengthColor[strength], marginTop: 4, display: "block", fontSize: "0.75rem" }}>
+                {strengthLabel[strength]}
+              </span>
+            </>
+          )}
+        </>
       )}
     </FormField>
   )

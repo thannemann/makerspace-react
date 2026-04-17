@@ -43,6 +43,27 @@ export const adminUser: LoginMember = {
   }
 };
 
+export const resourceManagerUser: LoginMember = {
+  id: "rm_member",
+  firstname: "Resource",
+  lastname: "Manager",
+  email: "rm_member@test.com",
+  password: "password",
+  role: "resource_manager" as any,
+  status: MemberStatus.ActiveMember,
+  subscription: false,
+  cardId: "rm_member_card_1",
+  expirationTime: (moment().add(1, "months").valueOf()),
+  memberContractOnFile: true,
+  customerId: "test_rm_customer_1",
+  address: {
+    street: "12 Main St.",
+    city: "Boston",
+    state: "MA",
+    postalCode: "00001"
+  }
+};
+
 export const buildTestMember = (uniqueId: string): LoginMember => ({
   ...basicUser,
   id: `test_member_${uniqueId}`,
@@ -93,3 +114,4 @@ export const defaultMembers: LoginMember[] = new Array(20).fill(undefined).map((
 
 export const basicMembers = defaultMembers.filter((member) => member.role == MemberRole.Member);
 export const adminMembers = defaultMembers.filter((member) => member.role == MemberRole.Admin);
+export const rmMembers = defaultMembers.filter((member) => (member.role as any) == "resource_manager");

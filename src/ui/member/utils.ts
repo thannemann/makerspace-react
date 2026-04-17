@@ -14,7 +14,11 @@ export const memberToRenewal = (member: Member | MemberSummary): RenewalEntity =
 }
 
 export const memberIsAdmin = (member: Member | MemberSummary): boolean => {
-  return member && member.role &&  member.role.includes(MemberRole.Admin);
+  return member && member.role && member.role.includes(MemberRole.Admin);
+}
+
+export const memberIsResourceManager = (member: Member | MemberSummary): boolean => {
+  return member && (member.role as string) === "resource_manager";
 }
 
 export const displayMemberExpiration = (member: Member | MemberSummary | number) => {

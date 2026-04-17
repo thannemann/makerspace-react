@@ -49,7 +49,7 @@ const SubscriptionsTable: React.FC = () => {
   const [selectedId, setSelectedId] = React.useState<string>();
   const searchTerms = new URLSearchParams(search);
 
-  const { current: searchTerm } = React.useRef(searchTerms.get("q"))
+  const { current: searchTerm } = React.useRef(searchTerms.get("q") || undefined)
   const { current: statusTerm } = React.useRef(searchTerms.get(SubscriptionFilter.Status))
 
   const {
@@ -67,9 +67,18 @@ const SubscriptionsTable: React.FC = () => {
     ],
   });
 
+  // Filter out null, undefined, and empty string values before sending to API
+  // Prevents issues like search=null being sent when no search term is provided
+  const cleanParams = Object.entries(restParams).reduce((acc, [key, value]) => {
+    if (value !== null && value !== undefined && value !== "") {
+      acc[key] = value;
+    }
+    return acc;
+  }, {} as Record<string, any>);
+
   const { isRequesting, data: subscriptions = [], response, refresh, error } = useReadTransaction(
     adminListSubscriptions,
-    { ...restParams }
+    { ...cleanParams }
   );
 
   const onCancel = React.useCallback(() => {

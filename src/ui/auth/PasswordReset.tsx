@@ -6,6 +6,7 @@ import { RouteComponentProps } from "react-router-dom";
 import TextField from "@material-ui/core/TextField";
 import Grid from "@material-ui/core/Grid";
 import InputAdornment from "@material-ui/core/InputAdornment";
+import LinearProgress from "@material-ui/core/LinearProgress";
 import Paper from "@material-ui/core/Paper";
 import RemoveRedEye from "@material-ui/icons/RemoveRedEye";
 import Typography from "@material-ui/core/Typography";
@@ -29,6 +30,7 @@ interface State {
   passwordMask: boolean;
   passwordRequesting: boolean;
   passwordError: string;
+  password: string;
 }
 
 const passwordId = "password-reset";
@@ -45,6 +47,21 @@ interface PasswordForm {
   password: string;
 }
 
+// Strength scorer: 0-4
+const scorePassword = (pw: string): number => {
+  if (!pw) return 0;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  return Math.min(score, 4);
+};
+
+const strengthLabel = ["Too short", "Weak", "Fair", "Good", "Strong"];
+const strengthColor = ["#f44336", "#ff9800", "#ffeb3b", "#8bc34a", "#4caf50"];
+
 class PasswordReset extends React.Component<Props, State> {
   public formRef: Form;
   private setFormRef = (ref: Form) => this.formRef = ref;
@@ -55,6 +72,7 @@ class PasswordReset extends React.Component<Props, State> {
       passwordMask: true,
       passwordError: undefined,
       passwordRequesting: false,
+      password: "",
     };
   }
 
@@ -70,24 +88,31 @@ class PasswordReset extends React.Component<Props, State> {
     this.setState((state) => ({ passwordMask: !state.passwordMask }));
   }
 
+  private handlePasswordChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    this.setState({ password: event.target.value });
+  }
+
   private submit = async (form: Form) => {
     const { password } = await this.formRef.simpleValidate<PasswordForm>(passwordFields);
     const { token: passwordToken } = this.props.match.params;
 
     if (!form.isValid()) return;
 
+    const strength = scorePassword(this.state.password);
+    if (strength < 2) {
+      this.setState({ passwordError: "Password is too weak. Try mixing uppercase, numbers, or symbols." });
+      return;
+    }
+
     this.setState({ passwordRequesting: true });
     try {
-      // Successfully changing password counts as auth action for Devise
       const passwordReset = await resetPassword({ body: { member: { resetPasswordToken: passwordToken, password } } });
       if (isApiErrorResponse(passwordReset)) {
         const error = passwordReset.error.message;
         const deviseErrors = (passwordReset.error as any).errors;
         const passwordError = error || (deviseErrors && Object.entries(deviseErrors).map(([field, error]) => `${field} ${error}`).join(". "))
-
         this.setState({ passwordRequesting: false, passwordError });
       } else {
-        // TODO: Toast Message
         await this.props.attemptLogin();
         this.setState({ passwordRequesting: false });
       }
@@ -95,11 +120,12 @@ class PasswordReset extends React.Component<Props, State> {
       message({ body: { message: JSON.stringify(e) }})
       console.error("ERR", e);
     }
-
   }
 
   public render(): JSX.Element {
-    const { passwordMask, passwordError, passwordRequesting } = this.state;
+    const { passwordMask, passwordError, passwordRequesting, password } = this.state;
+    const strength = scorePassword(password);
+
     return (
       <Grid container spacing={3} justify="center">
         <Grid item xs={12} md={6}>
@@ -126,6 +152,8 @@ class PasswordReset extends React.Component<Props, State> {
                       id={passwordFields.password.name}
                       placeholder={passwordFields.password.placeholder}
                       type={passwordMask ? "password" : "text"}
+                      value={password}
+                      onChange={this.handlePasswordChange}
                       InputProps={{
                         endAdornment: (
                           <InputAdornment position="end">
@@ -134,6 +162,20 @@ class PasswordReset extends React.Component<Props, State> {
                         )
                       }}
                     />
+                    {password && (
+                      <>
+                        <LinearProgress
+                          variant="determinate"
+                          value={(strength / 4) * 100}
+                          style={{ marginTop: 8, backgroundColor: "#e0e0e0" }}
+                          // @ts-ignore
+                          color="inherit"
+                        />
+                        <span style={{ color: strengthColor[strength], marginTop: 4, display: "block", fontSize: "0.75rem" }}>
+                          {strengthLabel[strength]}
+                        </span>
+                      </>
+                    )}
                   </Grid>
                 </Grid>
                 {!passwordRequesting && passwordError && (

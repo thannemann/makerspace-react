@@ -37,7 +37,6 @@ describe("Member management", () => {
     });
 
     it("Customers can register from home page", async function () {
-      pending("Failing due to page render issue")
       this.timeout(200 * 1000);
       const rejectionUid = "register-home-page";
       await createRejectCard(rejectionUid);
@@ -101,7 +100,7 @@ describe("Member management", () => {
       await browser.waitUntil(async () => {
         const loadedCard = await utils.getElementText(memberPO.accessCardForm.importConfirmation);
         return rejectionUid === loadedCard;
-      }, undefined, `Received rejection card ${await utils.getElementText(memberPO.accessCardForm.importConfirmation)}, expected ${rejectionUid}`);
+      }, 30000, `Rejection card never loaded, expected ${rejectionUid}`);
       await utils.clickElement(memberPO.accessCardForm.idVerification);
       await utils.clickElement(memberPO.accessCardForm.submit);
       expect(await utils.isElementDisplayed(memberPO.accessCardForm.error)).to.be.false;
@@ -115,7 +114,6 @@ describe("Member management", () => {
     });
 
     it("Customers can register from home page via URL with discounts", async function () {
-      pending("Workaound for slow page load failures)
       this.timeout(200 * 1000);
       const discount = "SUNRISE-MONTH-50";
       await browser.url(utils.buildUrl(
@@ -207,7 +205,7 @@ describe("Member management", () => {
       await browser.waitUntil(async () => {
         const loadedCard = await utils.getElementText(memberPO.accessCardForm.importConfirmation);
         return rejectionUid === loadedCard;
-      }, undefined, `Received rejection card ${await utils.getElementText(memberPO.accessCardForm.importConfirmation)}, expected ${rejectionUid}`);
+      }, 30000, `Rejection card never loaded, expected ${rejectionUid}`);
       await utils.clickElement(memberPO.accessCardForm.idVerification);
       await utils.clickElement(memberPO.accessCardForm.submit);
       expect(await utils.isElementDisplayed(memberPO.accessCardForm.error)).to.be.false;
@@ -221,7 +219,6 @@ describe("Member management", () => {
     });
 
     it("Admins can register a customer manually", async () => {
-      pending("Workaound for slow page load failures)
       const newMember = Object.assign({}, basicMembers.pop());
       const rejectionUid = "admin-register-home-page";
       await createRejectCard(rejectionUid);
@@ -271,7 +268,7 @@ describe("Member management", () => {
       await browser.waitUntil(async () => {
         const loadedCard = await utils.getElementText(memberPO.accessCardForm.importConfirmation);
         return rejectionUid === loadedCard;
-      }, undefined, `Received rejection card ${await utils.getElementText(memberPO.accessCardForm.importConfirmation)}, expected ${rejectionUid}`);
+      }, 30000, `Rejection card never loaded, expected ${rejectionUid}`);
       await utils.clickElement(memberPO.accessCardForm.submit);
       expect(await utils.isElementDisplayed(memberPO.accessCardForm.error)).to.be.false;
       await utils.waitForNotVisible(memberPO.accessCardForm.submit);

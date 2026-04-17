@@ -1,6 +1,5 @@
 import { expect } from "chai";
 import utils from "./common";
-import { By, WebElement } from "selenium-webdriver";
 
 export class TablePageObject {
   private tableId: string;
@@ -35,9 +34,11 @@ export class TablePageObject {
       [field]: `#${this.getRowBaseId(rowId)}-${field}`
     }), {})
   });
+
   public getColumnText = async (field: string, rowId: string): Promise<string> => {
     return await utils.getElementText(`#${this.getRowBaseId(rowId)}-${field}`);
   }
+
   public selectRow = async (rowId: string, check: boolean = true) => {
     const element = await browser.$(`#${this.getRowBaseId(rowId)}-select`);
     await utils.selectCheckbox(element, check);
@@ -58,7 +59,7 @@ export class TablePageObject {
     const row = await this.getRowByIndex(index);
     const column = await row.$(`[id$="-${field}"]`);
     return column;
-  } 
+  }
 
   public getColumnTextByIndex = async (index: number, field: string): Promise<string> => {
     const column = await this.getColumnByIndex(index, field);
@@ -73,14 +74,10 @@ export class TablePageObject {
   ): Promise<void> => {
     const fieldsContent: { field: string, text: string }[] = await Promise.all((this.fields as string[]).map((field: string) => {
       return new Promise(async (resolve) => {
-        const text =  await this.getColumnTextByIndex(index, field);
-        resolve({
-          field,
-          text
-        });
+        const text = await this.getColumnTextByIndex(index, field);
+        resolve({ field, text });
       }) as Promise<{ field: string, text: string }>;
     }));
-
     fieldsContent.forEach(fieldEvaluator(resource));
   }
 
@@ -90,14 +87,10 @@ export class TablePageObject {
   ): Promise<void> => {
     const fieldsContent: { field: string, text: string }[] = await Promise.all((this.fields as string[]).map((field: string) => {
       return new Promise(async (resolve) => {
-        const text: string = await this.getColumnText(field, resource.id);
-        resolve({
-          field,
-          text
-        });
+        const text: string = await this.getColumnText(field, (resource as any).id);
+        resolve({ field, text });
       }) as Promise<{ field: string, text: string }>;
     }));
-
     fieldsContent.forEach(fieldEvaluator(resource));
   }
 
@@ -105,7 +98,6 @@ export class TablePageObject {
     await browser.waitUntil(async () => {
       return (await this.getAllRows()).length === resourceList.length;
     }, undefined, "Members list never loaded");
-
     await Promise.all(resourceList.slice(0, 5).map(async (resource) => {
       await this.verifyFields(resource, fieldEvaluator);
     }));

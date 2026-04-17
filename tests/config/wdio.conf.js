@@ -31,9 +31,11 @@ exports.config = {
     bail: 0,
     connectionRetryTimeout: 90 * 1000,
     connectionRetryCount: 3,
+    ...(process.env.SELENIUM_REMOTE_URL && { hostname: new URL(process.env.SELENIUM_REMOTE_URL).hostname }),
+    ...(process.env.SELENIUM_REMOTE_URL && { port: parseInt(new URL(process.env.SELENIUM_REMOTE_URL).port) || 4444 }),
+    ...(process.env.SELENIUM_REMOTE_URL && { path: new URL(process.env.SELENIUM_REMOTE_URL).pathname }),
     services: [
-        "selenium-standalone",
-        "devtools",
+        ...(!process.env.SELENIUM_REMOTE_URL ? ["selenium-standalone"] : []),
         ...process.env.STATIC_SERVER ? [
             ['static-server', {
                 folders: [
@@ -54,7 +56,6 @@ exports.config = {
         "goog:chromeOptions": {
             args: [
                 "--disable-features=IsolateOrigins,site-per-process",
-                "--auto-open-devtools-for-tabs",
                 "--disable-dev-shm-usage",
                 "--disable-site-isolation-trials",
                 ...process.env.HEADLESS ? [
@@ -79,7 +80,8 @@ exports.config = {
             // Set to a width of 900 b/c the dev tools panel is open and included in this size
             await browser.setWindowSize(900, 1136)
         } else {
-            await browser.maximizeWindow()
+            //await browser.maximizeWindow()
+            await browser.setWindowSize(1920, 1080)
         }
     },
     async afterTest(

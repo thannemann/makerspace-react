@@ -117,7 +117,8 @@ export const fields = (admin: boolean, member?: Partial<Member>): FormFields => 
 
 export const MemberRoleOptions = {
   [MemberRole.Member]: "Member",
-  [MemberRole.Admin]: "Admin"
+  [MemberRole.Admin]: "Admin",
+  "resource_manager": "Resource Manager",
 }
 
 export const membershipDetails = {
@@ -150,12 +151,21 @@ export const membershipDetails = {
     description: "Recurring membership subscription by Braintree",
     type: "Subscription",
     allowMod: true,
+  },
+  household: {
+    description: "Membership covered under a household subscription. Expiration follows the primary member's subscription.",
+    type: "Household Membership",
+    allowMod: false,
   }
 }
 
 export const getDetailsForMember = (member: Partial<Member>) => {
   let details = membershipDetails.noSubscription;
-  if (member.subscription && !member.subscriptionId) {
+  if ((member as any).groupName && (member as any).householdRole === "secondary") {
+    details = membershipDetails.household;
+  } else if ((member as any).groupName && (member as any).householdRole === "primary") {
+    details = membershipDetails.household;
+  } else if (member.subscription && !member.subscriptionId) {
     details = membershipDetails.paypal;
   } else if (member.subscriptionId) {
     details = membershipDetails.subscription;

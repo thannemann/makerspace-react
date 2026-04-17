@@ -63,6 +63,12 @@ export const SignUpFields: FormFields = {
     name: `${signUpPrefix}-email`,
     placeholder: "Enter email",
   },
+  confirmEmail: {
+    label: "Confirm Email",
+    name: `${signUpPrefix}-confirmEmail`,
+    placeholder: "Confirm email address",
+    error: "Email addresses do not match",
+  },
   password: {
     label: "Password",
     name: `${signUpPrefix}-password`,

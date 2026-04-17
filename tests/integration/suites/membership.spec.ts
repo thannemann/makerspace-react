@@ -27,15 +27,17 @@ describe("Membership", () => {
   });
 
   afterEach(async () => {
-    const displayed = await utils.isElementDisplayed(header.links.logout);
-    if (displayed) {
+    try {
+      await browser.url(utils.buildUrl());
+      await browser.pause(1000);
       await header.navigateTo(header.links.logout);
       await utils.waitForVisible(header.loginLink);
+    } catch (e) {
+      // not logged in or navigation failed, ignore
     }
   });
 
   it("Members can create a membership, change payment methods and cancel their membership", async () => {
-    pending("Page load delays trigger failures")
     await auth.goToLogin();
     await auth.signInUser(getBasicUserLogin());
     await header.navigateTo(header.links.settings);
@@ -95,7 +97,7 @@ describe("Membership", () => {
     await browser.waitUntil(async () => {
       const numPaymentMethods = (await paymentMethods.getPaymentMethods()).length;
       return numPaymentMethods === 1;
-    }, undefined, "Payment methods table never reloaded");
+    }, 30000, "Payment methods table never reloaded");
     await utils.clickElement(paymentMethods.addPaymentButton);
     await utils.waitForVisible(paymentMethods.paymentMethodFormSelect.creditCard);
     await utils.waitForNotVisible(paymentMethods.paymentMethodFormSelect.loading);
@@ -118,7 +120,7 @@ describe("Membership", () => {
     await browser.waitUntil(async () => {
       const numPaymentMethods = (await paymentMethods.getPaymentMethods()).length;
       return numPaymentMethods === 2;
-    }, undefined, "Payment methods table never reloaded");
+    }, 30000, "Payment methods table never reloaded");
     await paymentMethods.selectPaymentMethodByIndex(0);
 
     // TODO: Verify correct payment method is selected when reopening
@@ -141,7 +143,6 @@ describe("Membership", () => {
   });
 
   it("Members can cancel a membership and sign back up", async () => {
-    pending("Page load delays trigger failures")
     const rejectionUid = "member-sign-back-up";
     await createRejectCard(rejectionUid);
     const newMember = buildTestMember("cancel-sign-up");
@@ -177,10 +178,13 @@ describe("Membership", () => {
     // Logout
     await header.navigateTo(header.links.logout);
     await utils.waitForVisible(header.loginLink);
+
     // Login as Admin
     await auth.goToLogin();
+    await utils.getElementById(auth.loginModal.emailInput, 120000);
     await auth.signInUser(getAdminUserLogin());
     await utils.waitForPageToMatch(Routing.Profile);
+
     // View new member's profile
     await browser.url(memberProfileUrl);
     await utils.waitForPageToMatch(Routing.Profile);
@@ -197,16 +201,16 @@ describe("Membership", () => {
 
     await browser.waitUntil(async () => {
       const loadedCard = await utils.getElementText(memberPO.accessCardForm.importConfirmation);
-        return rejectionUid === loadedCard;
-      }, undefined, `Received rejection card ${await utils.getElementText(memberPO.accessCardForm.importConfirmation)}, expected ${rejectionUid}`);
+      return rejectionUid === loadedCard;
+    }, 30000, `Rejection card never loaded, expected ${rejectionUid}`);
     await utils.clickElement(memberPO.accessCardForm.idVerification);
     await utils.clickElement(memberPO.accessCardForm.submit);
-    expect(await utils.isElementDisplayed(memberPO.accessCardForm.error)).to.be.false
+    expect(await utils.isElementDisplayed(memberPO.accessCardForm.error)).to.be.false;
     await utils.waitForNotVisible(memberPO.accessCardForm.submit);
     await utils.waitForNotVisible(memberPO.memberDetail.loading);
-    await memberPO.verifyProfileInfo({ // Verify registering card activates the membership
+    await memberPO.verifyProfileInfo({
       ...newMember,
-      expirationTime: moment().add(1, 'M').valueOf()
+      expirationTime: moment().add(1, "M").valueOf()
     });
 
     // Logout from admin and back as user
@@ -215,9 +219,9 @@ describe("Membership", () => {
     await auth.goToLogin();
     await auth.signInUser(newMember);
 
-    await memberPO.verifyProfileInfo({ // Verify user sees same expiration time
+    await memberPO.verifyProfileInfo({
       ...newMember,
-      expirationTime: moment().add(1, 'M').valueOf()
+      expirationTime: moment().add(1, "M").valueOf()
     });
 
     // Navigate to settings and cancel
@@ -241,9 +245,9 @@ describe("Membership", () => {
     await browser.url(memberProfileUrl);
     await utils.waitForPageToMatch(Routing.Profile);
     // Cancelling should not impact existing membership time
-    await memberPO.verifyProfileInfo({ // Verify user sees same expiration time
+    await memberPO.verifyProfileInfo({
       ...newMember,
-      expirationTime: moment().add(1, 'M').valueOf()
+      expirationTime: moment().add(1, "M").valueOf()
     });
 
     // Back to settings
@@ -258,13 +262,12 @@ describe("Membership", () => {
     await signup.selectMembershipOption(invoiceOptionIds.monthly, false);
     await signup.goNext();
 
-
     // Accept default selection in payment
     await utils.waitForNotVisible(paymentMethods.paymentMethodSelect.loading);
     await browser.waitUntil(async () => {
       const numPaymentMethods = (await paymentMethods.getPaymentMethods()).length;
       return numPaymentMethods === 1;
-    }, undefined, "Payment methods table never reloaded");
+    }, 30000, "Payment methods table never reloaded");
 
     await signup.goNext();
     await utils.waitForNotVisible(paymentMethods.paymentMethodAccordian.creditCard);
@@ -275,7 +278,6 @@ describe("Membership", () => {
   });
 
   it("Members can sign up after cancelling a Braintree membership via Braintree", async () => {
-    pending("Page load delays trigger failures")
     const rejectionUid = "braintree-member-sign-back-up";
     await createRejectCard(rejectionUid);
     const newMember = buildTestMember("braintree-cancel-sign-up");
@@ -330,16 +332,16 @@ describe("Membership", () => {
     await browser.waitUntil(async () => {
       const loadedCard = await utils.getElementText(memberPO.accessCardForm.importConfirmation);
       return rejectionUid === loadedCard;
-    }, undefined, `Received rejection card ${await utils.getElementText(memberPO.accessCardForm.importConfirmation)}, expected ${rejectionUid}`);
+    }, 30000, `Rejection card never loaded, expected ${rejectionUid}`);
 
     await utils.clickElement(memberPO.accessCardForm.idVerification);
     await utils.clickElement(memberPO.accessCardForm.submit);
-    expect(await utils.isElementDisplayed(memberPO.accessCardForm.error)).to.be.false
+    expect(await utils.isElementDisplayed(memberPO.accessCardForm.error)).to.be.false;
     await utils.waitForNotVisible(memberPO.accessCardForm.submit);
     await utils.waitForNotVisible(memberPO.memberDetail.loading);
-    await memberPO.verifyProfileInfo({ // Verify registering card activates the membership
+    await memberPO.verifyProfileInfo({
       ...newMember,
-      expirationTime: moment().add(1, 'M').valueOf()
+      expirationTime: moment().add(1, "M").valueOf()
     });
 
     // Logout from admin and back as user
@@ -352,9 +354,9 @@ describe("Membership", () => {
     // Login and verify user is cancelled
     await auth.goToLogin();
     await auth.signInUser(newMember);
-    await memberPO.verifyProfileInfo({ // Verify user sees same expiration time
+    await memberPO.verifyProfileInfo({
       ...newMember,
-      expirationTime: moment().add(1, 'M').valueOf()
+      expirationTime: moment().add(1, "M").valueOf()
     });
 
     // Go to settings to start a new membership
@@ -372,7 +374,7 @@ describe("Membership", () => {
     await browser.waitUntil(async () => {
       const numPaymentMethods = (await paymentMethods.getPaymentMethods()).length;
       return numPaymentMethods === 1;
-    }, undefined, "Payment methods table never reloaded");
+    }, 30000, "Payment methods table never reloaded");
     await signup.goNext();
     // Accept recurring payment authorization
     await utils.waitForVisible(checkoutPo.authAgreementCheckbox);
@@ -381,8 +383,8 @@ describe("Membership", () => {
     await utils.waitForPageToMatch(Routing.Profile);
   });
 
-  it("Members can sign up after canceling a PayPal membership via PayPal", async () => {
-    pending("Unknown Paypal membership issue in rendered page")
+  it("Members can sign up after canceling a PayPal membership via PayPal", async function () {
+    this.retries(0);
     await auth.goToLogin();
     await auth.signInUser(payPalMember);
     await utils.waitForPageToMatch(Routing.Profile);
@@ -391,7 +393,7 @@ describe("Membership", () => {
 
     const startingExpiration = await utils.getElementText(memberPO.memberDetail.expiration);
     const startingAsMs: number = dateToTime(startingExpiration);
-    await memberPO.verifyProfileInfo({ // Verify user sees same expiration time
+    await memberPO.verifyProfileInfo({
       ...payPalMember,
       expirationTime: startingAsMs
     } as any);
@@ -401,17 +403,24 @@ describe("Membership", () => {
     await utils.waitForPageToMatch(settingsPO.pageUrl);
     await settingsPO.waitForLoad();
     await settingsPO.goToMembershipSettings();
+
     // PayPal details displayed
     await utils.waitForNotVisible(settingsPO.nonSubscriptionDetails.loading);
     expect(await utils.isElementDisplayed(settingsPO.nonSubscriptionDetails.status)).to.be.true;
-    expect(await utils.getElementText(settingsPO.nonSubscriptionDetails.membershipType)).to.contain("PayPal");
 
+    await browser.waitUntil(async () => {
+      const type = await utils.getElementText(settingsPO.nonSubscriptionDetails.membershipType);
+      return type.includes("PayPal");
+    }, 30000, "Membership type never showed PayPal");
+
+    const membershipType = await utils.getElementText(settingsPO.nonSubscriptionDetails.membershipType);
+    expect(membershipType).to.contain("PayPal");
     await cancelMemberSubscription(payPalMember.email, true);
 
     // Go to profile (force new session)
     await browser.url(memberProfileUrl);
     await utils.waitForPageToMatch(Routing.Profile);
-    await memberPO.verifyProfileInfo({ // Verify user sees same expiration time
+    await memberPO.verifyProfileInfo({
       ...payPalMember,
       expirationTime: startingAsMs
     } as any);
@@ -446,14 +455,13 @@ describe("Membership", () => {
     await utils.clickElement(checkoutPo.authAgreementCheckbox);
     await signup.goNext();
     await utils.waitForPageToMatch(Routing.Profile);
-    await memberPO.verifyProfileInfo({ // Verify user sees updated expiration time
+    await memberPO.verifyProfileInfo({
       ...payPalMember,
       expirationTime: moment(startingAsMs).add(1, "months").valueOf()
     } as any);
   });
 
   it("Admins can cancel a membership", async function () {
-    pending("Admin cancel is failing due to page load time")
     this.timeout(300 * 1000);
     await auth.goToLogin();
     await auth.signInUser(getBasicUserLogin());
@@ -484,7 +492,7 @@ describe("Membership", () => {
     await creditCard.fillInput("expirationDate", newVisa.expiration);
     await creditCard.fillInput("postalCode", newVisa.postalCode);
     await creditCard.fillInput("cardholderName", newVisa.name);
-      await signup.goNext();
+    await signup.goNext();
     await utils.waitForNotVisible(paymentMethods.paymentMethodAccordian.creditCard);
 
     // Select the payment method
@@ -492,7 +500,7 @@ describe("Membership", () => {
     await browser.waitUntil(async () => {
       const numPaymentMethods = (await paymentMethods.getPaymentMethods()).length;
       return numPaymentMethods === 1;
-    }, undefined, "Payment methods table never reloaded");
+    }, 30000, "Payment methods table never reloaded");
 
     await signup.goNext();
 
@@ -511,7 +519,10 @@ describe("Membership", () => {
     await utils.waitForPageLoad(billingPO.url);
     await billingPO.goToSubscriptions();
 
-    await utils.waitForNotVisible(subscriptionPO.getLoadingId(), 86 * 1000);
+    await browser.waitUntil(async () => {
+      const rows = await subscriptionPO.getAllRows();
+      return rows.length > 0;
+    }, 120000, "Subscriptions table never loaded rows");
 
     // Find and cancel subscription
     const name = await subscriptionPO.getColumnTextByIndex(0, "memberName");
@@ -521,15 +532,22 @@ describe("Membership", () => {
     await utils.waitForNotVisible(subscriptionPO.cancelSubscriptionModal.loading);
     await utils.clickElement(subscriptionPO.cancelSubscriptionModal.submit);
     await utils.waitForNotVisible(subscriptionPO.cancelSubscriptionModal.submit);
-    await utils.waitForNotVisible(subscriptionPO.getLoadingId(), 86 * 1000);
+
+    await browser.waitUntil(async () => {
+      const rows = await subscriptionPO.getAllRows();
+      const memberNames = await Promise.all(rows.map(async (row) => {
+        const cell = await row.$(`[id$="-memberName"]`);
+        return await cell.getText();
+      }));
+      return !memberNames.includes(name);
+    }, 120000, "Canceled member still present in subscriptions table");
 
     const rows = await subscriptionPO.getAllRows();
-    await Promise.all(rows.map((row, index) => {
-      return new Promise(async (resolve) => {
-        const memberName = await subscriptionPO.getColumnByIndex(index, "memberName");
-        expect(memberName).not.to.eql(name);
-        resolve();
-      });
+    const memberNames = await Promise.all(rows.map(async (row) => {
+      const cell = await row.$(`[id$="-memberName"]`);
+      return await cell.getText();
     }));
+
+    expect(memberNames).not.to.include(name);
   });
 });
