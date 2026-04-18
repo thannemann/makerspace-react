@@ -104,6 +104,8 @@ export const MemberInfoStep: React.FC = ({ children }) => {
                   We do not sell any of your personal information.
                 </Typography>
               </Grid>
+
+              {/* Name */}
               <Grid item xs={12} sm={6}>
                 <TextInput
                   required={true}
@@ -120,25 +122,8 @@ export const MemberInfoStep: React.FC = ({ children }) => {
                   placeholder={SignUpFields.lastname.placeholder}
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
-                <EmailInput
-                  required={true}
-                  label={SignUpFields.email.label}
-                  fieldName={SignUpFields.email.name}
-                  placeholder={SignUpFields.email.placeholder}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <ConfirmEmailField />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <PasswordInput 
-                  label={SignUpFields.password.label}
-                  placeholder={SignUpFields.password.placeholder}
-                  fieldName={SignUpFields.password.name}
-                  validate={SignUpFields.password.validate}
-                />
-              </Grid>
+
+              {/* Address */}
               <Grid item xs={12} sm={6}>
                 <TextInput
                   required={true}
@@ -154,7 +139,7 @@ export const MemberInfoStep: React.FC = ({ children }) => {
                   placeholder={SignUpFields.unit.placeholder}
                 />
               </Grid>
-              <Grid item xs={12} md={5}>
+              <Grid item xs={12} sm={6}>
                 <TextInput
                   required={true}
                   label={SignUpFields.city.label}
@@ -162,8 +147,7 @@ export const MemberInfoStep: React.FC = ({ children }) => {
                   placeholder={SignUpFields.city.placeholder}
                 />
               </Grid>
-
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid item xs={4} sm={2}>
                 <SelectInput
                   required={true}
                   fieldName={SignUpFields.state.name}
@@ -183,8 +167,7 @@ export const MemberInfoStep: React.FC = ({ children }) => {
                   ]}
                 />
               </Grid>
-
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid item xs={8} sm={4}>
                 <TextInput
                   required={true}
                   label={SignUpFields.postalCode.label}
@@ -192,11 +175,34 @@ export const MemberInfoStep: React.FC = ({ children }) => {
                   placeholder={SignUpFields.postalCode.placeholder}
                 />
               </Grid>
+
+              {/* Phone */}
               <Grid item xs={12}>
                 <PhoneInput
                   label={SignUpFields.phone.label}
                   fieldName={SignUpFields.phone.name}
                   placeholder={SignUpFields.phone.placeholder}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <EmailInput
+                  required={true}
+                  label={SignUpFields.email.label}
+                  fieldName={SignUpFields.email.name}
+                  placeholder={SignUpFields.email.placeholder}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <ConfirmEmailField />
+              </Grid>
+
+              {/* Password */}
+              <Grid item xs={12}>
+                <PasswordInput 
+                  label={SignUpFields.password.label}
+                  placeholder={SignUpFields.password.placeholder}
+                  fieldName={SignUpFields.password.name}
+                  validate={SignUpFields.password.validate}
                 />
               </Grid>
             </Grid>
