@@ -241,6 +241,11 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
                   The primary member must be on a household membership plan before a household can be created.
                 </Typography>
               </Grid>
+              {error && (
+                <Grid item xs={12}>
+                  <ErrorMessage id="household-create-error" error={error} />
+                </Grid>
+              )}
               <Grid item xs={12}>
                 <Button
                   id="create-household-button"
