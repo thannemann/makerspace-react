@@ -18,6 +18,7 @@ export class SignUpPageObject {
     firstnameInput: `${this.signUpFormId}-firstname`,
     lastnameInput: `${this.signUpFormId}-lastname`,
     emailInput: `${this.signUpFormId}-email`,
+    confirmEmailInput: `${this.signUpFormId}-confirmEmail`,
     streetInput: `${this.signUpFormId}-street`,
     unitInput: `${this.signUpFormId}-unit`,
     cityInput: `${this.signUpFormId}-city`,
@@ -65,6 +66,7 @@ export class SignUpPageObject {
     await utils.fillInput(this.signUpForm.firstnameInput, user.firstname);
     await utils.fillInput(this.signUpForm.lastnameInput, user.lastname);
     await utils.fillInput(this.signUpForm.emailInput, user.email);
+    await utils.fillInput(this.signUpForm.confirmEmailInput, user.email);
     await utils.fillInput(this.signUpForm.passwordInput, user.password);
     await utils.fillInput(this.signUpForm.streetInput, user.address.street);
     await utils.fillInput(this.signUpForm.cityInput, user.address.city);
