@@ -45,6 +45,7 @@ export class AuthPageObject {
     await utils.fillInput(this.loginModal.emailInput, user.email);
     await utils.fillInput(this.loginModal.passwordInput, user.password);
     await utils.clickElement(this.loginModal.submitButton);
+    await utils.waitForPageToMatch(this.redirectUrl);
   }
 }
 
