@@ -184,7 +184,7 @@ const MemberProfile: React.FC = () => {
                   </span>
                 )}
                 {isAdmin && member.customerId && (
-                  <a target="blank" href={`https://www.braintreegateway.com/merchants/vfx5f27bnwwjjyqx/customers/${member.customerId}`}>
+                  <a target="blank" href={`https://www.braintreegateway.com/merchants/${process.env.BT_MERCHANT_ID || ""}/customers/${member.customerId}`}>
                     View in Braintree
                   </a>
                 )}
