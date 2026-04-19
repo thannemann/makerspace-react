@@ -17,12 +17,14 @@ import SendRegistrationComponent from 'ui/auth/SendRegistrationComponent';
 import AgreementContainer from 'ui/documents/AgreementsContainer';
 import UnsubscribeEmails from "ui/member/UnsubscribeEmails";
 import { SignUpWorkflow } from 'pages/registration/SignUpWorkflow/SignUpWorkflow';
+import AdminRentalsPage from 'ui/admin/rentals/AdminRentalsPage';
 
 interface Props {
   currentUserId: string,
   permissions: CollectionOf<Permission>,
   isAdmin: boolean;
 }
+
 const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions, isAdmin }) => {
   const billingEnabled = permissions[Whitelists.billing] || false;
   const earnedMembershipEnabled = isAdmin && permissions[Whitelists.earnedMembership];
@@ -35,6 +37,8 @@ const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions, isAdmin 
       <Route exact path={`${Routing.Settings}/${Routing.PathPlaceholder.Resource}${Routing.PathPlaceholder.Optional}`} component={SettingsContainer} />
       <Route exact path={`${Routing.Profile}/${Routing.PathPlaceholder.Resource}${Routing.PathPlaceholder.Optional}`} component={MemberDetail} />
       <Route exact path={Routing.Rentals} component={RentalsList} />
+      {/* Admin rental management — full tabbed screen */}
+      {isAdmin && <Route exact path={Routing.AdminRentals} component={AdminRentalsPage} />}
       {billingEnabled && <Route exact path={`${Routing.Billing}/${Routing.PathPlaceholder.Resource}${Routing.PathPlaceholder.Optional}`} component={BillingContainer} />}
       {billingEnabled && <Route exact path={Routing.Receipt} component={Receipt}/>}
       {billingEnabled && <Route path={Routing.Checkout} component={CheckoutPage} />}

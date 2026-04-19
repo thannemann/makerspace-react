@@ -18,13 +18,14 @@ export namespace Routing {
   export const Billing = "/billing";
   export const Subscriptions = "/subscriptions";
   export const Rentals = "/rentals";
+  export const AdminRentals = "/admin/rentals";   // ← NEW
   export const Checkout = "/checkout";
   export const Receipt = `${Checkout}/receipt/${PathPlaceholder.InvoiceId}`;
   export const PasswordReset = "/resetPassword";
   export const Settings = `${Profile}/settings`;
-  export const SendRegistration = `/send-registration/${PathPlaceholder.Email}`
+  export const SendRegistration = `/send-registration/${PathPlaceholder.Email}`;
   export const EarnedMemberships = "/earned-memberships";
-  export const Unsubscribe = `/unsubscribe/${PathPlaceholder.MemberId}`
+  export const Unsubscribe = `/unsubscribe/${PathPlaceholder.MemberId}`;
 }
 
 export enum CrudOperation {
