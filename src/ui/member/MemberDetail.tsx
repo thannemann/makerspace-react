@@ -9,7 +9,7 @@ import KeyValueItem from "ui/common/KeyValueItem";
 import DetailView from "ui/common/DetailView";
 import MemberStatusLabel from "ui/member/MemberStatusLabel";
 import InvoicesList from "ui/invoice/InvoicesList";
-import RentalsList from "ui/rentals/RentalsList";
+import MemberRentalsTab from "ui/rentals/MemberRentalsTab";
 import { ActionButton } from "ui/common/ButtonRow";
 import { Whitelists, Routing } from "app/constants";
 import { getDetailsForMember } from "./constants";
@@ -184,7 +184,7 @@ const MemberProfile: React.FC = () => {
                   </span>
                 )}
                 {isAdmin && member.customerId && (
-                  <a target="blank" href={`https://www.braintreegateway.com/merchants/${process.env.BT_MERCHANT_ID || ""}/customers/${member.customerId}`}>
+                  <a target="blank" href={`https://www.braintreegateway.com/merchants/vfx5f27bnwwjjyqx/customers/${member.customerId}`}>
                     View in Braintree
                   </a>
                 )}
@@ -222,7 +222,7 @@ const MemberProfile: React.FC = () => {
           }] : [],
           {
             name: "rentals",
-            content: <RentalsList member={member}/>
+            content: <MemberRentalsTab member={member} onUpdate={refreshMember} />
           },
           ...billingEnabled && !!customerId ? [{
             name: "transactions",

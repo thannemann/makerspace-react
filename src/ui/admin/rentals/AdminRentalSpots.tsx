@@ -27,6 +27,7 @@ import { withQueryContext, useQueryContext } from "ui/common/Filters/QueryContex
 import extractTotalItems from "ui/utils/extractTotalItems";
 
 const rowId = (spot: RentalSpot) => spot.id;
+
 const emptySpot = (): Partial<RentalSpot> => ({
   number: "", location: "", description: "",
   rentalTypeId: "", requiresApproval: false,
@@ -35,8 +36,7 @@ const emptySpot = (): Partial<RentalSpot> => ({
 
 const warningBoxStyle: React.CSSProperties = {
   padding: "8px", backgroundColor: "#fff3e0",
-  borderRadius: "4px", border: "1px solid #ffcc02",
-  marginTop: "8px"
+  borderRadius: "4px", border: "1px solid #ffcc02", marginTop: "8px"
 };
 
 const AdminRentalSpots: React.FC = () => {
@@ -44,6 +44,7 @@ const AdminRentalSpots: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = React.useState<RentalSpot | null>(null);
   const [editTarget,   setEditTarget]   = React.useState<Partial<RentalSpot>>(emptySpot());
   const [isEditing,    setIsEditing]    = React.useState(false);
+  const [selectedId,   setSelectedId]   = React.useState<string>(undefined);
   const { params, changePage } = useQueryContext();
 
   const { data: rentalTypes = [] } = useReadTransaction(
@@ -68,8 +69,8 @@ const AdminRentalSpots: React.FC = () => {
   const isSaving = creating || updating;
 
   const openCreate = () => { setEditTarget(emptySpot()); setIsEditing(false); setModalOpen(true); };
-  const openEdit = (spot: RentalSpot) => { setEditTarget({ ...spot }); setIsEditing(true); setModalOpen(true); };
-  const setField = (field: keyof RentalSpot, value: any) => setEditTarget(prev => ({ ...prev, [field]: value }));
+  const openEdit   = (spot: RentalSpot) => { setEditTarget({ ...spot }); setIsEditing(true); setModalOpen(true); };
+  const setField   = (field: keyof RentalSpot, value: any) => setEditTarget(prev => ({ ...prev, [field]: value }));
 
   const handleSave = React.useCallback(() => {
     if (isEditing && editTarget.id) {
@@ -86,7 +87,8 @@ const AdminRentalSpots: React.FC = () => {
         <span>
           {row.number}
           {row.parentNumber && (
-            <Chip size="small" label={`sub of ${row.parentNumber}`} style={{ marginLeft: "6px", fontSize: "10px" }} />
+            <Chip size="small" label={`sub of ${row.parentNumber}`}
+              style={{ marginLeft: "6px", fontSize: "10px" }} />
           )}
         </span>
       ),
@@ -104,26 +106,28 @@ const AdminRentalSpots: React.FC = () => {
       id: "approval", label: "Approval",
       cell: (row: RentalSpot) => row.requiresApproval
         ? <StatusLabel label="Required" color={Status.Warn} />
-        : <StatusLabel label="Auto" color={Status.Success} />,
+        : <StatusLabel label="Auto"     color={Status.Success} />,
     },
     {
       id: "available", label: "Available",
       cell: (row: RentalSpot) => row.available
         ? <StatusLabel label="Yes" color={Status.Success} />
-        : <StatusLabel label="No" color={Status.Default} />,
+        : <StatusLabel label="No"  color={Status.Default} />,
     },
     {
       id: "active", label: "Active",
       cell: (row: RentalSpot) => row.active
-        ? <StatusLabel label="Active" color={Status.Success} />
+        ? <StatusLabel label="Active"   color={Status.Success} />
         : <StatusLabel label="Disabled" color={Status.Danger} />,
     },
     {
       id: "actions", label: "",
       cell: (row: RentalSpot) => (
         <div style={{ display: "flex", gap: "8px" }}>
-          <Button size="small" variant="outlined" onClick={e => { e.stopPropagation(); openEdit(row); }}>Edit</Button>
-          <Button size="small" variant="outlined" color="secondary" onClick={e => { e.stopPropagation(); setDeleteTarget(row); }}>Delete</Button>
+          <Button size="small" variant="outlined"
+            onClick={e => { e.stopPropagation(); openEdit(row); }}>Edit</Button>
+          <Button size="small" variant="outlined" color="secondary"
+            onClick={e => { e.stopPropagation(); setDeleteTarget(row); }}>Delete</Button>
         </div>
       ),
     },
@@ -133,7 +137,7 @@ const AdminRentalSpots: React.FC = () => {
     <Grid container spacing={3}>
       <Grid item xs={12}>
         <Grid container justify="space-between" alignItems="center">
-          <Typography variant="h6">Rental Spot Catalog</Typography>
+          <Typography variant="h6">Rental Spots</Typography>
           <Button variant="contained" color="primary" onClick={openCreate}>Add Spot</Button>
         </Grid>
       </Grid>
@@ -142,8 +146,9 @@ const AdminRentalSpots: React.FC = () => {
         <StatefulTable
           id="admin-rental-spots-table" title="Rental Spots"
           loading={isRequesting} data={Object.values(spots)} error={error}
-          totalItems={extractTotalItems(response)} columns={columns}
-          rowId={rowId} renderSearch={true}
+          totalItems={extractTotalItems(response)}
+          selectedIds={selectedId} setSelectedIds={setSelectedId}
+          columns={columns} rowId={rowId} renderSearch={true}
         />
       </Grid>
 
@@ -177,7 +182,7 @@ const AdminRentalSpots: React.FC = () => {
                 onChange={e => setField("rentalTypeId", e.target.value)}
               >
                 <MenuItem value="">— Select type —</MenuItem>
-                {rentalTypes.map((t: RentalType) => (
+                {(rentalTypes as RentalType[]).map((t: RentalType) => (
                   <MenuItem key={t.id} value={t.id}>{t.displayName}</MenuItem>
                 ))}
               </TextField>
@@ -187,7 +192,7 @@ const AdminRentalSpots: React.FC = () => {
                 placeholder="Leave blank if not a sub-spot"
                 value={editTarget.parentNumber || ""}
                 onChange={e => setField("parentNumber", e.target.value || null)}
-                helperText="e.g. Shelf-1 for Shelf-1a or Shelf-1b"
+                helperText="e.g. Shelf-1 for Shelf-1a or Shelf-1b (parent or sub rentals block each other)"
               />
             </Grid>
             <Grid item xs={12}>

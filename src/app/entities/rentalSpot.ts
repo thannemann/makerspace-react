@@ -29,6 +29,7 @@ export interface RentalSpot {
 export enum RentalStatus {
   Pending   = "pending",
   Active    = "active",
+  Vacating  = "vacating",
   Cancelled = "cancelled",
   Denied    = "denied",
 }
@@ -36,6 +37,7 @@ export enum RentalStatus {
 export const RentalStatusDisplay: Record<RentalStatus, string> = {
   [RentalStatus.Pending]:   "Pending Approval",
   [RentalStatus.Active]:    "Active",
+  [RentalStatus.Vacating]:  "Vacating",
   [RentalStatus.Cancelled]: "Cancelled",
   [RentalStatus.Denied]:    "Denied",
 };

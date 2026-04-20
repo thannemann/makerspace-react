@@ -2,9 +2,10 @@ import * as React from "react";
 import moment from "moment";
 import { Link } from 'react-router-dom';
 import Grid from "@material-ui/core/Grid";
+import Tooltip from "@material-ui/core/Tooltip";
 import { Rental, listRentals, adminListRentals, Member } from "makerspace-ts-api-client";
 
-import StatefulTable from "../common/table/StatefulTable";
+import StatefulTable from "ui/common/table/StatefulTable";
 import { SortDirection } from "ui/common/table/constants";
 import { Column } from "ui/common/table/Table";
 import { Status } from "ui/constants";
@@ -12,14 +13,35 @@ import StatusLabel from "ui/common/StatusLabel";
 import { timeToDate } from "ui/utils/timeToDate";
 import DeleteRentalModal from "ui/rentals/DeleteRentalModal";
 import useReadTransaction from "ui/hooks/useReadTransaction";
-import CreateRental from "ui/rentals/CreateRental";
+import CreateRentalAdmin from "ui/rentals/CreateRentalAdmin";
 import RenewRental from "ui/rentals/RenewRental";
 import EditRental from "ui/rentals/EditRental";
-import extractTotalItems from "../utils/extractTotalItems";
-import { useAuthState } from "../reducer/hooks";
-import { useQueryContext, withQueryContext } from "../common/Filters/QueryContext";
+import extractTotalItems from "ui/utils/extractTotalItems";
+import { useAuthState } from "ui/reducer/hooks";
+import { useQueryContext, withQueryContext } from "ui/common/Filters/QueryContext";
+import { RentalStatus, RentalStatusDisplay } from "app/entities/rentalSpot";
 
 const rowId = (rental: Rental) => rental.id;
+
+const getRentalStatus = (row: Rental): { label: string; color: Status } => {
+  const status = (row as any).status as RentalStatus;
+
+  if (status && status !== RentalStatus.Active) {
+    switch (status) {
+      case RentalStatus.Pending:   return { label: "Pending Approval", color: Status.Warn };
+      case RentalStatus.Vacating:  return { label: "Vacating",         color: Status.Warn };
+      case RentalStatus.Cancelled: return { label: "Cancelled",        color: Status.Default };
+      case RentalStatus.Denied:    return { label: "Denied",           color: Status.Danger };
+    }
+  }
+
+  // Legacy / active — use expiration
+  const expired = row.expiration && moment(row.expiration).valueOf() < Date.now();
+  return {
+    label: expired ? "Expired" : "Active",
+    color: expired ? Status.Danger : Status.Success,
+  };
+};
 
 const RentalsList: React.FC<{ member?: Member }> = ({ member }) => {
   const { currentUser: { id, isAdmin, isResourceManager } } = useAuthState();
@@ -28,40 +50,44 @@ const RentalsList: React.FC<{ member?: Member }> = ({ member }) => {
 
   const fields: Column<Rental>[] = [
     {
-      id: "number",
-      label: "Number",
+      id: "number", label: "Number",
       cell: (row: Rental) => row.number,
       defaultSortDirection: SortDirection.Desc,
     },
     {
-      id: "description",
-      label: "Description",
+      id: "description", label: "Description",
       cell: (row: Rental) => row.description,
     },
     {
-      id: "expiration",
-      label: "Expiration Date",
+      id: "expiration", label: "Expiration Date",
       cell: (row: Rental) => row.expiration ? timeToDate(row.expiration) : "N/A",
       defaultSortDirection: SortDirection.Desc,
     },
     ...asAdmin ? [{
-      id: "member",
-      label: "Member",
+      id: "member", label: "Member",
       cell: (row: Rental) => <Link to={`/members/${row.memberId}`}>{row.memberName}</Link>,
       defaultSortDirection: SortDirection.Desc,
       width: 200
     }] : [],
     {
-      id: "status",
-      label: "Status",
+      id: "status", label: "Status",
       cell: (row: Rental) => {
-        const current = moment(row.expiration).valueOf() > Date.now();
-        const statusColor = current ? Status.Success : Status.Danger;
-        const label = current ? "Active" : "Expired";
+        const { label, color } = getRentalStatus(row);
+        const status = (row as any).status as RentalStatus;
 
-        return (
-          <StatusLabel label={label} color={statusColor} />
-        );
+        // Show denial reason as tooltip
+        if (status === RentalStatus.Denied) {
+          const notes = (row as any).notes || "";
+          const match = notes.match(/Denied: (.+?)(\s*\|.*)?$/);
+          const reason = match ? match[1].trim() : "No reason provided";
+          return (
+            <Tooltip title={`Reason: ${reason}`} placement="top">
+              <span><StatusLabel label={label} color={color} /></span>
+            </Tooltip>
+          );
+        }
+
+        return <StatusLabel label={label} color={color} />;
       },
     }
   ];
@@ -73,24 +99,15 @@ const RentalsList: React.FC<{ member?: Member }> = ({ member }) => {
     ...params,
     ...member && { memberId: member.id }
   }, !canManage);
-  const listRentalsResposne = useReadTransaction(listRentals, {}, canManage, "rentals-list");
+  const listRentalsResponse = useReadTransaction(listRentals, {}, canManage, "rentals-list");
 
   const { isRequesting, data: rentals = [], response, refresh, error } = canManage
     ? adminListRentalsResponse
-    : listRentalsResposne;
+    : listRentalsResponse;
 
-  const onRenew = React.useCallback(() => {
-    refresh();
-  }, [refresh]);
-  const onEdit = React.useCallback(() => {
-    refresh();
-    setSelectedId(null);
-  }, [refresh, setSelectedId]);
-  const onDelete = React.useCallback(() => {
-    refresh();
-    changePage(0);
-    setSelectedId(null);
-  }, [refresh, changePage, setSelectedId]);
+  const onRenew  = React.useCallback(() => { refresh(); }, [refresh]);
+  const onEdit   = React.useCallback(() => { refresh(); setSelectedId(null); }, [refresh]);
+  const onDelete = React.useCallback(() => { refresh(); changePage(0); setSelectedId(null); }, [refresh, changePage]);
 
   const selectedRental = rentals.find(rental => rental.id === selectedId);
 
@@ -99,7 +116,7 @@ const RentalsList: React.FC<{ member?: Member }> = ({ member }) => {
       <Grid item md={member ? 12 : 10} xs={12}>
         {canManage && (
           <Grid>
-            <CreateRental onCreate={onRenew} member={member} />
+            <CreateRentalAdmin onCreate={onRenew} member={member} />
             <EditRental rental={selectedRental} onUpdate={onEdit} />
             <RenewRental rental={selectedRental} onRenew={onRenew} />
             {isAdmin && (
@@ -109,17 +126,11 @@ const RentalsList: React.FC<{ member?: Member }> = ({ member }) => {
         )}
 
         <StatefulTable
-          id="rentals-table"
-          title="Rentals"
-          loading={isRequesting}
-          data={Object.values(rentals)}
-          error={error}
+          id="rentals-table" title="Rentals"
+          loading={isRequesting} data={Object.values(rentals)} error={error}
           totalItems={extractTotalItems(response)}
-          selectedIds={selectedId}
-          setSelectedIds={setSelectedId}
-          columns={fields}
-          rowId={rowId}
-          renderSearch={true}
+          selectedIds={selectedId} setSelectedIds={setSelectedId}
+          columns={fields} rowId={rowId} renderSearch={true}
         />
       </Grid>
     </Grid>

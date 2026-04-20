@@ -14,7 +14,7 @@ type TabKey = "current" | "requests" | "spots" | "types";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "current",  label: "Current Rentals" },
   { key: "requests", label: "Rental Requests" },
-  { key: "spots",    label: "Spot Catalog" },
+  { key: "spots",    label: "Rental Spots" },
   { key: "types",    label: "Rental Types" },
 ];
 

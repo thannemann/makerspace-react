@@ -8,7 +8,7 @@ import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Switch from "@material-ui/core/Switch";
 import FormLabel from "@material-ui/core/FormLabel";
 import { Link } from "react-router-dom";
-import { InvoiceOption, adminListInvoiceOptions } from "makerspace-ts-api-client";
+import { InvoiceOption, listInvoiceOptions, InvoiceableResource } from "makerspace-ts-api-client";
 
 import { RentalType } from "app/entities/rentalSpot";
 import StatefulTable from "ui/common/table/StatefulTable";
@@ -42,10 +42,15 @@ const AdminRentalTypes: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = React.useState<RentalType | null>(null);
   const [editTarget,   setEditTarget]   = React.useState<Partial<RentalType>>(emptyType());
   const [isEditing,    setIsEditing]    = React.useState(false);
+  const [selectedId,   setSelectedId]   = React.useState<string>(undefined);
   const { params, changePage } = useQueryContext();
 
+  // Load rental invoice options for the dropdown using existing listInvoiceOptions
   const { data: invoiceOptions = [] } = useReadTransaction(
-    adminListInvoiceOptions, { types: ["rental"] }, undefined, "rental-invoice-options"
+    listInvoiceOptions,
+    { types: [InvoiceableResource.Rental] },
+    undefined,
+    "rental-invoice-options-for-types"
   );
 
   const { isRequesting, data: rentalTypes = [], response, refresh, error } = useReadTransaction(
@@ -133,8 +138,9 @@ const AdminRentalTypes: React.FC = () => {
         <StatefulTable
           id="admin-rental-types-table" title="Rental Types"
           loading={isRequesting} data={Object.values(rentalTypes)} error={error}
-          totalItems={extractTotalItems(response)} columns={columns}
-          rowId={rowId} renderSearch={false}
+          totalItems={extractTotalItems(response)}
+          selectedIds={selectedId} setSelectedIds={setSelectedId}
+          columns={columns} rowId={rowId} renderSearch={false}
         />
       </Grid>
 
@@ -159,7 +165,7 @@ const AdminRentalTypes: React.FC = () => {
               <FormLabel component="legend" style={{ marginBottom: "8px" }}>
                 Billing Plan (Invoice Option)
               </FormLabel>
-              {invoiceOptions.length === 0 ? (
+              {(invoiceOptions as InvoiceOption[]).length === 0 ? (
                 <Typography variant="body2" style={warningBoxStyle}>
                   No rental invoice options found.{" "}
                   <Link to={billingPath}>Create one in Billing Options →</Link>
@@ -170,7 +176,7 @@ const AdminRentalTypes: React.FC = () => {
                   onChange={e => setField("invoiceOptionId", (e.target as HTMLSelectElement).value || null)}
                 >
                   <option value="">None (set up later)</option>
-                  {invoiceOptions.map((opt: InvoiceOption) => (
+                  {(invoiceOptions as InvoiceOption[]).map((opt: InvoiceOption) => (
                     <option key={opt.id} value={opt.id}>
                       {opt.name} — {numberAsCurrency(opt.amount)}/mo
                     </option>

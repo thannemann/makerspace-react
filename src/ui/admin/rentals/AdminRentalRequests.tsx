@@ -8,7 +8,7 @@ import DialogTitle from "@material-ui/core/DialogTitle";
 import DialogContent from "@material-ui/core/DialogContent";
 import DialogActions from "@material-ui/core/DialogActions";
 import { Link } from "react-router-dom";
-import { Rental, adminListRentals } from "makerspace-ts-api-client";
+import { Rental } from "makerspace-ts-api-client";
 
 import StatefulTable from "ui/common/table/StatefulTable";
 import { SortDirection } from "ui/common/table/constants";
@@ -18,7 +18,7 @@ import StatusLabel from "ui/common/StatusLabel";
 import ErrorMessage from "ui/common/ErrorMessage";
 import useReadTransaction from "ui/hooks/useReadTransaction";
 import useWriteTransaction from "ui/hooks/useWriteTransaction";
-import { approveRental, denyRental } from "api/rentals";
+import { adminListPendingRentals, approveRental, denyRental } from "api/rentals";
 import { withQueryContext, useQueryContext } from "ui/common/Filters/QueryContext";
 import extractTotalItems from "ui/utils/extractTotalItems";
 
@@ -34,15 +34,17 @@ const infoBoxStyle: React.CSSProperties = {
 const AdminRentalRequests: React.FC = () => {
   const [actionTarget, setActionTarget] = React.useState<ActionTarget | null>(null);
   const [denyReason,   setDenyReason]   = React.useState("");
-  const { params, changePage } = useQueryContext();
+  const [selectedId,   setSelectedId]   = React.useState<string>(undefined);
+  const { changePage } = useQueryContext();
 
   const { isRequesting, data: rentals = [], response, refresh, error } = useReadTransaction(
-    adminListRentals, { ...params, status: "pending" }, undefined, "admin-rental-requests"
+    adminListPendingRentals, {}, undefined, "admin-rental-requests"
   );
 
   const onActionSuccess = React.useCallback(() => {
     setActionTarget(null);
     setDenyReason("");
+    setSelectedId(undefined);
     refresh();
     changePage(0);
   }, [refresh, changePage]);
@@ -95,10 +97,17 @@ const AdminRentalRequests: React.FC = () => {
           <Typography color="textSecondary">No pending rental requests.</Typography>
         )}
         <StatefulTable
-          id="admin-rental-requests-table" title="Pending Rental Requests"
-          loading={isRequesting} data={Object.values(rentals)} error={error}
-          totalItems={extractTotalItems(response)} columns={columns}
-          rowId={rowId} renderSearch={false}
+          id="admin-rental-requests-table"
+          title="Pending Rental Requests"
+          loading={isRequesting}
+          data={Object.values(rentals)}
+          error={error}
+          totalItems={extractTotalItems(response)}
+          selectedIds={selectedId}
+          setSelectedIds={setSelectedId}
+          columns={columns}
+          rowId={rowId}
+          renderSearch={false}
         />
       </Grid>
 

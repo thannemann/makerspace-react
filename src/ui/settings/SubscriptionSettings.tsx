@@ -1,70 +1,108 @@
 import * as React from "react";
 import Typography from "@material-ui/core/Typography";
 import Grid from "@material-ui/core/Grid";
-import Divider from '@material-ui/core/Divider';
-
+import Divider from "@material-ui/core/Divider";
 import { listRentals, Rental } from "makerspace-ts-api-client";
 
-import LoadingOverlay from "../common/LoadingOverlay";
-import useReadTransaction from "../hooks/useReadTransaction";
-import { useAuthState } from "../reducer/hooks";
+import LoadingOverlay from "ui/common/LoadingOverlay";
+import useReadTransaction from "ui/hooks/useReadTransaction";
+import { useAuthState } from "ui/reducer/hooks";
+import SubscriptionDetails from "ui/subscriptions/SubscriptionDetails";
+import { RentalStatus } from "app/entities/rentalSpot";
 
-import SubscriptionDetails from "../subscriptions/SubscriptionDetails";
-
-interface Props {
-  
-}
-
-const SubscriptionSettings: React.FC<Props> = () => {
+const SubscriptionSettings: React.FC = () => {
   const { currentUser } = useAuthState();
   const { subscriptionId } = currentUser;
 
-  const [subscriptionsLoading, setSubscriptionsLoading] = React.useState({ ...subscriptionId && { [subscriptionId]: true } });
+  const [subscriptionsLoading, setSubscriptionsLoading] = React.useState(
+    { ...subscriptionId && { [subscriptionId]: true } }
+  );
   const [subRentals, setSubRentals] = React.useState<Rental[]>([]);
 
-  const {
-    isRequesting: rentalsLoading,
-    data: rentals = [],
-  } = useReadTransaction(listRentals, {}, undefined, "subscription-list-rentals");
+  const { isRequesting: rentalsLoading, data: rentals = [] } = useReadTransaction(
+    listRentals, {}, undefined, "subscription-list-rentals"
+  );
 
   React.useEffect(() => {
-    const subs = rentals.filter(rental => !!rental.subscriptionId);
+    // Only show active/vacating rentals that have a subscription
+    const subs = rentals.filter(rental =>
+      !!rental.subscriptionId &&
+      (!(rental as any).status ||
+        (rental as any).status === RentalStatus.Active ||
+        (rental as any).status === RentalStatus.Vacating)
+    );
     setSubscriptionsLoading(curr => ({
       ...curr,
       ...subs.reduce((states, sub) => ({ ...states, [sub.subscriptionId]: true }), {})
-    }))
+    }));
     setSubRentals(subs);
   }, [rentals]);
 
-  const reportLoad = React.useCallback((subId: string) => (loadState?: boolean) => {
-    setSubscriptionsLoading(curr => ({ ...curr, [subId]: !!loadState }));
-  }, [setSubscriptionsLoading]);
+  const reportLoad = React.useCallback(
+    (subId: string) => (loadState?: boolean) => {
+      setSubscriptionsLoading(curr => ({ ...curr, [subId]: !!loadState }));
+    },
+    [setSubscriptionsLoading]
+  );
 
   const isLoading = Object.values(subscriptionsLoading).some(l => l) || rentalsLoading;
 
   return (
     <>
-      {isLoading && <LoadingOverlay id="subscription-settings" contained={true}/>}
+      {isLoading && <LoadingOverlay id="subscription-settings" contained={true} />}
       <Grid container spacing={8} style={{ ...isLoading && { display: "none" } }}>
+        {/* Membership subscription */}
         <Grid item xs={12}>
-          <Typography variant="h4" gutterBottom={true}>Membership</Typography>
-            <SubscriptionDetails onLoad={reportLoad(subscriptionId)} subscriptionId={subscriptionId} /> 
+          <Typography variant="h4" gutterBottom>Membership</Typography>
+          <SubscriptionDetails onLoad={reportLoad(subscriptionId)} subscriptionId={subscriptionId} />
         </Grid>
-        
 
+        {/* Rental subscriptions — one section per rental with spot label */}
         {!!subRentals.length && (
           <>
             <Grid item xs={12}>
               <Divider />
             </Grid>
             <Grid item xs={12}>
-              <Typography variant="h4" gutterBottom={true}>Rentals</Typography>
+              <Typography variant="h4" gutterBottom>Rentals</Typography>
+              <Typography variant="body2" color="textSecondary" style={{ marginBottom: "16px" }}>
+                Each rental subscription is listed separately below. To cancel a rental, go to your profile Rentals tab.
+              </Typography>
             </Grid>
           </>
         )}
-        {subRentals.map(({ subscriptionId: rentalSubId }) => (
-          <Grid key={rentalSubId} item xs={12}>
-            <SubscriptionDetails onLoad={reportLoad(rentalSubId)} subscriptionId={rentalSubId} />
+
+        {subRentals.map(rental => (
+          <Grid key={rental.subscriptionId} item xs={12}>
+            {/* Spot identifier header */}
+            <div style={{
+              padding: "8px 12px", backgroundColor: "#f0f4f8",
+              borderRadius: "4px 4px 0 0", borderBottom: "1px solid #ddd",
+              display: "flex", alignItems: "center", gap: "8px"
+            }}>
+              <Typography variant="subtitle1" style={{ fontWeight: 600 }}>
+                {rental.number}
+              </Typography>
+              {rental.description && (
+                <Typography variant="body2" color="textSecondary">
+                  — {rental.description}
+                </Typography>
+              )}
+              {(rental as any).status === RentalStatus.Vacating && (
+                <Typography variant="caption" style={{
+                  backgroundColor: "#fff3e0", border: "1px solid #ffb74d",
+                  borderRadius: "3px", padding: "1px 6px", color: "#e65100"
+                }}>
+                  Vacating
+                </Typography>
+              )}
+            </div>
+            <div style={{ border: "1px solid #ddd", borderTop: "none", borderRadius: "0 0 4px 4px", padding: "12px" }}>
+              <SubscriptionDetails
+                onLoad={reportLoad(rental.subscriptionId)}
+                subscriptionId={rental.subscriptionId}
+              />
+            </div>
           </Grid>
         ))}
       </Grid>
@@ -72,4 +110,4 @@ const SubscriptionSettings: React.FC<Props> = () => {
   );
 };
 
-export default SubscriptionSettings
+export default SubscriptionSettings;

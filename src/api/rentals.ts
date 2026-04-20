@@ -1,110 +1,86 @@
-/**
- * src/api/rentals.ts
- *
- * API functions for rental types, spots, and member/admin rental actions.
- * Uses the same makeRequest/Method pattern as makerspace-ts-api-client.
- * Adjust the import path to match how other files in your project import it.
- */
-
-import { makeRequest, Method } from "makerspace-ts-api-client";
+import axios from "axios";
+import { ApiDataResponse, ApiErrorResponse } from "makerspace-ts-api-client";
 import { RentalType, RentalSpot } from "app/entities/rentalSpot";
 
+const wrapHeaders = (axiosHeaders: Record<string, any>) => ({
+  get: (key: string) => axiosHeaders[key.toLowerCase()] ?? null,
+  has: (key: string) => key.toLowerCase() in axiosHeaders,
+});
+
+const buildResponse = async <T>(
+  request: Promise<any>
+): Promise<ApiDataResponse<T> | ApiErrorResponse> => {
+  try {
+    const axiosResponse = await request;
+    return {
+      data: axiosResponse.data,
+      response: { ...axiosResponse, headers: wrapHeaders(axiosResponse.headers) },
+    } as ApiDataResponse<T>;
+  } catch (err) {
+    const error = err.response
+      ? err.response.data?.error || { message: err.response.data?.message || err.message }
+      : { message: err.message };
+    return { error, response: err.response } as unknown as ApiErrorResponse;
+  }
+};
+
+const getCsrfToken = () => {
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : "";
+};
+
+const api = axios.create({ withCredentials: true });
+api.interceptors.request.use(config => {
+  config.headers["X-XSRF-TOKEN"] = getCsrfToken();
+  config.headers["Content-Type"] = "application/json";
+  return config;
+});
+
 // ─── Rental Types ─────────────────────────────────────────────────────────────
+export const listRentalTypes = (_params?: any) =>
+  buildResponse<RentalType[]>(api.get("/api/rental_types"));
 
-export const listRentalTypes = () =>
-  makeRequest<RentalType[]>({
-    method: Method.Get,
-    path:   "/api/rental_types",
-  });
-
-export const adminListRentalTypes = () =>
-  makeRequest<RentalType[]>({
-    method: Method.Get,
-    path:   "/api/admin/rental_types",
-  });
+export const adminListRentalTypes = (_params?: any) =>
+  buildResponse<RentalType[]>(api.get("/api/admin/rental_types"));
 
 export const adminCreateRentalType = ({ body }: { body: Partial<RentalType> }) =>
-  makeRequest<RentalType>({
-    method: Method.Post,
-    path:   "/api/admin/rental_types",
-    body,
-  });
+  buildResponse<RentalType>(api.post("/api/admin/rental_types", body));
 
 export const adminUpdateRentalType = ({ id, body }: { id: string; body: Partial<RentalType> }) =>
-  makeRequest<RentalType>({
-    method: Method.Put,
-    path:   `/api/admin/rental_types/${id}`,
-    body,
-  });
+  buildResponse<RentalType>(api.put(`/api/admin/rental_types/${id}`, body));
 
 export const adminDeleteRentalType = ({ id }: { id: string }) =>
-  makeRequest({
-    method: Method.Delete,
-    path:   `/api/admin/rental_types/${id}`,
-  });
+  buildResponse<{}>(api.delete(`/api/admin/rental_types/${id}`));
 
 // ─── Rental Spots ─────────────────────────────────────────────────────────────
-
 export const listRentalSpots = (params?: { available?: string; rentalTypeId?: string }) =>
-  makeRequest<RentalSpot[]>({
-    method: Method.Get,
-    path:   "/api/rental_spots",
-    params,
-  });
+  buildResponse<RentalSpot[]>(api.get("/api/rental_spots", { params }));
 
-export const adminListRentalSpots = (params?: Record<string, string>) =>
-  makeRequest<RentalSpot[]>({
-    method: Method.Get,
-    path:   "/api/admin/rental_spots",
-    params,
-  });
+export const adminListRentalSpots = (params?: any) =>
+  buildResponse<RentalSpot[]>(api.get("/api/admin/rental_spots", { params }));
 
 export const adminCreateRentalSpot = ({ body }: { body: Partial<RentalSpot> }) =>
-  makeRequest<RentalSpot>({
-    method: Method.Post,
-    path:   "/api/admin/rental_spots",
-    body,
-  });
+  buildResponse<RentalSpot>(api.post("/api/admin/rental_spots", body));
 
 export const adminUpdateRentalSpot = ({ id, body }: { id: string; body: Partial<RentalSpot> }) =>
-  makeRequest<RentalSpot>({
-    method: Method.Put,
-    path:   `/api/admin/rental_spots/${id}`,
-    body,
-  });
+  buildResponse<RentalSpot>(api.put(`/api/admin/rental_spots/${id}`, body));
 
 export const adminDeleteRentalSpot = ({ id }: { id: string }) =>
-  makeRequest({
-    method: Method.Delete,
-    path:   `/api/admin/rental_spots/${id}`,
-  });
+  buildResponse<{}>(api.delete(`/api/admin/rental_spots/${id}`));
 
 // ─── Member Rentals ───────────────────────────────────────────────────────────
-
 export const createRental = ({ body }: { body: { rentalSpotId: string; notes?: string } }) =>
-  makeRequest({
-    method: Method.Post,
-    path:   "/api/rentals",
-    body,
-  });
+  buildResponse<{}>(api.post("/api/rentals", body));
 
-export const cancelRental = ({ id }: { id: string }) =>
-  makeRequest({
-    method: Method.Delete,
-    path:   `/api/rentals/${id}/cancel`,
-  });
+export const cancelRental = ({ id, body }: { id: string; body: { vacated: boolean } }) =>
+  buildResponse<{}>(api.delete(`/api/rentals/${id}/cancel`, { data: body }));
 
 // ─── Admin Rentals ────────────────────────────────────────────────────────────
+export const adminListPendingRentals = (_params?: any) =>
+  buildResponse<any[]>(api.get("/api/admin/rentals", { params: { status: "pending" } }));
 
 export const approveRental = ({ id }: { id: string }) =>
-  makeRequest({
-    method: Method.Post,
-    path:   `/api/admin/rentals/${id}/approve`,
-  });
+  buildResponse<{}>(api.post(`/api/admin/rentals/${id}/approve`));
 
 export const denyRental = ({ id, body }: { id: string; body?: { reason?: string } }) =>
-  makeRequest({
-    method: Method.Post,
-    path:   `/api/admin/rentals/${id}/deny`,
-    body,
-  });
+  buildResponse<{}>(api.post(`/api/admin/rentals/${id}/deny`, body || {}));

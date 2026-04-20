@@ -7,6 +7,7 @@ import Dialog from "@material-ui/core/Dialog";
 import DialogTitle from "@material-ui/core/DialogTitle";
 import DialogContent from "@material-ui/core/DialogContent";
 import DialogActions from "@material-ui/core/DialogActions";
+import Tooltip from "@material-ui/core/Tooltip";
 import { Rental, listRentals, Member } from "makerspace-ts-api-client";
 
 import StatefulTable from "ui/common/table/StatefulTable";
@@ -29,22 +30,44 @@ const statusColor = (status: string): Status => {
   switch (status) {
     case RentalStatus.Active:    return Status.Success;
     case RentalStatus.Pending:   return Status.Warn;
+    case RentalStatus.Vacating:  return Status.Warn;
     case RentalStatus.Cancelled: return Status.Default;
     case RentalStatus.Denied:    return Status.Danger;
     default:                     return Status.Default;
   }
 };
 
+// Extract denial reason from notes field
+const getDenialReason = (rental: Rental): string => {
+  const notes = (rental as any).notes || "";
+  const match = notes.match(/Denied: (.+?)(\s*\|.*)?$/);
+  return match ? match[1].trim() : "Contact us for details.";
+};
+
+type CancelStep = "confirm" | "vacated";
+
 const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = ({ member, onUpdate }) => {
   const [cancelTarget, setCancelTarget] = React.useState<Rental | null>(null);
+  const [cancelStep,   setCancelStep]   = React.useState<CancelStep>("confirm");
+  const [selectedId,   setSelectedId]   = React.useState<string>(undefined);
   const { params, changePage } = useQueryContext();
 
   const { isRequesting, data: rentals = [], response, refresh, error } = useReadTransaction(
     listRentals, { ...params }, undefined, "member-rentals-list"
   );
 
-  const onCancelSuccess = React.useCallback(() => {
+  const openCancel = (rental: Rental) => {
+    setCancelTarget(rental);
+    setCancelStep("confirm");
+  };
+
+  const closeCancel = () => {
     setCancelTarget(null);
+    setCancelStep("confirm");
+  };
+
+  const onCancelSuccess = React.useCallback(() => {
+    closeCancel();
     refresh();
     changePage(0);
     onUpdate && onUpdate();
@@ -54,9 +77,15 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
     cancelRental, onCancelSuccess
   );
 
+  const handleVacated = (vacated: boolean) => {
+    if (cancelTarget) {
+      doCancel({ id: cancelTarget.id, body: { vacated } });
+    }
+  };
+
   const columns: Column<Rental>[] = [
     {
-      id: "number", label: "Spot",
+      id: "number", label: "Rental",
       cell: (row: Rental) => row.number,
       defaultSortDirection: SortDirection.Asc,
     },
@@ -72,14 +101,29 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
     {
       id: "status", label: "Status",
       cell: (row: Rental) => {
-        const status = (row as any).status;
+        const status = (row as any).status as RentalStatus;
+
+        // Legacy rentals without status field
         if (!status || status === RentalStatus.Active) {
           const expired = row.expiration && moment(row.expiration).valueOf() < Date.now();
           return <StatusLabel label={expired ? "Expired" : "Active"} color={expired ? Status.Danger : Status.Success} />;
         }
+
+        // Denied — show with tooltip explaining reason
+        if (status === RentalStatus.Denied) {
+          const reason = getDenialReason(row);
+          return (
+            <Tooltip title={`Reason: ${reason}`} placement="top">
+              <span>
+                <StatusLabel label="Denied" color={Status.Danger} />
+              </span>
+            </Tooltip>
+          );
+        }
+
         return (
           <StatusLabel
-            label={RentalStatusDisplay[status as RentalStatus] || status}
+            label={RentalStatusDisplay[status] || status}
             color={statusColor(status)}
           />
         );
@@ -88,16 +132,20 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
     {
       id: "actions", label: "",
       cell: (row: Rental) => {
-        const status = (row as any).status;
+        const status = (row as any).status as RentalStatus;
         const cancellable = !status || status === RentalStatus.Active || status === RentalStatus.Pending;
         return cancellable ? (
           <Button size="small" variant="outlined" color="secondary"
-            onClick={e => { e.stopPropagation(); setCancelTarget(row); }}
+            onClick={e => { e.stopPropagation(); openCancel(row); }}
           >Cancel</Button>
         ) : null;
       },
     },
   ];
+
+  const expiryDisplay = cancelTarget?.expiration
+    ? timeToDate(cancelTarget.expiration)
+    : "the end of your current rental period";
 
   return (
     <Grid container spacing={3}>
@@ -105,29 +153,58 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
         <StatefulTable
           id="member-rentals-table" title="My Rentals"
           loading={isRequesting} data={Object.values(rentals)} error={error}
-          totalItems={extractTotalItems(response)} columns={columns}
-          rowId={rowId} renderSearch={false}
+          totalItems={extractTotalItems(response)}
+          selectedIds={selectedId} setSelectedIds={setSelectedId}
+          columns={columns} rowId={rowId} renderSearch={false}
         />
       </Grid>
 
-      <Dialog open={!!cancelTarget} onClose={() => setCancelTarget(null)}>
+      {/* Step 1 — Confirm cancellation intent */}
+      <Dialog open={!!cancelTarget && cancelStep === "confirm"} onClose={closeCancel}>
         <DialogTitle>Cancel Rental</DialogTitle>
         <DialogContent>
           <Typography gutterBottom>
-            Are you sure you want to cancel your rental of <strong>{cancelTarget && cancelTarget.number}</strong>?
+            Are you sure you want to cancel your rental of <strong>{cancelTarget?.number}</strong>?
           </Typography>
-          <Typography variant="body2" color="textSecondary" gutterBottom>
-            Cancellation takes effect immediately. Any active Braintree subscription will be cancelled
-            and any pending invoice will be voided.
+          <Typography variant="body2" color="textSecondary">
+            No further charges will be made after your current rental period ends.
           </Typography>
           <ErrorMessage error={cancelError} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCancelTarget(null)} disabled={cancelling}>Keep Rental</Button>
-          <Button color="secondary" variant="contained" disabled={cancelling}
-            onClick={() => cancelTarget && doCancel({ id: cancelTarget.id })}
+          <Button onClick={closeCancel}>Keep Rental</Button>
+          <Button color="secondary" variant="contained" onClick={() => setCancelStep("vacated")}>
+            Yes, Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Step 2 — Have you vacated? */}
+      <Dialog open={!!cancelTarget && cancelStep === "vacated"} onClose={closeCancel}>
+        <DialogTitle>Have You Vacated Your Rental?</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            Have you already removed your belongings from rental <strong>{cancelTarget?.number}</strong>?
+          </Typography>
+          <Typography variant="body2" style={{ marginTop: "8px", padding: "10px", backgroundColor: "#f5f5f5", borderRadius: "4px" }}>
+            <strong>Yes</strong> — Your rental will end immediately and the space will be available for other members.
+          </Typography>
+          <Typography variant="body2" style={{ marginTop: "8px", padding: "10px", backgroundColor: "#f5f5f5", borderRadius: "4px" }}>
+            <strong>No</strong> — Your rental will remain active until <strong>{expiryDisplay}</strong>. Please ensure you have vacated by then.
+          </Typography>
+          <ErrorMessage error={cancelError} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeCancel} disabled={cancelling}>Back</Button>
+          <Button variant="outlined" color="secondary" disabled={cancelling}
+            onClick={() => handleVacated(false)}
           >
-            {cancelling ? "Cancelling..." : "Yes, Cancel"}
+            {cancelling ? "Processing..." : "No, Not Yet"}
+          </Button>
+          <Button variant="contained" color="secondary" disabled={cancelling}
+            onClick={() => handleVacated(true)}
+          >
+            {cancelling ? "Processing..." : "Yes, I Have Vacated"}
           </Button>
         </DialogActions>
       </Dialog>
