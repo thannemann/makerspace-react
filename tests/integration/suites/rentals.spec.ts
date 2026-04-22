@@ -22,6 +22,10 @@ describe("Rentals", () => {
   });
   
   it("Admins can CRUD rentals", async () => {
+    // Logout
+    await header.navigateTo(header.links.logout);
+    await utils.waitForVisible(header.loginLink);
+
     // Login
     await auth.goToLogin();
     await auth.signInUser(getAdminUserLogin());
