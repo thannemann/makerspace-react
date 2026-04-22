@@ -19,8 +19,18 @@ const newRental = {
 describe("Rentals", () => {
   beforeEach(() => {
     return browser.deleteAllCookies();
+    await browser.pause(1000);
+    return browser.url(utils.buildUrl());
   });
   
+  afterEach(async () => {
+    const displayed = await utils.isElementDisplayed(header.links.logout);
+    if (displayed) {
+      await header.navigateTo(header.links.logout);
+      await utils.waitForVisible(header.loginLink);
+    }
+  });
+
   it("Admins can CRUD rentals", async () => {
     // Logout
     await header.navigateTo(header.links.logout);
