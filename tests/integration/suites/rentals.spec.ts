@@ -37,12 +37,13 @@ describe("Rentals", () => {
 
   it("Admins can CRUD rentals", async () => {
     // Logout
-    await header.navigateTo(header.links.logout);
-    await utils.waitForVisible(header.loginLink);
+    //await header.navigateTo(header.links.logout);
+    //await utils.waitForVisible(header.loginLink);
 
     // Login
     await auth.goToLogin();
     await auth.signInUser(getAdminUserLogin());
+    await browser.saveScreenshot("tmp/screenshots/afterLogin.png");
 
     // Go to a member profile
     await header.navigateTo(header.links.members);
@@ -50,9 +51,11 @@ describe("Rentals", () => {
     await utils.waitForNotVisible(memberPo.membersList.loading);
     await utils.fillSearchInput(memberPo.membersList.searchInput, getBasicUserLogin().email);
     await utils.waitForNotVisible(memberPo.membersList.loading);
+    await browser.saveScreenshot("tmp/screenshots/aftermemberlistload.png");
     const link = await memberPO.getColumnByIndex(0, "lastname");
     const memberName: string = await link.getText();
     await (await link.$("a")).click();
+    await browser.saveScreenshot("tmp/screenshots/aftermemberlistclick.png");
     await utils.waitForPageToMatch(Routing.Profile);
     await utils.waitForNotVisible(memberPO.memberDetail.loading);
 
@@ -65,6 +68,7 @@ describe("Rentals", () => {
     await utils.fillInput(rentalsPO.rentalForm.number, newRental.number);
     await utils.fillInput(rentalsPO.rentalForm.description, newRental.description);
     await utils.fillInput(rentalsPO.rentalForm.notes, "Some notes could be put in here");
+    await browser.saveScreenshot("tmp/screenshots/afterrentalnotes.png");
     await utils.clickElement(rentalsPO.rentalForm.contract);
     await utils.clickElement(rentalsPO.rentalForm.submit);
     await utils.waitForNotVisible(rentalsPO.rentalForm.submit);
@@ -82,6 +86,7 @@ describe("Rentals", () => {
     await utils.waitForVisible(renewPO.renewalForm.submit);
     expect(await utils.getElementText(renewPO.renewalForm.entity)).to.eql(newRental.number);
     await utils.selectDropdownByValue(renewPO.renewalForm.renewalSelect, "1");
+    await browser.saveScreenshot("tmp/screenshots/afterrenewalselect.png");
     await utils.clickElement(renewPO.renewalForm.submit);
     await utils.waitForNotVisible(renewPO.renewalForm.submit);
     await utils.waitForNotVisible(rentalsPO.getLoadingId());
@@ -103,5 +108,6 @@ describe("Rentals", () => {
     await utils.clickElement(rentalsPO.deleteRentalModal.submit);
     await utils.waitForNotVisible(rentalsPO.deleteRentalModal.submit);
     await utils.waitForVisible(rentalsPO.getNoDataRowId());
+    await browser.saveScreenshot("tmp/screenshots/afterrentaldeleted.png");
   });
 });
