@@ -16,10 +16,31 @@ const railsLogFile = path.join(screenshotsDir, "rails.log");
 const reactLogFile = path.join(screenshotsDir, "react.log");
 
 const railsRepo = {
-  url: "https://github.com/ManchesterMakerspace/makerspace-rails.git",
+  url: "https://github.com/thannemann/makerspace-rails-2026.git",
 }
 
+
+const getBuildInfo = () => {
+  let reactBranch = "unknown";
+  let railsBranch = process.env.RAILS_VERSION || "master (default)";
+  try {
+    reactBranch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
+  } catch (e) {}
+
+  const separator = "=".repeat(60);
+  console.log("\n" + separator);
+  console.log("  INTEGRATION TEST BUILD INFO");
+  console.log(separator);
+  console.log("  React branch : " + reactBranch);
+  console.log("  Rails repo   : " + railsRepo.url);
+  console.log("  Rails branch : " + railsBranch);
+  console.log("  Node version : " + process.version);
+  console.log("  Timestamp    : " + new Date().toISOString());
+  console.log(separator + "\n");
+};
+
 const integrationTest = async () => {
+  getBuildInfo();
   if (!fs.existsSync(tmp)) {
     fs.mkdirSync(tmp);
   }

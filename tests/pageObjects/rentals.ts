@@ -46,7 +46,7 @@ class RentalsPageObject extends TablePageObject {
     types:    "#admin-rentals-tab-types",
   };
 
-  public goToTab = async (tab: keyof typeof this.adminTabs) => {
+  public goToTab = async (tab: "current" | "requests" | "spots" | "types") => {
     await utils.clickElement(this.adminTabs[tab]);
   };
 
