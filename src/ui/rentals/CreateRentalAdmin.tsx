@@ -118,7 +118,7 @@ const CreateRentalAdmin: React.FC<Props> = ({ member, onCreate }) => {
               </Typography>
             ) : (
               <MemberSearchInput
-                name="member"
+                name="admin-create-rental-member-search"
                 placeholder="Search by name or email"
                 onChange={selection => setMemberId(selection?.value || "")}
               />
@@ -130,6 +130,7 @@ const CreateRentalAdmin: React.FC<Props> = ({ member, onCreate }) => {
             <TextField
               select fullWidth required
               label="Select a Rental Spot"
+              inputProps={{ id: "admin-create-rental-spot-select" }}
               value={selectedSpotId}
               onChange={e => setSelectedSpotId(e.target.value)}
               variant="outlined"
@@ -177,6 +178,7 @@ const CreateRentalAdmin: React.FC<Props> = ({ member, onCreate }) => {
             <TextField
               fullWidth multiline rows={2}
               label="Notes (optional)"
+              id="admin-create-rental-notes"
               value={notes}
               onChange={e => setNotes(e.target.value)}
               variant="outlined"
@@ -188,6 +190,7 @@ const CreateRentalAdmin: React.FC<Props> = ({ member, onCreate }) => {
             <FormControlLabel
               control={
                 <Checkbox
+                  id="admin-create-rental-agreement"
                   checked={agreementSigned}
                   onChange={e => setAgreementSigned(e.target.checked)}
                   color="primary"

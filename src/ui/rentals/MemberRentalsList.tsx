@@ -173,7 +173,8 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
         </DialogContent>
         <DialogActions>
           <Button onClick={closeCancel}>Keep Rental</Button>
-          <Button color="secondary" variant="contained" onClick={() => setCancelStep("vacated")}>
+          <Button color="secondary" variant="contained" id="member-rental-cancel-confirm"
+              onClick={() => setCancelStep("vacated")}>
             Yes, Cancel
           </Button>
         </DialogActions>
@@ -197,11 +198,13 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
         <DialogActions>
           <Button onClick={closeCancel} disabled={cancelling}>Back</Button>
           <Button variant="outlined" color="secondary" disabled={cancelling}
+            id="member-rental-vacated-no"
             onClick={() => handleVacated(false)}
           >
             {cancelling ? "Processing..." : "No, Not Yet"}
           </Button>
           <Button variant="contained" color="secondary" disabled={cancelling}
+            id="member-rental-vacated-yes"
             onClick={() => handleVacated(true)}
           >
             {cancelling ? "Processing..." : "Yes, I Have Vacated"}

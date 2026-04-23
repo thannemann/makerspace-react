@@ -126,6 +126,7 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
             <TextField
               select fullWidth
               label="Select an Available Rental"
+              inputProps={{ id: "member-rental-spot-select" }}
               value={selectedRentalId}
               onChange={e => { setSelectedRentalId(e.target.value); setStep("select"); setAgreementSigned(false); }}
               variant="outlined"
@@ -198,6 +199,7 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
               <Button
                 variant="contained" color="primary"
                 disabled={!selectedRentalId || !eligibility.eligible || eligibility.loading}
+                id="member-rental-continue"
                 onClick={() => setStep("agreement")}
               >
                 {selectedRental.requiresApproval ? "Continue to Agreement" : "Continue to Agreement"}
@@ -223,6 +225,7 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
           <Button onClick={resetFlow}>Cancel</Button>
           <Button
             variant="contained" color="primary"
+            id="member-rental-agreement-continue"
             disabled={!agreementSigned}
             onClick={() => setStep("confirm")}
           >
@@ -268,8 +271,9 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
           <ErrorMessage error={requestError} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setStep("agreement")}>Back</Button>
-          <Button variant="contained" color="primary" disabled={requesting} onClick={handleConfirm}>
+          <Button id="member-rental-continue"
+                onClick={() => setStep("agreement")}>Back</Button>
+          <Button variant="contained" color="primary" id="member-rental-confirm" disabled={requesting} onClick={handleConfirm}>
             {requesting ? "Processing..." : (selectedRental?.requiresApproval ? "Submit Request" : "Confirm Rental")}
           </Button>
         </DialogActions>

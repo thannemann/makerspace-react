@@ -44,7 +44,7 @@ const AdminRentalsPage: React.FC = () => {
           variant="scrollable"
           scrollButtons="auto"
         >
-          {TABS.map(t => <Tab key={t.key} value={t.key} label={t.label} />)}
+          {TABS.map(t => <Tab key={t.key} id={"admin-rentals-tab-" + t.key} value={t.key} label={t.label} />)}
         </Tabs>
       </Grid>
       <Grid item md={10} xs={12}>

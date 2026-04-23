@@ -61,6 +61,7 @@ const RentalAgreementInline: React.FC<Props> = ({ onSigned, signed }) => {
         <FormControlLabel
           control={
             <Checkbox
+              id="member-rental-agreement-checkbox"
               checked={signed}
               onChange={e => e.target.checked && onSigned()}
               color="primary"
