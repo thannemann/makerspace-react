@@ -18,7 +18,7 @@ exports.config = {
     waitForTimeout: 5 * 1000,
     mochaOpts: {
         ui: "bdd",
-        retries: 3,
+        retries: 1,
         timeout: 12 * 60 * 1000,
         require: [
             "tsconfig-paths/register"
