@@ -51,12 +51,18 @@ const integrationTest = async () => {
 
 
   let git = simpleGit();
-  if (!fs.existsSync(railsFolder)) {
-    await git.clone(railsRepo.url, railsFolder);
+  // Always re-clone to ensure we get the correct repo and branch
+  if (fs.existsSync(railsFolder)) {
+    console.log("Removing existing Rails folder to ensure fresh clone...");
+    execSync(`rm -rf ${railsFolder}`, { encoding: "utf8", stdio: "inherit" });
+  }
+  console.log(`Cloning Rails from: ${railsRepo.url}`);
+  await git.clone(railsRepo.url, railsFolder);
 
-    if (process.env.RAILS_VERSION) {
-      await git.checkout(process.env.RAILS_VERSION);
-    }
+  if (process.env.RAILS_VERSION) {
+    console.log(`Checking out Rails branch: ${process.env.RAILS_VERSION}`);
+    const folderGit = simpleGit(railsFolder);
+    await folderGit.checkout(process.env.RAILS_VERSION);
   }
 
   const railsLogs = fs.createWriteStream(railsLogFile, { flags: 'a' });
