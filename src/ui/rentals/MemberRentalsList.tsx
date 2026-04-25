@@ -21,6 +21,7 @@ import useReadTransaction from "ui/hooks/useReadTransaction";
 import useWriteTransaction from "ui/hooks/useWriteTransaction";
 import { cancelRental } from "api/rentals";
 import { RentalStatus, RentalStatusDisplay } from "app/entities/rentalSpot";
+import { Routing } from "app/constants";
 import { withQueryContext, useQueryContext } from "ui/common/Filters/QueryContext";
 import extractTotalItems from "ui/utils/extractTotalItems";
 
@@ -28,7 +29,9 @@ const rowId = (rental: Rental) => rental.id;
 
 const statusColor = (status: string): Status => {
   switch (status) {
-    case RentalStatus.Active:    return Status.Success;
+    case RentalStatus.Active:           return Status.Success;
+    case RentalStatus.PendingAgreement: return Status.Warn;
+    case RentalStatus.AgreementDenied:  return Status.Danger;
     case RentalStatus.Pending:   return Status.Warn;
     case RentalStatus.Vacating:  return Status.Warn;
     case RentalStatus.Cancelled: return Status.Default;

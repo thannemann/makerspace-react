@@ -11,14 +11,15 @@ import DialogTitle from "@material-ui/core/DialogTitle";
 import DialogContent from "@material-ui/core/DialogContent";
 import DialogActions from "@material-ui/core/DialogActions";
 import { Member } from "makerspace-ts-api-client";
+import useReactRouter from "use-react-router";
 
-import { RentalSpot, RentalType } from "app/entities/rentalSpot";
+import { RentalSpot } from "app/entities/rentalSpot";
+import { Routing } from "app/constants";
 import useReadTransaction from "ui/hooks/useReadTransaction";
 import useWriteTransaction from "ui/hooks/useWriteTransaction";
 import useRentalEligibility from "ui/rentals/useRentalEligibility";
 import ErrorMessage from "ui/common/ErrorMessage";
 import { listRentalSpots, listRentalTypes, createRental } from "api/rentals";
-import RentalAgreementInline from "ui/rentals/RentalAgreementInline";
 
 interface Props {
   member:          Member;
@@ -37,31 +38,34 @@ const warningBoxStyle: React.CSSProperties = {
   marginBottom: "8px", fontSize: "0.875rem"
 };
 
-type Step = "select" | "agreement" | "confirm";
-
 const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
+  const { history } = useReactRouter();
   const [selectedRentalId, setSelectedRentalId] = React.useState<string>("");
   const [requestNotes,     setRequestNotes]      = React.useState<string>("");
-  const [step,             setStep]              = React.useState<Step>("select");
-  const [agreementSigned,  setAgreementSigned]   = React.useState(false);
+  const [confirmOpen,      setConfirmOpen]        = React.useState(false);
 
   const eligibility = useRentalEligibility(member);
-
-  const { data: rentalTypes = [], isRequesting: typesLoading } = useReadTransaction(
-    listRentalTypes, {}, undefined, "rental-types-browser"
-  );
 
   const { data: rentals = [], isRequesting: rentalsLoading } = useReadTransaction(
     listRentalSpots, { available: "true" }, undefined, "rental-spots-browser"
   );
 
-  const onSuccess = React.useCallback(() => {
+  const onSuccess = React.useCallback((response: any) => {
+    const rentalId = response?.data?.id || response?.id;
     setSelectedRentalId("");
     setRequestNotes("");
-    setStep("select");
-    setAgreementSigned(false);
+    setConfirmOpen(false);
     onRentalCreated();
-  }, [onRentalCreated]);
+
+    // Redirect to agreement page if we have a rental ID
+    if (rentalId) {
+      history.push(
+        Routing.Documents
+          .replace(Routing.PathPlaceholder.Resource, "rental")
+          .replace(Routing.PathPlaceholder.ResourceId, rentalId)
+      );
+    }
+  }, [onRentalCreated, history]);
 
   const { call: requestRental, isRequesting: requesting, error: requestError } = useWriteTransaction(
     createRental, onSuccess
@@ -73,7 +77,6 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
   }, [selectedRentalId, requestNotes, requestRental]);
 
   const selectedRental = (rentals as RentalSpot[]).find((s: RentalSpot) => s.id === selectedRentalId);
-  const isLoading = typesLoading || rentalsLoading;
 
   // Group rentals by type for the dropdown
   const rentalsByType: Record<string, RentalSpot[]> = (rentals as RentalSpot[]).reduce(
@@ -84,11 +87,6 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
       return acc;
     }, {}
   );
-
-  const resetFlow = () => {
-    setStep("select");
-    setAgreementSigned(false);
-  };
 
   return (
     <Grid container spacing={2}>
@@ -106,36 +104,37 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
         </Grid>
       )}
 
-      {isLoading && (
+      {rentalsLoading && (
         <Grid item xs={12}>
           <CircularProgress size={24} />
           <Typography variant="body2" display="inline" style={{ marginLeft: 8 }}>Loading available rentals...</Typography>
         </Grid>
       )}
 
-      {!isLoading && rentals.length === 0 && (
+      {!rentalsLoading && rentals.length === 0 && (
         <Grid item xs={12}>
           <Typography color="textSecondary">No rentals are currently available.</Typography>
         </Grid>
       )}
 
-      {!isLoading && rentals.length > 0 && (
+      {!rentalsLoading && rentals.length > 0 && (
         <>
           {/* Rental selector dropdown */}
           <Grid item xs={12} sm={8} md={6}>
             <TextField
               select fullWidth
+              id="member-rental-spot-select"
               label="Select an Available Rental"
-              inputProps={{ id: "member-rental-spot-select" }}
               value={selectedRentalId}
-              onChange={e => { setSelectedRentalId(e.target.value); setStep("select"); setAgreementSigned(false); }}
+              onChange={e => setSelectedRentalId(e.target.value)}
               variant="outlined"
               disabled={!eligibility.eligible || eligibility.loading}
               helperText="Choose the rental you'd like"
             >
               <MenuItem value="">— Choose a rental —</MenuItem>
               {Object.entries(rentalsByType).map(([typeName, typeRentals]) => [
-                <MenuItem key={`header-${typeName}`} disabled style={{ fontWeight: "bold", opacity: 1, color: "#333" }}>
+                <MenuItem key={`header-${typeName}`} disabled
+                  style={{ fontWeight: "bold", opacity: 1, color: "#333" }}>
                   {typeName}
                 </MenuItem>,
                 ...(typeRentals as RentalSpot[]).map((rental: RentalSpot) => (
@@ -162,17 +161,17 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
                       <Typography variant="body2"><strong>Description:</strong> {selectedRental.description}</Typography>
                     )}
                     {selectedRental.invoiceOptionAmount != null && (
-                      <Typography variant="body2"><strong>Cost:</strong> ${selectedRental.invoiceOptionAmount}/mo ({selectedRental.invoiceOptionName})</Typography>
+                      <Typography variant="body2"><strong>Cost:</strong> ${selectedRental.invoiceOptionAmount}/mo</Typography>
                     )}
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     {selectedRental.requiresApproval ? (
                       <Typography variant="body2" style={infoBoxStyle}>
-                        ⏳ This rental requires admin approval. You will be notified by email once reviewed. No charge until approved.
+                        ⏳ This rental requires admin approval. No charge until approved and agreement is signed.
                       </Typography>
                     ) : (
                       <Typography variant="body2" style={infoBoxStyle}>
-                        ✓ This rental is auto-approved. An invoice will be generated immediately. <strong>Rental is not valid until payment is received.</strong>
+                        ✓ After confirming you will be asked to sign the rental agreement. An invoice will be generated once the agreement is signed.
                       </Typography>
                     )}
                   </Grid>
@@ -181,7 +180,6 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
                       <TextField
                         fullWidth multiline rows={2}
                         label="Notes for admin (optional)"
-                        placeholder="Any additional information for your request..."
                         value={requestNotes}
                         onChange={e => setRequestNotes(e.target.value)}
                         variant="outlined" size="small"
@@ -193,62 +191,39 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
             </Grid>
           )}
 
-          {/* Action button */}
+          {/* Confirm button */}
           {selectedRental && (
             <Grid item xs={12}>
               <Button
+                id="member-rental-continue"
                 variant="contained" color="primary"
                 disabled={!selectedRentalId || !eligibility.eligible || eligibility.loading}
-                id="member-rental-continue"
-                onClick={() => setStep("agreement")}
+                onClick={() => setConfirmOpen(true)}
               >
-                {selectedRental.requiresApproval ? "Continue to Agreement" : "Continue to Agreement"}
+                {selectedRental.requiresApproval ? "Submit Request" : "Confirm Rental"}
               </Button>
             </Grid>
           )}
         </>
       )}
 
-      {/* Step 2 — Rental Agreement */}
-      <Dialog open={step === "agreement"} fullWidth maxWidth="md" onClose={resetFlow}>
-        <DialogTitle>Rental Agreement</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" gutterBottom>
-            Please review and sign the rental agreement before proceeding.
-          </Typography>
-          <RentalAgreementInline
-            onSigned={() => setAgreementSigned(true)}
-            signed={agreementSigned}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={resetFlow}>Cancel</Button>
-          <Button
-            variant="contained" color="primary"
-            id="member-rental-agreement-continue"
-            disabled={!agreementSigned}
-            onClick={() => setStep("confirm")}
-          >
-            Continue
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Step 3 — Confirm */}
-      <Dialog open={step === "confirm"} onClose={resetFlow}>
-        <DialogTitle>
-          {selectedRental?.requiresApproval ? "Confirm Rental Request" : "Confirm Rental"}
-        </DialogTitle>
-        <DialogContent>
-          {selectedRental && (
+      {/* Confirmation dialog */}
+      {confirmOpen && selectedRental && (
+        <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+          <DialogTitle>
+            {selectedRental.requiresApproval ? "Confirm Rental Request" : "Confirm Rental"}
+          </DialogTitle>
+          <DialogContent>
             <Grid container spacing={2}>
               <Grid item xs={12}>
                 <Typography variant="body1" gutterBottom>
                   <strong>{selectedRental.number}</strong> — {selectedRental.location}
                 </Typography>
-                <Typography variant="body2" color="textSecondary" gutterBottom>
-                  {selectedRental.description}
-                </Typography>
+                {selectedRental.description && (
+                  <Typography variant="body2" color="textSecondary" gutterBottom>
+                    {selectedRental.description}
+                  </Typography>
+                )}
                 {selectedRental.invoiceOptionAmount != null && (
                   <Typography variant="body2" gutterBottom>
                     <strong>Cost:</strong> ${selectedRental.invoiceOptionAmount}/mo
@@ -258,26 +233,30 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
               <Grid item xs={12}>
                 {selectedRental.requiresApproval ? (
                   <Typography variant="body2" style={infoBoxStyle}>
-                    Your request will be sent to an admin for approval. You will be notified by email and Slack once reviewed. No charge until approved.
+                    Your request will be sent to an admin for approval. You will be notified by email and Slack once reviewed.
                   </Typography>
                 ) : (
-                  <Typography variant="body2" style={{ ...infoBoxStyle, backgroundColor: "#fff3e0", borderColor: "#ffb74d" }}>
-                    ⚠ <strong>An invoice will be generated immediately.</strong> Your rental is not valid until payment is received. Go to your Invoices tab to pay.
+                  <Typography variant="body2" style={infoBoxStyle}>
+                    You will be directed to review and sign the rental agreement. An invoice will be generated after signing.
                   </Typography>
                 )}
               </Grid>
             </Grid>
-          )}
-          <ErrorMessage error={requestError} />
-        </DialogContent>
-        <DialogActions>
-          <Button id="member-rental-continue"
-                onClick={() => setStep("agreement")}>Back</Button>
-          <Button variant="contained" color="primary" id="member-rental-confirm" disabled={requesting} onClick={handleConfirm}>
-            {requesting ? "Processing..." : (selectedRental?.requiresApproval ? "Submit Request" : "Confirm Rental")}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <ErrorMessage error={requestError} />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfirmOpen(false)} disabled={requesting}>Cancel</Button>
+            <Button
+              id="member-rental-confirm"
+              variant="contained" color="primary"
+              disabled={requesting}
+              onClick={handleConfirm}
+            >
+              {requesting ? "Processing..." : (selectedRental.requiresApproval ? "Submit Request" : "Confirm & Sign Agreement")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Grid>
   );
 };

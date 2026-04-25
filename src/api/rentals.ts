@@ -69,11 +69,19 @@ export const adminDeleteRentalSpot = ({ id }: { id: string }) =>
   buildResponse<{}>(api.delete(`/api/admin/rental_spots/${id}`));
 
 // ─── Member Rentals ───────────────────────────────────────────────────────────
-export const createRental = ({ body }: { body: { rentalSpotId: string; notes?: string } }) =>
-  buildResponse<{}>(api.post("/api/rentals", body));
 
+// Creates rental with status pending_agreement (or pending if approval required)
+// No invoice is generated at this point
+export const createRental = ({ body }: { body: { rentalSpotId: string; notes?: string } }) =>
+  buildResponse<any>(api.post("/api/rentals", body));
+
+// Called when member signs the agreement — triggers invoice generation
 export const cancelRental = ({ id, body }: { id: string; body: { vacated: boolean } }) =>
   buildResponse<{}>(api.delete(`/api/rentals/${id}/cancel`, { data: body }));
+
+// Called when member declines the agreement — voids the rental
+export const declineRentalAgreement = ({ id }: { id: string }) =>
+  buildResponse<{}>(api.delete(`/api/rentals/${id}/decline_agreement`));
 
 // ─── Admin Rentals ────────────────────────────────────────────────────────────
 export const adminListPendingRentals = (_params?: any) =>
