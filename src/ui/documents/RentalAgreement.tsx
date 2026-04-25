@@ -9,10 +9,11 @@ import DialogTitle from "@material-ui/core/DialogTitle";
 import DialogContent from "@material-ui/core/DialogContent";
 import DialogActions from "@material-ui/core/DialogActions";
 
-import { updateRental } from "makerspace-ts-api-client";
+import { updateRental, getRental } from "makerspace-ts-api-client";
 import { buildProfileRouting } from "../member/utils";
 import { useAuthState } from "../reducer/hooks";
 import useWriteTransaction from "../hooks/useWriteTransaction";
+import useReadTransaction from "../hooks/useReadTransaction";
 import DocumentForm from "./DocumentForm";
 import { Documents, documents } from "./Document";
 import { useScrollToHeader } from "../hooks/useScrollToHeader";
@@ -26,6 +27,13 @@ const RentalAgreement: React.FC<{ rentalId: string }> = ({ rentalId }) => {
   const { currentUser: { id: currentUserId } } = useAuthState();
   const { executeScroll } = useScrollToHeader();
   const [declineConfirmOpen, setDeclineConfirmOpen] = React.useState(false);
+
+  const { data: rental, isRequesting: rentalLoading } = useReadTransaction(
+    getRental, { id: rentalId }, undefined, `rental-agreement-${rentalId}`
+  );
+
+  const rentalStatus = (rental as any)?.status;
+  const canSign = !rentalLoading && rentalStatus === "pending_agreement";
 
   const onSignSuccess = React.useCallback(() => {
     executeScroll();
@@ -58,6 +66,23 @@ const RentalAgreement: React.FC<{ rentalId: string }> = ({ rentalId }) => {
   const onDeclineConfirm = React.useCallback(async () => {
     await decline({ id: rentalId });
   }, [decline, rentalId]);
+
+  if (!rentalLoading && rentalStatus && rentalStatus !== "pending_agreement") {
+    return (
+      <Paper style={{ padding: "32px", maxWidth: "600px", margin: "auto" }}>
+        <Typography variant="h6" gutterBottom>Agreement Not Available</Typography>
+        <Typography variant="body1" gutterBottom>
+          {rentalStatus === "agreement_denied" && "This rental was voided because the agreement was not signed."}
+          {rentalStatus === "active" && "This rental agreement has already been signed."}
+          {rentalStatus === "cancelled" && "This rental has been cancelled."}
+          {!["agreement_denied", "active", "cancelled"].includes(rentalStatus) && }
+        </Typography>
+        <Button variant="outlined" onClick={() => history.push(buildProfileRouting(currentUserId) + "/rentals")}>
+          Return to Rentals
+        </Button>
+      </Paper>
+    );
+  }
 
   return (
     <Paper>
