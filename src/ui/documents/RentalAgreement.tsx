@@ -75,7 +75,7 @@ const RentalAgreement: React.FC<{ rentalId: string }> = ({ rentalId }) => {
           {rentalStatus === "agreement_denied" && "This rental was voided because the agreement was not signed."}
           {rentalStatus === "active" && "This rental agreement has already been signed."}
           {rentalStatus === "cancelled" && "This rental has been cancelled."}
-          {!["agreement_denied", "active", "cancelled"].includes(rentalStatus) && }
+          {!["agreement_denied", "active", "cancelled"].includes(rentalStatus) && `This rental cannot be signed at this stage (status: ${rentalStatus}).`}
         </Typography>
         <Button variant="outlined" onClick={() => history.push(buildProfileRouting(currentUserId) + "/rentals")}>
           Return to Rentals
