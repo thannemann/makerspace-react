@@ -43,7 +43,7 @@ const getRentalStatus = (row: Rental): { label: string; color: Status } => {
   };
 };
 
-const RentalsList: React.FC<{ member?: Member }> = ({ member }) => {
+const RentalsList: React.FC<{ member?: Member; statusFilter?: string }> = ({ member, statusFilter }) => {
   const { currentUser: { id, isAdmin, isResourceManager } } = useAuthState();
   const canManage = isAdmin || isResourceManager;
   const asAdmin = canManage && id !== (member && member.id);
@@ -97,7 +97,8 @@ const RentalsList: React.FC<{ member?: Member }> = ({ member }) => {
 
   const adminListRentalsResponse = useReadTransaction(adminListRentals, {
     ...params,
-    ...member && { memberId: member.id }
+    ...member && { memberId: member.id },
+    ...statusFilter && { status: statusFilter }
   }, !canManage);
   const listRentalsResponse = useReadTransaction(listRentals, {}, canManage, "rentals-list");
 
