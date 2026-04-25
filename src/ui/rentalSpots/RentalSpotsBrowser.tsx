@@ -51,7 +51,8 @@ const RentalSpotsBrowser: React.FC<Props> = ({ member, onRentalCreated }) => {
   );
 
   const onSuccess = React.useCallback((response: any) => {
-    const rentalId = response?.data?.id || response?.id;
+    console.log("[RentalSpotsBrowser] onSuccess response:", JSON.stringify(response?.response?.data));
+    const rentalId = response?.response?.data?.id || response?.data?.id || response?.id;
     setSelectedRentalId("");
     setRequestNotes("");
     setConfirmOpen(false);
