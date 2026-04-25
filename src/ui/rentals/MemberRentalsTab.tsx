@@ -5,6 +5,7 @@ import { Member } from "makerspace-ts-api-client";
 
 import MemberRentalsList from "ui/rentals/MemberRentalsList";
 import RentalSpotsBrowser from "ui/rentalSpots/RentalSpotsBrowser";
+import CreateRentalAdmin from "ui/rentals/CreateRentalAdmin";
 import { useAuthState } from "ui/reducer/hooks";
 
 interface Props {
@@ -13,8 +14,9 @@ interface Props {
 }
 
 const MemberRentalsTab: React.FC<Props> = ({ member, onUpdate }) => {
-  const { currentUser: { id: currentUserId } } = useAuthState();
+  const { currentUser: { id: currentUserId, isAdmin, isResourceManager } } = useAuthState();
   const isOwnProfile = currentUserId === member.id;
+  const canManage = isAdmin || isResourceManager;
 
   const [browserKey, setBrowserKey] = React.useState(0);
 
@@ -25,10 +27,18 @@ const MemberRentalsTab: React.FC<Props> = ({ member, onUpdate }) => {
 
   return (
     <Grid container spacing={4}>
+      {/* Admin/RM create rental button when viewing another member's profile */}
+      {canManage && !isOwnProfile && (
+        <Grid item xs={12}>
+          <CreateRentalAdmin member={member} onCreate={handleRentalCreated} />
+        </Grid>
+      )}
+
       <Grid item xs={12}>
         <MemberRentalsList member={member} onUpdate={onUpdate} />
       </Grid>
 
+      {/* Member's own rental browser */}
       {isOwnProfile && (
         <>
           <Grid item xs={12}>
