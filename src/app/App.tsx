@@ -17,7 +17,7 @@ const publicPaths = [Routing.Login, Routing.SignUp, Routing.PasswordReset];
 const App: React.FC = () => {
   const { location: { pathname, search, hash }, history } = useReactRouter();
   const dispatch = useDispatch();
-  const { currentUser: { id: currentUserId, isAdmin }, permissions, isRequesting, error } = useAuthState();
+  const { currentUser: { id: currentUserId, isAdmin, isResourceManager }, permissions, isRequesting, error } = useAuthState();
   const [attemptingLogin, setAttemptingLogin] = React.useState(true);
   const [loginAttempted, setLoginAttempted] = React.useState<boolean>();
   const [authSettled, setAuthSettled] = React.useState<boolean>();
@@ -63,7 +63,14 @@ const App: React.FC = () => {
         <Header />
         {attemptingLogin ?
           <LoadingOverlay id="body" />
-          : (currentUserId ? <PrivateRouting permissions={permissions} currentUserId={currentUserId} isAdmin={isAdmin} /> : <PublicRouting />)
+          : (currentUserId
+              ? <PrivateRouting
+                  permissions={permissions}
+                  currentUserId={currentUserId}
+                  isAdmin={isAdmin}
+                  isResourceManager={!!isResourceManager}
+                />
+              : <PublicRouting />)
         }
       </div>
     </ErrorBoundary>

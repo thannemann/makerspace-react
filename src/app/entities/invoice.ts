@@ -14,10 +14,12 @@ export enum InvoiceOperation {
   Renew = "renew"
 }
 
-export const InvoiceableResourceDisplay = {
+export const InvoiceableResourceDisplay: Record<string, string> = {
   [InvoiceableResource.Member]: "Membership",
   [InvoiceableResource.Rental]: "Rental",
-}
+  // "fee" is not in the generated enum (server-side only) so we add it manually
+  fee: "Shop Charge",
+};
 
 export enum Properties {
   Id = "id",

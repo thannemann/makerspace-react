@@ -19,6 +19,7 @@ export namespace Routing {
   export const Subscriptions = "/subscriptions";
   export const Rentals = "/rentals";
   export const AdminRentals = "/admin/rentals";
+  export const ShopFees = "/shop-fees";
   export const Checkout = "/checkout";
   export const Receipt = `${Checkout}/receipt/${PathPlaceholder.InvoiceId}`;
   export const PasswordReset = "/resetPassword";

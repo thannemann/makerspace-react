@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import useReactRouter from "use-react-router";
 import { Member, getMember, listRentals } from "makerspace-ts-api-client";
 
-import { displayMemberExpiration } from "ui/member/utils";
+import { displayMemberExpiration, memberIsResourceManager } from "ui/member/utils";
 import LoadingOverlay from "ui/common/LoadingOverlay";
 import KeyValueItem from "ui/common/KeyValueItem";
 import DetailView from "ui/common/DetailView";
@@ -27,10 +27,11 @@ import PreviewMemberContract from "../documents/PreviewMemberContract";
 import { SubRoutes } from "ui/settings/SettingsContainer";
 import { SubscriptionFilter } from "../subscriptions/SubscriptionFilters";
 import { useSearchQuery, useSetSearchQuery } from "hooks/useSearchQuery";
+import ChargeButton from "ui/shopFees/ChargeButton";
 
 const MemberProfile: React.FC = () => {
   const { match: { params: { memberId, resource } }, history } = useReactRouter<{ memberId: string, resource: string }>();
-  const { currentUser: { id: currentUserId, isAdmin }, permissions } = useAuthState();
+  const { currentUser: { id: currentUserId, isAdmin, isResourceManager }, permissions } = useAuthState();
 
   const {
     isNewMember
@@ -44,6 +45,7 @@ const MemberProfile: React.FC = () => {
 
   const isOwnProfile = currentUserId === memberId;
   const billingEnabled = !!permissions[Whitelists.billing];
+  const canChargeMember = (isAdmin || isResourceManager) && !isOwnProfile;
 
   const goToSettings = React.useCallback(() => {
     history.push(Routing.Settings.replace(Routing.PathPlaceholder.MemberId, currentUserId));
@@ -118,9 +120,9 @@ const MemberProfile: React.FC = () => {
     if (memberError && !member.id) {
       history.push(Routing.Members);
     }
-  }, [memberError, member.id, history]);
+  }, [memberError]);
 
-  if (!member.id) {
+  if (memberLoading && !member.id) {
     return <LoadingOverlay />;
   }
 
@@ -148,7 +150,11 @@ const MemberProfile: React.FC = () => {
             <AccessCardForm memberId={memberId} key="card-form"/>,
             <AdminChangePasswordModal member={member} key="change-password"/>,
             <HouseholdModal member={member} key="household" onUpdate={refreshMember}/>
-          ] : []
+          ] : [],
+          // Send Charge button — admin and RM, not on own profile
+          ...canChargeMember && member.id ? [
+            <ChargeButton member={member} key="charge-member" />
+          ] : [],
         ]}
         information={(
           <>

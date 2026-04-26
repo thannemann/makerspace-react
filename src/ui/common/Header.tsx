@@ -16,7 +16,7 @@ import Logo from "../../assets/FilledLaserableLogo.svg";
 import { ScopedThunkDispatch, State as ReduxState } from "ui/reducer";
 import { logoutUserAction } from "ui/auth/actions";
 import { AuthMember } from "ui/auth/interfaces";
-import { memberIsAdmin } from "ui/member/utils";
+import { memberIsAdmin, memberIsResourceManager } from "ui/member/utils";
 import { Routing, Whitelists } from "app/constants";
 import Help from "ui/common/Help";
 
@@ -83,6 +83,9 @@ class Header extends React.Component<Props, State> {
     const { anchorEl } = this.state;
     const menuOpen = Boolean(anchorEl);
     const profileUrl = Routing.Profile.replace(Routing.PathPlaceholder.MemberId, currentUser.id);
+    const isAdmin = memberIsAdmin(currentUser);
+    const isRM = memberIsResourceManager(currentUser);
+    const canManageShopFees = isAdmin || isRM;
 
     return (
       <>
@@ -114,8 +117,9 @@ class Header extends React.Component<Props, State> {
         >
           {this.renderMenuNavLink(profileUrl, "My Profile", "profile")}
           {this.renderMenuNavLink(Routing.Members, "Members", "members")}
-          {(memberIsAdmin(currentUser) || currentUser.isResourceManager) && this.renderMenuNavLink(Routing.AdminRentals, "Rentals", "rentals")}
-          {billingEnabled && memberIsAdmin(currentUser) && this.renderMenuNavLink(Routing.Billing, "Billing", "billing")}
+          {(isAdmin || isRM) && this.renderMenuNavLink(Routing.AdminRentals, "Rentals", "rentals")}
+          {canManageShopFees && this.renderMenuNavLink(Routing.ShopFees, "Shop Fees", "shop-fees")}
+          {billingEnabled && isAdmin && this.renderMenuNavLink(Routing.Billing, "Billing", "billing")}
           {earnedMembershipEnabled && this.renderMenuNavLink(Routing.EarnedMemberships, "Earned Memberships", "earnedMembership")}
           {this.renderMenuNavLink(Routing.Settings.replace(Routing.PathPlaceholder.MemberId, currentUser.id), "Account Settings", "settings")}
           <MenuItem id="logout" onClick={this.logoutUser}>Logout</MenuItem>
