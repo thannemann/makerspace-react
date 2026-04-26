@@ -13,10 +13,15 @@ api.interceptors.request.use(config => {
   return config;
 });
 
+const wrapHeaders = (axiosHeaders: Record<string, any>) => ({
+  get: (key: string) => axiosHeaders[key.toLowerCase()] ?? null,
+  has: (key: string) => key.toLowerCase() in axiosHeaders,
+});
+
 const buildResponse = async <T>(request: Promise<any>) => {
   try {
     const res = await request;
-    return { data: res.data, response: res };
+    return { data: res.data, response: { ...res, headers: wrapHeaders(res.headers) } };
   } catch (err) {
     const error = err.response?.data?.error || { message: err.message };
     return { error, response: err.response };
