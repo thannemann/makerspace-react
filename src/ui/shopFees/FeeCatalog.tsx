@@ -48,7 +48,7 @@ const FeeCatalog: React.FC = () => {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editState, setEditState] = React.useState<EditState>(emptyEdit());
   const [newItem, setNewItem] = React.useState<EditState>(emptyEdit());
-  const [selectedId, setSelectedId] = React.useState<string | undefined>(undefined);
+
 
   const {
     isRequesting,
@@ -252,8 +252,6 @@ const FeeCatalog: React.FC = () => {
           columns={columns}
           rowId={rowId}
           totalItems={extractTotalItems(response)}
-          selectedIds={selectedId}
-          setSelectedIds={setSelectedId}
           renderSearch={true}
         />
         {isSaving && <LoadingOverlay id="fee-catalog-saving" contained />}
