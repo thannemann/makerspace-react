@@ -19,18 +19,21 @@ import UnsubscribeEmails from "ui/member/UnsubscribeEmails";
 import { SignUpWorkflow } from 'pages/registration/SignUpWorkflow/SignUpWorkflow';
 import AdminRentalsPage from 'ui/admin/rentals/AdminRentalsPage';
 import ShopFeesPage from 'ui/shopFees/ShopFeesPage';
+import ToolCheckoutsPage from 'ui/toolCheckouts/ToolCheckoutsPage';
 
 interface Props {
   currentUserId: string,
   permissions: CollectionOf<Permission>,
   isAdmin: boolean;
   isResourceManager: boolean;
+  isCheckoutApprover: boolean;
 }
 
-const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions, isAdmin, isResourceManager }) => {
+const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions, isAdmin, isResourceManager, isCheckoutApprover }) => {
   const billingEnabled = permissions[Whitelists.billing] || false;
   const earnedMembershipEnabled = isAdmin && permissions[Whitelists.earnedMembership];
   const canManageShopFees = isAdmin || isResourceManager;
+  const canManageCheckouts = isAdmin || isResourceManager || isCheckoutApprover;
 
   return (
     <Switch>
@@ -44,6 +47,7 @@ const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions, isAdmin,
       {(isAdmin || isResourceManager) && <Route exact path={Routing.AdminRentals} component={AdminRentalsPage} />}
       {/* Admin/RM shop fee charges */}
       {canManageShopFees && <Route exact path={Routing.ShopFees} component={ShopFeesPage} />}
+      {canManageCheckouts && <Route exact path={Routing.ToolCheckouts} component={ToolCheckoutsPage} />}
       {billingEnabled && <Route exact path={`${Routing.Billing}/${Routing.PathPlaceholder.Resource}${Routing.PathPlaceholder.Optional}`} component={BillingContainer} />}
       {billingEnabled && <Route exact path={Routing.Receipt} component={Receipt}/>}
       {billingEnabled && <Route path={Routing.Checkout} component={CheckoutPage} />}

@@ -1,0 +1,64 @@
+import * as React from "react";
+import Tabs from "@material-ui/core/Tabs";
+import Tab from "@material-ui/core/Tab";
+import Grid from "@material-ui/core/Grid";
+import Typography from "@material-ui/core/Typography";
+
+import CheckoutRoster from "./CheckoutRoster";
+import ShopManager from "./ShopManager";
+import ToolManager from "./ToolManager";
+import CheckoutApproversManager from "./CheckoutApproversManager";
+import { useAuthState } from "ui/reducer/hooks";
+import { memberIsAdmin, memberIsResourceManager } from "ui/member/utils";
+
+type TabKey = "roster" | "shops" | "tools" | "approvers";
+
+const ToolCheckoutsPage: React.FC = () => {
+  const { currentUser } = useAuthState();
+  const isAdmin = memberIsAdmin(currentUser);
+  const isRM = memberIsResourceManager(currentUser);
+  const [activeTab, setActiveTab] = React.useState<TabKey>("roster");
+
+  const tabs: { key: TabKey; label: string; adminOnly?: boolean }[] = [
+    { key: "roster", label: "Checkout Roster" },
+    { key: "shops", label: "Shops" },
+    { key: "tools", label: "Tools" },
+    { key: "approvers", label: "Approvers", adminOnly: true },
+  ];
+
+  const visibleTabs = tabs.filter(t => !t.adminOnly || isAdmin);
+
+  return (
+    <Grid container spacing={3} justify="center">
+      <Grid item md={10} xs={12}>
+        <Typography variant="h5" gutterBottom>Tool Checkouts</Typography>
+        <Typography variant="body2" color="textSecondary">
+          Manage member tool checkouts, shops, tools, and checkout approvers.
+          Members can be checked out via the portal or via Slack slash command in the shop channel.
+        </Typography>
+      </Grid>
+      <Grid item md={10} xs={12}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, val) => setActiveTab(val as TabKey)}
+          indicatorColor="primary"
+          textColor="primary"
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          {visibleTabs.map(t => (
+            <Tab key={t.key} id={`tool-checkouts-tab-${t.key}`} value={t.key} label={t.label} />
+          ))}
+        </Tabs>
+      </Grid>
+      <Grid item md={10} xs={12}>
+        {activeTab === "roster" && <CheckoutRoster isAdmin={isAdmin} isResourceManager={isRM} />}
+        {activeTab === "shops" && <ShopManager />}
+        {activeTab === "tools" && <ToolManager />}
+        {activeTab === "approvers" && isAdmin && <CheckoutApproversManager />}
+      </Grid>
+    </Grid>
+  );
+};
+
+export default ToolCheckoutsPage;

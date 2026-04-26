@@ -28,6 +28,7 @@ import { SubRoutes } from "ui/settings/SettingsContainer";
 import { SubscriptionFilter } from "../subscriptions/SubscriptionFilters";
 import { useSearchQuery, useSetSearchQuery } from "hooks/useSearchQuery";
 import ChargeButton from "ui/shopFees/ChargeButton";
+import MemberCheckoutsTab from "ui/toolCheckouts/MemberCheckoutsTab";
 
 const MemberProfile: React.FC = () => {
   const { match: { params: { memberId, resource } }, history } = useReactRouter<{ memberId: string, resource: string }>();
@@ -229,6 +230,11 @@ const MemberProfile: React.FC = () => {
           {
             name: "rentals",
             content: <MemberRentalsTab member={member} onUpdate={refreshMember} />
+          },
+          {
+            name: "checkouts",
+            displayName: "Checkouts",
+            content: <MemberCheckoutsTab member={member} />
           },
           ...billingEnabled && !!customerId ? [{
             name: "transactions",

@@ -86,6 +86,7 @@ class Header extends React.Component<Props, State> {
     const isAdmin = memberIsAdmin(currentUser);
     const isRM = memberIsResourceManager(currentUser);
     const canManageShopFees = isAdmin || isRM;
+    const canManageCheckouts = isAdmin || isRM || (currentUser as any).isCheckoutApprover;
 
     return (
       <>
@@ -119,6 +120,7 @@ class Header extends React.Component<Props, State> {
           {this.renderMenuNavLink(Routing.Members, "Members", "members")}
           {(isAdmin || isRM) && this.renderMenuNavLink(Routing.AdminRentals, "Rentals", "rentals")}
           {canManageShopFees && this.renderMenuNavLink(Routing.ShopFees, "Shop Fees", "shop-fees")}
+          {canManageCheckouts && this.renderMenuNavLink(Routing.ToolCheckouts, "Tool Checkouts", "tool-checkouts")}
           {billingEnabled && isAdmin && this.renderMenuNavLink(Routing.Billing, "Billing", "billing")}
           {earnedMembershipEnabled && this.renderMenuNavLink(Routing.EarnedMemberships, "Earned Memberships", "earnedMembership")}
           {this.renderMenuNavLink(Routing.Settings.replace(Routing.PathPlaceholder.MemberId, currentUser.id), "Account Settings", "settings")}
