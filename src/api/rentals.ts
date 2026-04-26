@@ -79,6 +79,10 @@ export const createRental = ({ body }: { body: { rentalSpotId: string; notes?: s
 export const cancelRental = ({ id, body }: { id: string; body: { vacated: boolean } }) =>
   buildResponse<{}>(api.delete(`/api/rentals/${id}/cancel`, { data: body }));
 
+// Called when a vacating rental is marked as fully vacated
+export const markRentalVacated = ({ id }: { id: string }) =>
+  buildResponse<{}>(api.post(`/api/rentals/${id}/mark_vacated`));
+
 // Called when member declines the agreement — voids the rental
 export const declineRentalAgreement = ({ id }: { id: string }) =>
   buildResponse<{}>(api.delete(`/api/rentals/${id}/decline_agreement`));

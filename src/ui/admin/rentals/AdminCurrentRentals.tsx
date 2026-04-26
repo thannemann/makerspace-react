@@ -1,8 +1,6 @@
 import * as React from "react";
 import Grid from "@material-ui/core/Grid";
-import FormControlLabel from "@material-ui/core/FormControlLabel";
-import Checkbox from "@material-ui/core/Checkbox";
-import Typography from "@material-ui/core/Typography";
+import Button from "@material-ui/core/Button";
 import Tooltip from "@material-ui/core/Tooltip";
 import { Link } from "react-router-dom";
 import moment from "moment";
@@ -15,6 +13,7 @@ import { Status } from "ui/constants";
 import StatusLabel from "ui/common/StatusLabel";
 import { timeToDate } from "ui/utils/timeToDate";
 import useReadTransaction from "ui/hooks/useReadTransaction";
+import useWriteTransaction from "ui/hooks/useWriteTransaction";
 import extractTotalItems from "ui/utils/extractTotalItems";
 import CreateRentalAdmin from "ui/rentals/CreateRentalAdmin";
 import EditRental from "ui/rentals/EditRental";
@@ -22,6 +21,8 @@ import RenewRental from "ui/rentals/RenewRental";
 import DeleteRentalModal from "ui/rentals/DeleteRentalModal";
 import { useAuthState } from "ui/reducer/hooks";
 import { RentalStatus } from "app/entities/rentalSpot";
+import { markRentalVacated } from "api/rentals";
+import { withQueryContext, useQueryContext } from "ui/common/Filters/QueryContext";
 
 const rowId = (rental: Rental) => rental.id;
 
@@ -41,16 +42,16 @@ const getRentalStatus = (row: Rental): { label: string; color: Status } => {
   return { label: expired ? "Expired" : "Active", color: expired ? Status.Danger : Status.Success };
 };
 
-const AdminCurrentRentals: React.FC = () => {
+const AdminCurrentRentalsInner: React.FC = () => {
   const { currentUser: { isAdmin } } = useAuthState();
-  const [activeOnly, setActiveOnly] = React.useState(true);
   const [selectedId, setSelectedId] = React.useState<string>();
+  const { params } = useQueryContext();
 
   const { isRequesting, data: rentals = [], response, refresh, error } = useReadTransaction(
     adminListRentals,
-    (activeOnly ? { status: "active" } : {}) as any,
+    params as any,
     undefined,
-    `admin-current-rentals-${activeOnly}`
+    "admin-current-rentals"
   );
 
   const onAction = React.useCallback(() => {
@@ -58,7 +59,11 @@ const AdminCurrentRentals: React.FC = () => {
     setSelectedId(null);
   }, [refresh]);
 
-  const selectedRental = rentals.find(r => r.id === selectedId);
+  const selectedRental   = rentals.find(r => r.id === selectedId);
+  const selectedVacating = (selectedRental as any)?.status === "vacating";
+
+  const onMarkVacatedSuccess = React.useCallback(() => { refresh(); setSelectedId(null); }, [refresh]);
+  const { call: doMarkVacated, isRequesting: markingVacated } = useWriteTransaction(markRentalVacated, onMarkVacatedSuccess);
 
   const columns: Column<Rental>[] = [
     {
@@ -84,10 +89,10 @@ const AdminCurrentRentals: React.FC = () => {
       id: "status", label: "Status",
       cell: (r: Rental) => {
         const { label, color } = getRentalStatus(r);
-        const status = (r as any).status as RentalStatus;
+        const status  = (r as any).status as RentalStatus;
         if (status === RentalStatus.Denied || status === RentalStatus.AgreementDenied) {
-          const notes = (r as any).notes || "";
-          const match = notes.match(/(?:Denied|Agreement declined)[:\s]+(.+?)(\s*\|.*)?$/i);
+          const notes  = (r as any).notes || "";
+          const match  = notes.match(/(?:Denied|Agreement declined)[:\s]+(.+?)(\s*\|.*)?$/i);
           const reason = match ? match[1].trim() : "No reason provided";
           return (
             <Tooltip title={`Reason: ${reason}`} placement="top">
@@ -103,24 +108,23 @@ const AdminCurrentRentals: React.FC = () => {
   return (
     <Grid container spacing={2}>
       <Grid item xs={12}>
-        <Grid container justify="space-between" alignItems="center">
-          <Grid item>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  id="admin-rentals-active-filter"
-                  checked={activeOnly}
-                  onChange={e => setActiveOnly(e.target.checked)}
-                  color="primary"
-                />
-              }
-              label={<Typography variant="body2">Show active rentals only</Typography>}
-            />
-          </Grid>
+        <Grid container justify="flex-end" alignItems="center">
           <Grid item>
             <CreateRentalAdmin onCreate={onAction} />
             <EditRental rental={selectedRental} onUpdate={onAction} />
             <RenewRental rental={selectedRental} onRenew={onAction} />
+            {selectedVacating && (
+              <Button
+                id="rentals-list-mark-vacated"
+                variant="outlined"
+                color="secondary"
+                disabled={markingVacated}
+                onClick={() => selectedRental && doMarkVacated({ id: selectedRental.id })}
+                style={{ marginRight: "8px" }}
+              >
+                Mark Vacated
+              </Button>
+            )}
             {isAdmin && <DeleteRentalModal rental={selectedRental} onDelete={onAction} />}
           </Grid>
         </Grid>
@@ -145,4 +149,4 @@ const AdminCurrentRentals: React.FC = () => {
   );
 };
 
-export default AdminCurrentRentals;
+export default withQueryContext(AdminCurrentRentalsInner);

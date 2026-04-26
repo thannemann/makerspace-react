@@ -9,7 +9,6 @@ import useModal from "../hooks/useModal";
 import useWriteTransaction from "../hooks/useWriteTransaction";
 import { ActionButton } from "ui/common/ButtonRow";
 
-
 interface Props {
   rental: Rental;
   onDelete?: () => void;
@@ -35,7 +34,7 @@ const DeleteRentalModal: React.FC<Props> = ({ rental, onDelete }) => {
         color="secondary"
         disabled={!rental}
         onClick={openModal}
-        label="Delete Rental"
+        label="Cancel Rental"
       />
       {isOpen && rental && (
         <FormModal
@@ -43,15 +42,15 @@ const DeleteRentalModal: React.FC<Props> = ({ rental, onDelete }) => {
           loading={isRequesting}
           isOpen={isOpen}
           closeHandler={closeModal}
-          title="Delete Rental"
+          title="Cancel Rental"
           onSubmit={onSubmit}
-          submitText="Delete"
+          submitText="Cancel Rental"
           error={error}
         >
           <Typography gutterBottom>
-            Are you sure you want to delete this rental?
+            Are you sure you want to cancel this rental? The Braintree subscription will be cancelled and the rental status will be set to cancelled. This cannot be undone.
           </Typography>
-          <KeyValueItem label="Contact">
+          <KeyValueItem label="Member">
             <span id="delete-rental-member">{rental.memberName}</span>
           </KeyValueItem>
           <KeyValueItem label="Number">

@@ -70,7 +70,7 @@ const MemberProfile: React.FC = () => {
   const { data: rentals = [], isRequesting: rentalsLoading } = useReadTransaction(listRentals, {}, undefined, "listRentals");
 
   React.useEffect(() => {
-    const missingAgreement = rentals.find(rental => !rental.contractOnFile && !["agreement_denied", "cancelled", "denied"].includes((rental as any).status));
+    const missingAgreement = rentals.find(rental => !rental.contractOnFile && !["agreement_denied", "cancelled", "denied", "pending"].includes((rental as any).status));
     if (!initRender && isOwnProfile && !rentalsLoading && missingAgreement && !notification) {
       setNotification(Notification.SignRental)
     }
@@ -89,7 +89,7 @@ const MemberProfile: React.FC = () => {
   const goToAgreements = React.useCallback(() => {
     switch (notification) {
       case Notification.SignRental:
-        const missingAgreement = rentals.find(rental => !rental.contractOnFile && !["agreement_denied", "cancelled", "denied"].includes((rental as any).status));
+        const missingAgreement = rentals.find(rental => !rental.contractOnFile && !["agreement_denied", "cancelled", "denied", "pending"].includes((rental as any).status));
         if (missingAgreement) {
           history.push(
             Routing.Documents
