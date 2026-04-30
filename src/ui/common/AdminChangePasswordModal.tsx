@@ -175,6 +175,11 @@ const AdminChangePasswordModal: React.FC<Props> = ({ member = {} as Member }) =>
 
             {adminMode === "set" && (
               <>
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="textSecondary">
+                    The member will receive an email notifying them that their password has been changed. If you do not want them notified, use the <strong>Send reset link</strong> option instead.
+                  </Typography>
+                </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
                     id="admin-password-input"
