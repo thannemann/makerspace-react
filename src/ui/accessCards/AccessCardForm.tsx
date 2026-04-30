@@ -47,6 +47,11 @@ const AccessCardForm: React.FC<{ memberId: string }> = ({ memberId }) => {
   }, [refreshMember, closeModal]);
   const { isRequesting: createLoading, error: createError, call: createCard, data: newCard } = useWriteTransaction(adminCreateCard, onSuccess);
   const onSubmit = React.useCallback(() => {
+    if (!member.memberContractOnFile) {
+      setError("Member has not signed the member contract. A key fob cannot be issued until the contract is on file.");
+      return;
+    }
+
     if (!rejectionCard) {
       setError("Import new key fob before proceeding.");
       return;
@@ -63,7 +68,7 @@ const AccessCardForm: React.FC<{ memberId: string }> = ({ memberId }) => {
         uid: rejectionCard.uid,
       }
     });
-  }, [rejectionCard, createCard, setError, member.id, idVerified]);
+  }, [rejectionCard, createCard, setError, member.id, member.memberContractOnFile, idVerified]);
 
   return (
     <>
@@ -71,10 +76,15 @@ const AccessCardForm: React.FC<{ memberId: string }> = ({ memberId }) => {
         id="member-detail-open-card-modal"
         color="primary"
         variant={member && member.cardId ? "outlined" : "contained"}
-        disabled={memberLoading}
+        disabled={memberLoading || !member.memberContractOnFile}
         label={member && member.cardId ? "Replace Fob" : "Register Fob"}
         onClick={openModal}
       />
+      {!member.memberContractOnFile && (
+        <Typography variant="body2" color="error" style={{ marginTop: 8 }}>
+          Member has not signed the member contract. A key fob cannot be issued until the contract is on file.
+        </Typography>
+      )}
       {isOpen && <FormModal
         id="card-form"
         loading={createLoading || newCardLoading}
