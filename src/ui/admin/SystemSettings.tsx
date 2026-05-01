@@ -32,6 +32,14 @@ const JOB_LABELS: Record<string, string> = {
   db_backup:       "Database Backup",
 };
 
+const JOB_DESCRIPTIONS: Record<string, string> = {
+  slack_sync:      "Syncs Slack workspace users to member records by matching email addresses.",
+  member_review:   "Reviews membership statuses and sends a weekly summary report to Slack.",
+  invoice_review:  "Reviews invoice statuses, flags past due accounts, and reports to the treasurer channel.",
+  garbage_collect: "Cleans up old Redis invoicing cache keys from the previous month.",
+  db_backup:       "Backs up the MongoDB database to Google Drive.",
+};
+
 const formatDate = (dateStr: string | null): string => {
   if (!dateStr) return "Never";
   return new Date(dateStr).toLocaleString("en-US", {
@@ -159,7 +167,7 @@ const SystemSettings: React.FC = () => {
                         {JOB_LABELS[job.key] || job.key}
                       </Typography>
                       <Typography variant="caption" color="textSecondary">
-                        {job.task}
+                        {JOB_DESCRIPTIONS[job.key] || job.task}
                       </Typography>
                     </Grid>
 
