@@ -20,6 +20,7 @@ import { SignUpWorkflow } from 'pages/registration/SignUpWorkflow/SignUpWorkflow
 import AdminRentalsPage from 'ui/admin/rentals/AdminRentalsPage';
 import ShopFeesPage from 'ui/shopFees/ShopFeesPage';
 import ToolCheckoutsPage from 'ui/toolCheckouts/ToolCheckoutsPage';
+import SystemSettings from 'ui/admin/SystemSettings';
 
 interface Props {
   currentUserId: string,
@@ -48,6 +49,7 @@ const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions, isAdmin,
       {/* Admin/RM shop fee charges */}
       {canManageShopFees && <Route exact path={Routing.ShopFees} component={ShopFeesPage} />}
       {canManageCheckouts && <Route exact path={Routing.ToolCheckouts} component={ToolCheckoutsPage} />}
+      {isAdmin && <Route exact path={Routing.SystemSettings} component={SystemSettings} />}
       {billingEnabled && <Route exact path={`${Routing.Billing}/${Routing.PathPlaceholder.Resource}${Routing.PathPlaceholder.Optional}`} component={BillingContainer} />}
       {billingEnabled && <Route exact path={Routing.Receipt} component={Receipt}/>}
       {billingEnabled && <Route path={Routing.Checkout} component={CheckoutPage} />}

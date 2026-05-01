@@ -123,6 +123,7 @@ class Header extends React.Component<Props, State> {
           {canManageCheckouts && this.renderMenuNavLink(Routing.ToolCheckouts, "Tool Checkouts", "tool-checkouts")}
           {billingEnabled && isAdmin && this.renderMenuNavLink(Routing.Billing, "Billing", "billing")}
           {earnedMembershipEnabled && this.renderMenuNavLink(Routing.EarnedMemberships, "Earned Memberships", "earnedMembership")}
+          {isAdmin && this.renderMenuNavLink(Routing.SystemSettings, "System Settings", "system-settings")}
           {this.renderMenuNavLink(Routing.Settings.replace(Routing.PathPlaceholder.MemberId, currentUser.id), "Account Settings", "settings")}
           <MenuItem id="logout" onClick={this.logoutUser}>Logout</MenuItem>
         </Menu>
