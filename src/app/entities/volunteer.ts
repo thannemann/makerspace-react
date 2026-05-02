@@ -37,11 +37,31 @@ export interface VolunteerTask {
   updatedAt: string;
 }
 
+export interface VolunteerEvent {
+  id: string;
+  eventNumber: number;
+  title: string;
+  description: string;
+  creditValue: number;
+  eventDate: string | null;
+  status: 'open' | 'closed';
+  createdById: string;
+  createdByName: string;
+  closedById: string | null;
+  closedByName: string | null;
+  closedAt: string | null;
+  attendeeIds: string[];
+  attendeeNames: string[];
+  attendeeCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface VolunteerSummary {
   year_count: number;
-  discounts_used: number;
-  max_discounts: number;
-  credits_per_discount: number;
+  discounts_used: number | null;
+  max_discounts: number | null;
+  credits_per_discount: number | null;
   pending_count: number;
   is_earned_member: boolean;
   discount_active: boolean;

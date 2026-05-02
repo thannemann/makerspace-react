@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { ApiDataResponse, ApiErrorResponse } from 'makerspace-ts-api-client';
-import { VolunteerCredit, VolunteerTask, VolunteerSummary } from 'app/entities/volunteer';
+import { VolunteerCredit, VolunteerTask, VolunteerEvent, VolunteerSummary } from 'app/entities/volunteer';
 
 const wrapHeaders = (axiosHeaders: Record<string, any>) => ({
   get: (key: string) => axiosHeaders[key.toLowerCase()] ?? null,
@@ -47,11 +47,17 @@ export const getVolunteerSummary = (_params?: any) =>
 export const getMemberVolunteerTasks = (_params?: any) =>
   buildResponse<VolunteerTask[]>(api.get('/api/volunteer/tasks'));
 
+export const getMemberVolunteerEvents = (_params?: any) =>
+  buildResponse<VolunteerEvent[]>(api.get('/api/volunteer/events'));
+
 export const claimVolunteerTask = ({ id }: { id: string }) =>
   buildResponse<VolunteerTask>(api.post(`/api/volunteer/tasks/${id}/claim`));
 
 export const completeVolunteerTask = ({ id }: { id: string }) =>
   buildResponse<VolunteerTask>(api.post(`/api/volunteer/tasks/${id}/complete`));
+
+export const checkinVolunteerEvent = ({ id }: { id: string }) =>
+  buildResponse<VolunteerEvent>(api.post(`/api/volunteer/events/${id}/checkin`));
 
 // ── Admin endpoints ───────────────────────────────────────────────────────────
 
@@ -106,3 +112,27 @@ export const adminRejectPendingVolunteerTask = ({ id, reason }: { id: string; re
 
 export const adminDeleteVolunteerTask = ({ id }: { id: string }) =>
   buildResponse<{}>(api.delete(`/api/admin/volunteer_tasks/${id}`));
+
+// ── Admin event endpoints ─────────────────────────────────────────────────────
+
+export const adminListVolunteerEvents = (params?: { status?: string }) =>
+  buildResponse<VolunteerEvent[]>(api.get('/api/admin/volunteer_events', { params }));
+
+export const adminCreateVolunteerEvent = ({ body }: { body: Partial<VolunteerEvent> }) =>
+  buildResponse<VolunteerEvent>(api.post('/api/admin/volunteer_events', {
+    title:        body.title,
+    description:  body.description,
+    credit_value: body.creditValue,
+    event_date:   body.eventDate || null,
+  }));
+
+export const adminCloseVolunteerEvent = ({ id }: { id: string }) =>
+  buildResponse<VolunteerEvent>(api.post(`/api/admin/volunteer_events/${id}/close`));
+
+export const adminAddEventAttendee = ({ id, memberId }: { id: string; memberId: string }) =>
+  buildResponse<VolunteerEvent>(api.post(`/api/admin/volunteer_events/${id}/add_attendee`, {
+    member_id: memberId,
+  }));
+
+export const adminDeleteVolunteerEvent = ({ id }: { id: string }) =>
+  buildResponse<{}>(api.delete(`/api/admin/volunteer_events/${id}`));
