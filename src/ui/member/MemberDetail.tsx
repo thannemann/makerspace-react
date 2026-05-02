@@ -29,6 +29,7 @@ import { SubscriptionFilter } from "../subscriptions/SubscriptionFilters";
 import { useSearchQuery, useSetSearchQuery } from "hooks/useSearchQuery";
 import ChargeButton from "ui/shopFees/ChargeButton";
 import MemberCheckoutsTab from "ui/toolCheckouts/MemberCheckoutsTab";
+import MemberVolunteerTab from "ui/volunteer/MemberVolunteerTab";
 
 const MemberProfile: React.FC = () => {
   const { match: { params: { memberId, resource } }, history } = useReactRouter<{ memberId: string, resource: string }>();
@@ -240,7 +241,12 @@ const MemberProfile: React.FC = () => {
             name: "transactions",
             displayName: "Payment History",
             content: <TransactionsList member={member} />
-          }] : []
+          }] : [],
+          ...isOwnProfile ? [{
+            name: "volunteer",
+            displayName: "Volunteer",
+            content: <MemberVolunteerTab member={member} />
+          }] : [],
         ]}
       />
       {notification && <NotificationModal

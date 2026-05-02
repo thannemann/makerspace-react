@@ -21,6 +21,7 @@ import AdminRentalsPage from 'ui/admin/rentals/AdminRentalsPage';
 import ShopFeesPage from 'ui/shopFees/ShopFeesPage';
 import ToolCheckoutsPage from 'ui/toolCheckouts/ToolCheckoutsPage';
 import SystemSettings from 'ui/admin/SystemSettings';
+import AdminVolunteerPage from 'ui/volunteer/AdminVolunteerPage';
 
 interface Props {
   currentUserId: string,
@@ -35,6 +36,7 @@ const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions, isAdmin,
   const earnedMembershipEnabled = isAdmin && permissions[Whitelists.earnedMembership];
   const canManageShopFees = isAdmin || isResourceManager;
   const canManageCheckouts = isAdmin || isResourceManager || isCheckoutApprover;
+  const canManageVolunteer = isAdmin || isResourceManager;
 
   return (
     <Switch>
@@ -49,6 +51,8 @@ const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions, isAdmin,
       {/* Admin/RM shop fee charges */}
       {canManageShopFees && <Route exact path={Routing.ShopFees} component={ShopFeesPage} />}
       {canManageCheckouts && <Route exact path={Routing.ToolCheckouts} component={ToolCheckoutsPage} />}
+      {/* Admin/RM volunteer management */}
+      {canManageVolunteer && <Route exact path={Routing.Volunteer} component={AdminVolunteerPage} />}
       {isAdmin && <Route exact path={Routing.SystemSettings} component={SystemSettings} />}
       {billingEnabled && <Route exact path={`${Routing.Billing}/${Routing.PathPlaceholder.Resource}${Routing.PathPlaceholder.Optional}`} component={BillingContainer} />}
       {billingEnabled && <Route exact path={Routing.Receipt} component={Receipt}/>}
