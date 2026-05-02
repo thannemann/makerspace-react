@@ -87,7 +87,6 @@ class Header extends React.Component<Props, State> {
     const isRM = memberIsResourceManager(currentUser);
     const canManageShopFees = isAdmin || isRM;
     const canManageCheckouts = isAdmin || isRM || (currentUser as any).isCheckoutApprover;
-    const canManageVolunteer = isAdmin || isRM;
 
     return (
       <>
@@ -122,10 +121,9 @@ class Header extends React.Component<Props, State> {
           {(isAdmin || isRM) && this.renderMenuNavLink(Routing.AdminRentals, "Rentals", "rentals")}
           {canManageShopFees && this.renderMenuNavLink(Routing.ShopFees, "Shop Fees", "shop-fees")}
           {canManageCheckouts && this.renderMenuNavLink(Routing.ToolCheckouts, "Tool Checkouts", "tool-checkouts")}
-          {canManageVolunteer && this.renderMenuNavLink(Routing.Volunteer, "Volunteer", "volunteer")}
           {billingEnabled && isAdmin && this.renderMenuNavLink(Routing.Billing, "Billing", "billing")}
           {earnedMembershipEnabled && this.renderMenuNavLink(Routing.EarnedMemberships, "Earned Memberships", "earnedMembership")}
-          {isAdmin && this.renderMenuNavLink(Routing.SystemSettings, "System Settings", "system-settings")}
+          {isAdmin && this.renderMenuNavLink(Routing.SystemSettings, "Member Portal Settings", "system-settings")}
           {this.renderMenuNavLink(Routing.Settings.replace(Routing.PathPlaceholder.MemberId, currentUser.id), "Account Settings", "settings")}
           <MenuItem id="logout" onClick={this.logoutUser}>Logout</MenuItem>
         </Menu>
