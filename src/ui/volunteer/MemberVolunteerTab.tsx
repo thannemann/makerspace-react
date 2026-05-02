@@ -1,16 +1,24 @@
 import * as React from 'react';
 import Grid from '@material-ui/core/Grid';
 import Typography from '@material-ui/core/Typography';
-import Card from '@material-ui/core/Card';
-import CardContent from '@material-ui/core/CardContent';
-import Chip from '@material-ui/core/Chip';
 import Button from '@material-ui/core/Button';
+import IconButton from '@material-ui/core/IconButton';
+import Tooltip from '@material-ui/core/Tooltip';
 import Divider from '@material-ui/core/Divider';
-import CircularProgress from '@material-ui/core/CircularProgress';
+import AssignmentIcon from '@material-ui/icons/Assignment';
+import CheckIcon from '@material-ui/icons/Check';
 import { Member } from 'makerspace-ts-api-client';
 
+import StatefulTable from 'ui/common/table/StatefulTable';
+import { Column } from 'ui/common/table/Table';
+import { SortDirection } from 'ui/common/table/constants';
+import { withQueryContext } from 'ui/common/Filters/QueryContext';
+import StatusLabel from 'ui/common/StatusLabel';
+import { Status } from 'ui/constants';
 import useReadTransaction from 'ui/hooks/useReadTransaction';
 import useWriteTransaction from 'ui/hooks/useWriteTransaction';
+import extractTotalItems from 'ui/utils/extractTotalItems';
+
 import { VolunteerCredit, VolunteerTask, VolunteerSummary } from 'app/entities/volunteer';
 import {
   getMemberVolunteerCredits,
@@ -24,262 +32,282 @@ interface Props {
   member: Member;
 }
 
-const statusLabel = (status: string): string => {
+const creditStatusLabel = (status: string): { label: string; color: Status } => {
   switch (status) {
-    case 'pending':   return 'Awaiting Approval';
-    case 'approved':  return 'Approved';
-    case 'rejected':  return 'Rejected';
-    case 'available': return 'Available';
-    case 'claimed':   return 'Claimed';
-    case 'completed': return 'Completed';
-    case 'cancelled': return 'Cancelled';
-    default:          return status;
+    case 'approved':  return { label: 'Approved',         color: Status.Success };
+    case 'pending':   return { label: 'Awaiting Approval', color: Status.Warn };
+    case 'rejected':  return { label: 'Rejected',         color: Status.Danger };
+    default:          return { label: status,             color: Status.Default };
   }
 };
 
-const statusColor = (status: string): 'default' | 'primary' | 'secondary' => {
+const taskStatusLabel = (status: string): { label: string; color: Status } => {
   switch (status) {
-    case 'approved':
-    case 'completed': return 'primary';
-    case 'rejected':
-    case 'cancelled': return 'secondary';
-    default:          return 'default';
+    case 'available': return { label: 'Available',            color: Status.Success };
+    case 'claimed':   return { label: 'Claimed',              color: Status.Info };
+    case 'pending':   return { label: 'Pending Verification', color: Status.Warn };
+    case 'completed': return { label: 'Completed',            color: Status.Primary };
+    case 'cancelled': return { label: 'Cancelled',            color: Status.Danger };
+    default:          return { label: status,                 color: Status.Default };
   }
 };
 
-const MemberVolunteerTab: React.FC<Props> = ({ member }) => {
-  const {
-    data: summary,
-    isRequesting: summaryLoading,
-    refresh: refreshSummary,
-  } = useReadTransaction(getVolunteerSummary, {});
+// ── Credit History Table ──────────────────────────────────────────────────────
 
-  const {
-    data: credits = [],
-    isRequesting: creditsLoading,
-    refresh: refreshCredits,
-  } = useReadTransaction(getMemberVolunteerCredits, {});
+interface CreditHistoryProps {
+  member: Member;
+}
 
-  const {
-    data: tasks = [],
-    isRequesting: tasksLoading,
-    refresh: refreshTasks,
-  } = useReadTransaction(getMemberVolunteerTasks, {});
+const CreditHistoryInner: React.FC<CreditHistoryProps> = ({ member }) => {
+  const { isRequesting, data: credits = [], response, error } =
+    useReadTransaction(getMemberVolunteerCredits, {}, undefined, 'member-volunteer-credits');
 
-  const refreshAll = React.useCallback(() => {
-    refreshSummary();
-    refreshCredits();
-    refreshTasks();
-  }, [refreshSummary, refreshCredits, refreshTasks]);
+  const columns: Column<VolunteerCredit>[] = [
+    {
+      id: 'description',
+      label: 'Description',
+      defaultSortDirection: SortDirection.Asc,
+      cell: (row: VolunteerCredit) => (
+        <div>
+          <Typography variant='body2'>{row.description}</Typography>
+          {row.taskTitle && (
+            <Typography variant='caption' color='textSecondary'>Task: {row.taskTitle}</Typography>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'creditValue',
+      label: 'Credits',
+      cell: (row: VolunteerCredit) => (
+        <Typography variant='body2'>{row.creditValue}</Typography>
+      ),
+    },
+    {
+      id: 'date',
+      label: 'Date',
+      cell: (row: VolunteerCredit) => (
+        <Typography variant='body2'>
+          {new Date(row.createdAt).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric'
+          })}
+        </Typography>
+      ),
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      cell: (row: VolunteerCredit) => {
+        const s = creditStatusLabel(row.status);
+        return (
+          <div>
+            <StatusLabel label={s.label} color={s.color} />
+            {row.discountApplied && (
+              <div><StatusLabel label='Discount Applied' color={Status.Primary} /></div>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
 
-  const { call: claimTask, isRequesting: claiming } = useWriteTransaction(
-    claimVolunteerTask,
-    refreshAll
+  return (
+    <StatefulTable
+      id='member-volunteer-credits-table'
+      title='Credit History'
+      loading={isRequesting}
+      data={credits as VolunteerCredit[]}
+      error={error}
+      columns={columns}
+      rowId={(c: VolunteerCredit) => c.id}
+      totalItems={extractTotalItems(response)}
+      selectedIds={undefined}
+      setSelectedIds={() => {}}
+    />
   );
+};
 
-  const { call: markComplete, isRequesting: completing } = useWriteTransaction(
-    completeVolunteerTask,
-    refreshAll
-  );
+const CreditHistory = withQueryContext(CreditHistoryInner);
 
-  const myClaimedTask = (tasks as VolunteerTask[]).find(
+// ── Available Tasks Table ─────────────────────────────────────────────────────
+
+interface AvailableTasksProps {
+  member: Member;
+  onClaim: () => void;
+  onComplete: () => void;
+}
+
+const AvailableTasksInner: React.FC<AvailableTasksProps> = ({ member, onClaim, onComplete }) => {
+  const { isRequesting, data: tasks = [], response, error, refresh } =
+    useReadTransaction(getMemberVolunteerTasks, {}, undefined, 'member-volunteer-tasks');
+
+  const refreshRef = React.useRef(refresh);
+  React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);
+
+  const onSuccess = React.useCallback(() => {
+    refreshRef.current();
+    onClaim();
+    onComplete();
+  }, [onClaim, onComplete]);
+
+  const { call: claimTask, isRequesting: claiming } = useWriteTransaction(claimVolunteerTask, onSuccess);
+  const { call: markComplete, isRequesting: completing } = useWriteTransaction(completeVolunteerTask, onSuccess);
+
+  const myActiveTask = (tasks as VolunteerTask[]).find(
     t => t.claimedById === member.id && ['claimed', 'pending'].includes(t.status)
   );
 
-  const availableTasks = (tasks as VolunteerTask[]).filter(t => t.status === 'available');
-
-  const s = summary as VolunteerSummary & { discount_active?: boolean };
-
-  if (summaryLoading && creditsLoading) {
-    return (
-      <Grid container justify='center' style={{ padding: 32 }}>
-        <CircularProgress />
-      </Grid>
-    );
-  }
+  const columns: Column<VolunteerTask>[] = [
+    {
+      id: 'title',
+      label: 'Task',
+      defaultSortDirection: SortDirection.Asc,
+      cell: (row: VolunteerTask) => (
+        <div>
+          <Typography variant='body2'><strong>{row.title}</strong></Typography>
+          <Typography variant='caption' color='textSecondary'>{row.description}</Typography>
+          {row.shopName && (
+            <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>
+              {row.shopName}
+            </Typography>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'creditValue',
+      label: 'Credits',
+      cell: (row: VolunteerTask) => (
+        <Typography variant='body2'>{row.creditValue}</Typography>
+      ),
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      cell: (row: VolunteerTask) => {
+        const s = taskStatusLabel(row.status);
+        return <StatusLabel label={s.label} color={s.color} />;
+      },
+    },
+    {
+      id: 'actions',
+      label: '',
+      cell: (row: VolunteerTask) => {
+        if (row.status === 'available' && !myActiveTask) {
+          return (
+            <Tooltip title='Claim this task'>
+              <Button
+                size='small'
+                variant='outlined'
+                color='primary'
+                disabled={claiming}
+                startIcon={<AssignmentIcon fontSize='small' />}
+                onClick={e => { e.stopPropagation(); claimTask({ id: row.id }); }}
+              >
+                Claim
+              </Button>
+            </Tooltip>
+          );
+        }
+        if (row.claimedById === member.id && row.status === 'claimed') {
+          return (
+            <Tooltip title='Mark as complete'>
+              <Button
+                size='small'
+                variant='contained'
+                color='primary'
+                disabled={completing}
+                startIcon={<CheckIcon fontSize='small' />}
+                onClick={e => { e.stopPropagation(); markComplete({ id: row.id }); }}
+              >
+                Mark Complete
+              </Button>
+            </Tooltip>
+          );
+        }
+        if (row.claimedById === member.id && row.status === 'pending') {
+          return <Typography variant='caption' color='textSecondary'>Awaiting verification</Typography>;
+        }
+        return null;
+      },
+    },
+  ];
 
   return (
-    <Grid container spacing={3} style={{ padding: '16px 0' }}>
+    <StatefulTable
+      id='member-volunteer-tasks-table'
+      title='Bounty Tasks'
+      loading={isRequesting}
+      data={tasks as VolunteerTask[]}
+      error={error}
+      columns={columns}
+      rowId={(t: VolunteerTask) => t.id}
+      totalItems={extractTotalItems(response)}
+      selectedIds={undefined}
+      setSelectedIds={() => {}}
+    />
+  );
+};
 
-      {/* Summary banner */}
+const AvailableTasks = withQueryContext(AvailableTasksInner);
+
+// ── Summary Banner ────────────────────────────────────────────────────────────
+
+interface SummaryBannerProps {
+  summary: VolunteerSummary & { discount_active?: boolean };
+}
+
+const SummaryBanner: React.FC<SummaryBannerProps> = ({ summary }) => (
+  <Grid container spacing={2} style={{ marginBottom: 8 }}>
+    <Grid item xs={12} sm={4}>
+      <Typography variant='h6' color='primary'>{summary.year_count}</Typography>
+      <Typography variant='body2' color='textSecondary'>Credits this year</Typography>
+    </Grid>
+    {summary.discount_active && (
+      <Grid item xs={12} sm={4}>
+        <Typography variant='h6'>{summary.discounts_used} / {summary.max_discounts}</Typography>
+        <Typography variant='body2' color='textSecondary'>Discounts applied</Typography>
+      </Grid>
+    )}
+    {summary.pending_count > 0 && (
+      <Grid item xs={12} sm={4}>
+        <Typography variant='h6'>{summary.pending_count}</Typography>
+        <Typography variant='body2' color='textSecondary'>Pending approval</Typography>
+      </Grid>
+    )}
+    {summary.discount_active && summary.message && (
+      <Grid item xs={12}>
+        <Typography variant='body2' color='primary'>{summary.message}</Typography>
+      </Grid>
+    )}
+  </Grid>
+);
+
+// ── Main Tab ──────────────────────────────────────────────────────────────────
+
+const MemberVolunteerTab: React.FC<Props> = ({ member }) => {
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const triggerRefresh = React.useCallback(() => setRefreshKey(k => k + 1), []);
+
+  const { data: summary } = useReadTransaction(getVolunteerSummary, {}, undefined, `volunteer-summary-${refreshKey}`);
+  const s = summary as VolunteerSummary & { discount_active?: boolean } | undefined;
+
+  return (
+    <Grid container spacing={3}>
       {s && (
         <Grid item xs={12}>
-          <Card variant='outlined'>
-            <CardContent>
-              <Grid container spacing={2} alignItems='center'>
-                <Grid item xs={12} sm={s.discount_active ? 4 : 6}>
-                  <Typography variant='h4' color='primary'>
-                    {s.year_count}
-                  </Typography>
-                  <Typography variant='body2' color='textSecondary'>
-                    Credits this year
-                  </Typography>
-                </Grid>
-                {s.discount_active && (
-                  <Grid item xs={12} sm={4}>
-                    <Typography variant='h4'>
-                      {s.discounts_used} / {s.max_discounts}
-                    </Typography>
-                    <Typography variant='body2' color='textSecondary'>
-                      Discounts applied
-                    </Typography>
-                  </Grid>
-                )}
-                {s.pending_count > 0 && (
-                  <Grid item xs={12} sm={4}>
-                    <Typography variant='h4'>
-                      {s.pending_count}
-                    </Typography>
-                    <Typography variant='body2' color='textSecondary'>
-                      Pending approval
-                    </Typography>
-                  </Grid>
-                )}
-              </Grid>
-              {s.discount_active && s.message && (
-                <Typography variant='body1' style={{ marginTop: 12 }} color='primary'>
-                  {s.message}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      )}
-
-      {/* My active task */}
-      {myClaimedTask && (
-        <Grid item xs={12}>
-          <Typography variant='h6' gutterBottom>My Active Task</Typography>
-          <Card variant='outlined'>
-            <CardContent>
-              <Grid container alignItems='center' spacing={2}>
-                <Grid item xs={12} sm={8}>
-                  <Typography variant='subtitle1'>{myClaimedTask.title}</Typography>
-                  <Typography variant='body2' color='textSecondary'>{myClaimedTask.description}</Typography>
-                  <Chip
-                    size='small'
-                    label={statusLabel(myClaimedTask.status)}
-                    style={{ marginTop: 8 }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  {myClaimedTask.status === 'claimed' && (
-                    <Button
-                      variant='contained'
-                      color='primary'
-                      disabled={completing}
-                      onClick={() => markComplete({ id: myClaimedTask.id })}
-                    >
-                      Mark Complete
-                    </Button>
-                  )}
-                  {myClaimedTask.status === 'pending' && (
-                    <Typography variant='body2' color='textSecondary'>
-                      Awaiting admin verification
-                    </Typography>
-                  )}
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-      )}
-
-      {/* Available bounty tasks */}
-      {availableTasks.length > 0 && !myClaimedTask && (
-        <Grid item xs={12}>
-          <Typography variant='h6' gutterBottom>Available Bounty Tasks</Typography>
-          <Grid container spacing={2}>
-            {availableTasks.map((task: VolunteerTask) => (
-              <Grid item xs={12} sm={6} key={task.id}>
-                <Card variant='outlined'>
-                  <CardContent>
-                    <Grid container alignItems='center' spacing={1}>
-                      <Grid item xs={12}>
-                        <Typography variant='subtitle1'>{task.title}</Typography>
-                        <Typography variant='body2' color='textSecondary'>{task.description}</Typography>
-                        {task.shopName && (
-                          <Typography variant='caption' color='textSecondary'>{task.shopName}</Typography>
-                        )}
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Chip
-                          size='small'
-                          color='primary'
-                          label={`${task.creditValue} ${task.creditValue === 1 ? 'credit' : 'credits'}`}
-                        />
-                      </Grid>
-                      <Grid item xs={6} style={{ textAlign: 'right' }}>
-                        <Button
-                          size='small'
-                          variant='outlined'
-                          color='primary'
-                          disabled={claiming}
-                          onClick={() => claimTask({ id: task.id })}
-                        >
-                          Claim
-                        </Button>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+          <SummaryBanner summary={s} />
+          <Divider />
         </Grid>
       )}
 
       <Grid item xs={12}>
-        <Divider />
+        <AvailableTasks member={member} onClaim={triggerRefresh} onComplete={triggerRefresh} />
       </Grid>
 
-      {/* Credit history */}
       <Grid item xs={12}>
-        <Typography variant='h6' gutterBottom>Credit History</Typography>
-        {creditsLoading && <CircularProgress size={24} />}
-        {!creditsLoading && (credits as VolunteerCredit[]).length === 0 && (
-          <Typography variant='body2' color='textSecondary'>
-            No credits yet. Claim a bounty task or participate in a volunteer event to get started.
-          </Typography>
-        )}
-        {(credits as VolunteerCredit[]).map((credit: VolunteerCredit) => (
-          <Card key={credit.id} variant='outlined' style={{ marginBottom: 8 }}>
-            <CardContent style={{ paddingBottom: 8 }}>
-              <Grid container alignItems='center' spacing={1}>
-                <Grid item xs={12} sm={8}>
-                  <Typography variant='body1'>{credit.description}</Typography>
-                  <Typography variant='caption' color='textSecondary'>
-                    {new Date(credit.createdAt).toLocaleDateString('en-US', {
-                      month: 'short', day: 'numeric', year: 'numeric'
-                    })}
-                    {credit.issuedByName && ` — Issued by ${credit.issuedByName}`}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6} sm={2}>
-                  <Typography variant='body2'>
-                    {credit.creditValue} {credit.creditValue === 1 ? 'credit' : 'credits'}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6} sm={2} style={{ textAlign: 'right' }}>
-                  <Chip
-                    size='small'
-                    color={statusColor(credit.status)}
-                    label={statusLabel(credit.status)}
-                  />
-                  {credit.discountApplied && s?.discount_active && (
-                    <Chip
-                      size='small'
-                      label='Discount Applied'
-                      style={{ marginLeft: 4, backgroundColor: '#e8f5e9', color: '#2e7d32' }}
-                    />
-                  )}
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        ))}
+        <CreditHistory member={member} />
       </Grid>
-
     </Grid>
   );
 };
