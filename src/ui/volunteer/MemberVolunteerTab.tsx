@@ -88,6 +88,8 @@ const MemberVolunteerTab: React.FC<Props> = ({ member }) => {
 
   const availableTasks = (tasks as VolunteerTask[]).filter(t => t.status === 'available');
 
+  const s = summary as VolunteerSummary & { discount_active?: boolean };
+
   if (summaryLoading && creditsLoading) {
     return (
       <Grid container justify='center' style={{ padding: 32 }}>
@@ -100,31 +102,33 @@ const MemberVolunteerTab: React.FC<Props> = ({ member }) => {
     <Grid container spacing={3} style={{ padding: '16px 0' }}>
 
       {/* Summary banner */}
-      {summary && (
+      {s && (
         <Grid item xs={12}>
           <Card variant='outlined'>
             <CardContent>
               <Grid container spacing={2} alignItems='center'>
-                <Grid item xs={12} sm={4}>
+                <Grid item xs={12} sm={s.discount_active ? 4 : 6}>
                   <Typography variant='h4' color='primary'>
-                    {(summary as VolunteerSummary).year_count}
+                    {s.year_count}
                   </Typography>
                   <Typography variant='body2' color='textSecondary'>
                     Credits this year
                   </Typography>
                 </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Typography variant='h4'>
-                    {(summary as VolunteerSummary).discounts_used} / {(summary as VolunteerSummary).max_discounts}
-                  </Typography>
-                  <Typography variant='body2' color='textSecondary'>
-                    Discounts applied
-                  </Typography>
-                </Grid>
-                {(summary as VolunteerSummary).pending_count > 0 && (
+                {s.discount_active && (
                   <Grid item xs={12} sm={4}>
                     <Typography variant='h4'>
-                      {(summary as VolunteerSummary).pending_count}
+                      {s.discounts_used} / {s.max_discounts}
+                    </Typography>
+                    <Typography variant='body2' color='textSecondary'>
+                      Discounts applied
+                    </Typography>
+                  </Grid>
+                )}
+                {s.pending_count > 0 && (
+                  <Grid item xs={12} sm={4}>
+                    <Typography variant='h4'>
+                      {s.pending_count}
                     </Typography>
                     <Typography variant='body2' color='textSecondary'>
                       Pending approval
@@ -132,9 +136,9 @@ const MemberVolunteerTab: React.FC<Props> = ({ member }) => {
                   </Grid>
                 )}
               </Grid>
-              {(summary as VolunteerSummary).message && (
+              {s.discount_active && s.message && (
                 <Typography variant='body1' style={{ marginTop: 12 }} color='primary'>
-                  {(summary as VolunteerSummary).message}
+                  {s.message}
                 </Typography>
               )}
             </CardContent>
@@ -262,7 +266,7 @@ const MemberVolunteerTab: React.FC<Props> = ({ member }) => {
                     color={statusColor(credit.status)}
                     label={statusLabel(credit.status)}
                   />
-                  {credit.discountApplied && (
+                  {credit.discountApplied && s?.discount_active && (
                     <Chip
                       size='small'
                       label='Discount Applied'
