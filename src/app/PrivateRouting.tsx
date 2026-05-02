@@ -21,6 +21,7 @@ import AdminRentalsPage from 'ui/admin/rentals/AdminRentalsPage';
 import ShopFeesPage from 'ui/shopFees/ShopFeesPage';
 import ToolCheckoutsPage from 'ui/toolCheckouts/ToolCheckoutsPage';
 import MemberPortalSettings from 'ui/admin/MemberPortalSettings';
+import AdminVolunteerPage from 'ui/volunteer/AdminVolunteerPage';
 
 interface Props {
   currentUserId: string,
@@ -35,6 +36,7 @@ const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions, isAdmin,
   const earnedMembershipEnabled = isAdmin && permissions[Whitelists.earnedMembership];
   const canManageShopFees = isAdmin || isResourceManager;
   const canManageCheckouts = isAdmin || isResourceManager || isCheckoutApprover;
+  const canManageVolunteer = isAdmin || isResourceManager;
 
   return (
     <Switch>
@@ -44,11 +46,10 @@ const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions, isAdmin,
       <Route exact path={`${Routing.Settings}/${Routing.PathPlaceholder.Resource}${Routing.PathPlaceholder.Optional}`} component={SettingsContainer} />
       <Route exact path={`${Routing.Profile}/${Routing.PathPlaceholder.Resource}${Routing.PathPlaceholder.Optional}`} component={MemberDetail} />
       <Route exact path={Routing.Rentals} component={RentalsList} />
-      {/* Admin/RM rental management */}
       {(isAdmin || isResourceManager) && <Route exact path={Routing.AdminRentals} component={AdminRentalsPage} />}
-      {/* Admin/RM shop fee charges */}
       {canManageShopFees && <Route exact path={Routing.ShopFees} component={ShopFeesPage} />}
       {canManageCheckouts && <Route exact path={Routing.ToolCheckouts} component={ToolCheckoutsPage} />}
+      {canManageVolunteer && <Route exact path={Routing.Volunteer} component={AdminVolunteerPage} />}
       {isAdmin && <Route exact path={Routing.SystemSettings} component={MemberPortalSettings} />}
       {billingEnabled && <Route exact path={`${Routing.Billing}/${Routing.PathPlaceholder.Resource}${Routing.PathPlaceholder.Optional}`} component={BillingContainer} />}
       {billingEnabled && <Route exact path={Routing.Receipt} component={Receipt}/>}
