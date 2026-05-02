@@ -319,7 +319,7 @@ const TasksTabInner: React.FC = () => {
       defaultSortDirection: SortDirection.Asc,
       cell: (row: VolunteerTask) => (
         <div>
-          <Typography variant='body2'><strong>{row.title}</strong></Typography>
+          <Typography variant='body2'><strong>#{row.taskNumber} — {row.title}</strong></Typography>
           <Typography variant='caption' color='textSecondary'>{row.description}</Typography>
           {row.claimedByName && (
             <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>

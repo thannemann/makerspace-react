@@ -17,6 +17,7 @@ export interface VolunteerCredit {
 
 export interface VolunteerTask {
   id: string;
+  taskNumber: number;
   title: string;
   description: string;
   creditValue: number;
@@ -43,5 +44,6 @@ export interface VolunteerSummary {
   credits_per_discount: number;
   pending_count: number;
   is_earned_member: boolean;
+  discount_active: boolean;
   message: string | null;
 }
