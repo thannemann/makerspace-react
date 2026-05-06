@@ -2,13 +2,10 @@ import * as React from 'react';
 import Tooltip from '@material-ui/core/Tooltip';
 import CheckCircleIcon from '@material-ui/icons/CheckCircle';
 import ErrorIcon from '@material-ui/icons/Error';
-import HelpOutlineIcon from '@material-ui/icons/HelpOutline';
+import InfoOutlined from '@material-ui/icons/InfoOutlined';
 
-// Mailtrap statuses that are considered healthy
+// Mailtrap statuses considered healthy
 const GOOD_STATUSES = ['delivered', 'opened', 'clicked'];
-
-// Mailtrap statuses that are considered problems
-const BAD_STATUSES = ['bounced', 'soft_bounced', 'spam', 'unsubscribed', 'rejected'];
 
 const STATUS_LABELS: Record<string, string> = {
   delivered:    'Email delivered successfully',
@@ -21,30 +18,22 @@ const STATUS_LABELS: Record<string, string> = {
   rejected:     'Email rejected by mail server',
 };
 
-interface MailtrapData {
+export interface MailtrapData {
   status: string;
   timestamp: string;
   email: string;
 }
 
-interface SlackData {
+export interface SlackData {
   slack_id: string;
   name: string;
 }
 
-interface Props {
-  mailtrap?: MailtrapData;
-  slack?: SlackData;
-  /** When true, renders both icons horizontally (for table cells).
-   *  When false, renders each on its own labelled row (for detail page). */
-  inline?: boolean;
-}
-
-const EmailStatusIcon: React.FC<{ mailtrap?: MailtrapData }> = ({ mailtrap }) => {
+export const EmailStatusIcon: React.FC<{ mailtrap?: MailtrapData }> = ({ mailtrap }) => {
   if (!mailtrap) {
     return (
       <Tooltip title='No email delivery data on record'>
-        <HelpOutlineIcon fontSize='small' style={{ color: '#9e9e9e', verticalAlign: 'middle' }} />
+        <InfoOutlined fontSize='small' style={{ color: '#9e9e9e', verticalAlign: 'middle' }} />
       </Tooltip>
     );
   }
@@ -65,11 +54,11 @@ const EmailStatusIcon: React.FC<{ mailtrap?: MailtrapData }> = ({ mailtrap }) =>
   );
 };
 
-const SlackStatusIcon: React.FC<{ slack?: SlackData }> = ({ slack }) => {
+export const SlackStatusIcon: React.FC<{ slack?: SlackData }> = ({ slack }) => {
   if (!slack) {
     return (
       <Tooltip title='No Slack account linked to this member'>
-        <HelpOutlineIcon fontSize='small' style={{ color: '#9e9e9e', verticalAlign: 'middle' }} />
+        <InfoOutlined fontSize='small' style={{ color: '#9e9e9e', verticalAlign: 'middle' }} />
       </Tooltip>
     );
   }
@@ -80,39 +69,3 @@ const SlackStatusIcon: React.FC<{ slack?: SlackData }> = ({ slack }) => {
     </Tooltip>
   );
 };
-
-/**
- * Renders email and slack status icons for a member.
- * Use inline=true for table cells, inline=false (default) for detail page rows.
- */
-const ContactStatusIcons: React.FC<Props> = ({ mailtrap, slack, inline = false }) => {
-  if (inline) {
-    return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-        <EmailStatusIcon mailtrap={mailtrap} />
-        <SlackStatusIcon slack={slack} />
-      </span>
-    );
-  }
-
-  return (
-    <>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-        <EmailStatusIcon mailtrap={mailtrap} />
-        <span style={{ fontSize: '0.875rem' }}>
-          {mailtrap ? (GOOD_STATUSES.includes(mailtrap.status) ? 'Delivered' : mailtrap.status.replace('_', ' ')) : 'Unknown'}
-        </span>
-      </span>
-      <br />
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-        <SlackStatusIcon slack={slack} />
-        <span style={{ fontSize: '0.875rem' }}>
-          {slack ? slack.name : 'Not linked'}
-        </span>
-      </span>
-    </>
-  );
-};
-
-export default ContactStatusIcons;
-export { EmailStatusIcon, SlackStatusIcon };

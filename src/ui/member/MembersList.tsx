@@ -13,9 +13,9 @@ import { displayMemberExpiration, buildProfileRouting } from 'ui/member/utils';
 import { SortDirection } from 'ui/common/table/constants';
 import { Column } from 'ui/common/table/Table';
 import MemberStatusLabel from 'ui/member/MemberStatusLabel';
-import ContactStatusIcons from 'ui/common/ContactStatusIcons';
+import { EmailStatusIcon, SlackStatusIcon } from 'ui/common/ContactStatusIcons';
 
-import { listMembers, getMember, MemberSummary } from 'makerspace-ts-api-client';
+import { listMembers, MemberSummary } from 'makerspace-ts-api-client';
 import CreateMember from 'ui/member/CreateMember';
 import RenewMember from 'ui/member/RenewMember';
 import extractTotalItems from '../utils/extractTotalItems';
@@ -24,7 +24,6 @@ import StatefulTable from '../common/table/StatefulTable';
 import { useQueryContext, withQueryContext } from '../common/Filters/QueryContext';
 import { useAuthState } from 'ui/reducer/hooks';
 
-// Columns shown to all users
 const baseFields: Column<MemberSummary>[] = [
   {
     id: 'lastname',
@@ -47,7 +46,6 @@ const baseFields: Column<MemberSummary>[] = [
   },
 ];
 
-// Additional columns for admins and resource managers
 const privilegedFields: Column<MemberSummary>[] = [
   {
     id: 'notes',
@@ -63,22 +61,20 @@ const privilegedFields: Column<MemberSummary>[] = [
   {
     id: 'emailStatus',
     label: 'Email Status',
-    cell: (row: MemberSummary) => (
-      <ContactStatusIcons
-        mailtrap={(row as any).mailtrap}
-        inline={true}
-      />
-    ),
+    cell: (row: MemberSummary) => <EmailStatusIcon mailtrap={(row as any).mailtrap} />,
   },
   {
     id: 'slackStatus',
     label: 'Slack',
-    cell: (row: MemberSummary) => (
-      <ContactStatusIcons
-        slack={(row as any).slack}
-        inline={true}
-      />
-    ),
+    cell: (row: MemberSummary) => {
+      const slack = (row as any).slack;
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+          <SlackStatusIcon slack={slack} />
+          {slack && <span style={{ fontSize: '0.8rem', color: '#555' }}>{slack.name}</span>}
+        </span>
+      );
+    },
   },
 ];
 
@@ -90,12 +86,8 @@ const rowId = (member: MemberSummary) => member.id;
 const MembersList: React.FC = () => {
   const [selectedId, setSelectedId] = React.useState<string>();
   const { history } = useReactRouter();
-  const { params, setParam } = useQueryContext({
-    currentMembers: true,
-  });
-  const {
-    currentUser: { isAdmin, isResourceManager, id: currentUserId },
-  } = useAuthState();
+  const { params, setParam } = useQueryContext({ currentMembers: true });
+  const { currentUser: { isAdmin, isResourceManager } } = useAuthState();
 
   const canViewAll = isAdmin || isResourceManager;
   const updateFilter = React.useCallback(
@@ -108,56 +100,31 @@ const MembersList: React.FC = () => {
     { ...params }
   );
 
-  const onRenew = React.useCallback(() => {
-    refresh();
-  }, [refresh]);
-
-  const onCreate = React.useCallback(
-    (id: string) => {
-      history.push(buildProfileRouting(id));
-    },
-    [history]
-  );
+  const onRenew = React.useCallback(() => { refresh(); }, [refresh]);
+  const onCreate = React.useCallback((id: string) => { history.push(buildProfileRouting(id)); }, [history]);
 
   const selectedMember = members.find(member => member.id === selectedId);
 
   return (
     <Grid container spacing={3} justify='center'>
       <Grid item md={10} xs={12}>
-
-        {/* Admin-only action bar */}
         {isAdmin && (
           <Grid>
             <CreateMember onCreate={onCreate} />
             <RenewMember member={selectedMember} onRenew={onRenew} />
             <FormControlLabel
-              control={
-                <Checkbox
-                  color='primary'
-                  value='true'
-                  checked={!!params.currentMembers}
-                  onChange={updateFilter}
-                />
-              }
+              control={<Checkbox color='primary' value='true' checked={!!params.currentMembers} onChange={updateFilter} />}
               label='View only current members'
             />
           </Grid>
         )}
-
-        {/* Resource Manager info bar */}
         {isResourceManager && (
           <Grid>
-            <Typography
-              variant='body2'
-              color='textSecondary'
-              style={{ marginBottom: 8 }}
-              data-testid='rm-notice'
-            >
+            <Typography variant='body2' color='textSecondary' style={{ marginBottom: 8 }} data-testid='rm-notice'>
               You are viewing members in read-only mode as a Resource Manager.
             </Typography>
           </Grid>
         )}
-
         <StatefulTable
           id='members-table'
           title='Members'

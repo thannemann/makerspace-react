@@ -30,7 +30,6 @@ import { useSearchQuery, useSetSearchQuery } from "hooks/useSearchQuery";
 import ChargeButton from "ui/shopFees/ChargeButton";
 import MemberCheckoutsTab from "ui/toolCheckouts/MemberCheckoutsTab";
 import MemberVolunteerTab from "ui/volunteer/MemberVolunteerTab";
-import ContactStatusIcons from "ui/common/ContactStatusIcons";
 
 const MemberProfile: React.FC = () => {
   const { match: { params: { memberId, resource } }, history } = useReactRouter<{ memberId: string, resource: string }>();
@@ -162,18 +161,21 @@ const MemberProfile: React.FC = () => {
         information={(
           <>
             <KeyValueItem label="Email">
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 {member.email ? <a id="member-detail-email" href={`mailto:${member.email}`}>{member.email}</a> : "N/A"}
                 {(isAdmin || isResourceManager) && (
-                  <ContactStatusIcons mailtrap={(member as any).mailtrap} inline={true} />
+                  <>
+                    <EmailStatusIcon mailtrap={(member as any).mailtrap} />
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <SlackStatusIcon slack={(member as any).slack} />
+                      {(member as any).slack && (
+                        <span style={{ fontSize: "0.8rem", color: "#555" }}>{(member as any).slack.name}</span>
+                      )}
+                    </span>
+                  </>
                 )}
               </span>
             </KeyValueItem>
-            {(isAdmin || isResourceManager) && (
-              <KeyValueItem label="Slack">
-                <ContactStatusIcons slack={(member as any).slack} inline={true} />
-              </KeyValueItem>
-            )}
             <KeyValueItem  label="Membership Expiration">
               <span id="member-detail-expiration">{displayMemberExpiration(member)}</span>
             </KeyValueItem>
