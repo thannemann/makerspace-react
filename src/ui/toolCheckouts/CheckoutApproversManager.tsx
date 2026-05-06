@@ -2,11 +2,10 @@ import * as React from "react";
 import Grid from "@material-ui/core/Grid";
 import Typography from "@material-ui/core/Typography";
 import Button from "@material-ui/core/Button";
-import IconButton from "@material-ui/core/IconButton";
-import Tooltip from "@material-ui/core/Tooltip";
 import Chip from "@material-ui/core/Chip";
 import FormLabel from "@material-ui/core/FormLabel";
 import AddIcon from "@material-ui/icons/Add";
+import EditIcon from "@material-ui/icons/Edit";
 import DeleteIcon from "@material-ui/icons/Delete";
 
 import FormModal from "ui/common/FormModal";
@@ -24,47 +23,67 @@ import { CheckoutApprover, Shop } from "app/entities/toolCheckout";
 import {
   listCheckoutApprovers,
   adminCreateCheckoutApprover,
+  adminUpdateCheckoutApprover,
   adminDeleteCheckoutApprover,
   listShops,
 } from "api/toolCheckouts";
 
 const rowId = (a: CheckoutApprover) => a.id;
 
-// ── AddApproverModal ──────────────────────────────────────────────────────────
+// ── ApproverModal (Add + Edit) ────────────────────────────────────────────────
 
-interface AddApproverModalProps {
+interface ApproverModalProps {
   shops: Shop[];
+  existing: CheckoutApprover | null; // null = adding new
   onClose: () => void;
-  onSave: (memberId: string, shopIds: string[]) => void;
+  onSave: (memberId: string, shopIds: string[], existingId?: string) => void;
   loading: boolean;
   error: string;
 }
 
-const AddApproverModal: React.FC<AddApproverModalProps> = ({ shops, onClose, onSave, loading, error }) => {
-  const [selectedMember, setSelectedMember] = React.useState<SelectOption | null>(null);
-  const [shopIds, setShopIds] = React.useState<string[]>([]);
+const ApproverModal: React.FC<ApproverModalProps> = ({ shops, existing, onClose, onSave, loading, error }) => {
+  const [selectedMember, setSelectedMember] = React.useState<SelectOption | null>(
+    existing ? { value: existing.memberId, label: existing.memberName } : null
+  );
+  const [shopIds, setShopIds] = React.useState<string[]>(existing ? existing.shopIds : []);
 
+  // When member selection changes in Add mode, check if they're already an approver
+  // (handled by parent via existing prop — if user picks existing member, parent sets existing)
   const toggleShop = (id: string) => {
     setShopIds(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   };
 
+  const isEditing = !!existing;
+  const title = isEditing ? `Edit Approver — ${existing.memberName}` : "Add Checkout Approver";
+  const submitText = isEditing ? "Save Changes" : "Add Approver";
+
+  const handleSubmit = () => {
+    if (!shopIds.length) return;
+    if (isEditing) {
+      onSave(existing.memberId, shopIds, existing.id);
+    } else if (selectedMember) {
+      onSave(selectedMember.value, shopIds);
+    }
+  };
+
   return (
     <FormModal
-      id="add-approver" isOpen={true} title="Add Checkout Approver"
-      closeHandler={onClose}
-      onSubmit={() => selectedMember && shopIds.length && onSave(selectedMember.value, shopIds)}
-      submitText="Add Approver" loading={loading} error={error}
+      id="approver-modal" isOpen={true} title={title}
+      closeHandler={onClose} onSubmit={handleSubmit}
+      submitText={submitText} loading={loading} error={error}
     >
       <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <FormLabel style={{ marginBottom: 6, display: "block" }}>Member *</FormLabel>
-          <MemberSearchInput
-            name="approver-member-search"
-            placeholder="Search by name or email"
-            onChange={(opt: SelectOption) => setSelectedMember(opt || null)}
-            initialSelection={selectedMember}
-          />
-        </Grid>
+        {!isEditing && (
+          <Grid item xs={12}>
+            <FormLabel style={{ marginBottom: 6, display: "block" }}>Member *</FormLabel>
+            <MemberSearchInput
+              name="approver-member-search"
+              placeholder="Search by name or email"
+              onChange={(opt: SelectOption) => setSelectedMember(opt || null)}
+              initialSelection={selectedMember}
+            />
+          </Grid>
+        )}
         <Grid item xs={12}>
           <FormLabel style={{ fontSize: 12, display: "block", marginBottom: 6 }}>
             Shops this member can approve checkouts for *
@@ -116,7 +135,8 @@ const DeleteApproverModal: React.FC<DeleteApproverModalProps> = ({ target, onClo
 // ── CheckoutApproversManager ──────────────────────────────────────────────────
 
 const CheckoutApproversManager: React.FC = () => {
-  const [addOpen, setAddOpen] = React.useState(false);
+  const [modalMode, setModalMode] = React.useState<"add" | "edit" | null>(null);
+  const [selectedId, setSelectedId] = React.useState<string | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = React.useState<CheckoutApprover | null>(null);
 
   const { isRequesting, data: approvers = [], response, refresh, error: loadError } =
@@ -127,15 +147,28 @@ const CheckoutApproversManager: React.FC = () => {
   React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);
 
   const onSuccess = React.useCallback(() => {
-    setAddOpen(false);
+    setModalMode(null);
     setDeleteTarget(null);
+    setSelectedId(undefined);
     refreshRef.current();
   }, []);
 
   const { call: createApprover, isRequesting: creating, error: createError } =
     useWriteTransaction(adminCreateCheckoutApprover, onSuccess);
+  const { call: updateApprover, isRequesting: updating, error: updateError } =
+    useWriteTransaction(adminUpdateCheckoutApprover, onSuccess);
   const { call: deleteApprover, isRequesting: deleting, error: deleteError } =
     useWriteTransaction(adminDeleteCheckoutApprover, onSuccess);
+
+  const selectedApprover = approvers.find((a: CheckoutApprover) => a.id === selectedId) || null;
+
+  const handleSave = (memberId: string, shopIds: string[], existingId?: string) => {
+    if (existingId) {
+      updateApprover({ id: existingId, body: { shopIds } });
+    } else {
+      createApprover({ body: { memberId, shopIds } });
+    }
+  };
 
   const columns: Column<CheckoutApprover>[] = [
     {
@@ -160,18 +193,6 @@ const CheckoutApproversManager: React.FC = () => {
         </div>
       ),
     },
-    {
-      id: "actions",
-      label: "",
-      cell: (row: CheckoutApprover) => (
-        <Tooltip title="Remove approver">
-          <IconButton size="small" color="secondary"
-            onClick={e => { e.stopPropagation(); setDeleteTarget(row); }}>
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      ),
-    },
   ];
 
   return (
@@ -185,29 +206,63 @@ const CheckoutApproversManager: React.FC = () => {
               scoped to specific shops.
             </Typography>
           </div>
-          <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
-            Add Approver
-          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            {selectedId && (
+              <>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<EditIcon />}
+                  onClick={() => setModalMode("edit")}
+                >
+                  Edit Shops
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<DeleteIcon />}
+                  onClick={() => setDeleteTarget(selectedApprover)}
+                >
+                  Remove Approver
+                </Button>
+              </>
+            )}
+            <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => setModalMode("add")}>
+              Add Approver
+            </Button>
+          </div>
         </Grid>
       </Grid>
+
       {loadError && <Grid item xs={12}><ErrorMessage error={loadError} /></Grid>}
+
       <Grid item xs={12}>
         <StatefulTable
-          id="approvers-table" title="Checkout Approvers" loading={isRequesting}
-          data={approvers as CheckoutApprover[]} error={loadError} columns={columns}
-          rowId={rowId} totalItems={extractTotalItems(response)}
-          selectedIds={undefined} setSelectedIds={() => {}} renderSearch={false}
+          id="approvers-table"
+          title="Checkout Approvers"
+          loading={isRequesting}
+          data={approvers as CheckoutApprover[]}
+          error={loadError}
+          columns={columns}
+          rowId={rowId}
+          totalItems={extractTotalItems(response)}
+          selectedIds={selectedId}
+          setSelectedIds={setSelectedId}
+          renderSearch={false}
         />
       </Grid>
-      {addOpen && (
-        <AddApproverModal
+
+      {modalMode && (
+        <ApproverModal
           shops={shops as Shop[]}
-          onClose={() => setAddOpen(false)}
-          onSave={(memberId, shopIds) => createApprover({ body: { memberId, shopIds } })}
-          loading={creating}
-          error={createError}
+          existing={modalMode === "edit" ? selectedApprover : null}
+          onClose={() => setModalMode(null)}
+          onSave={handleSave}
+          loading={creating || updating}
+          error={createError || updateError}
         />
       )}
+
       <DeleteApproverModal
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}

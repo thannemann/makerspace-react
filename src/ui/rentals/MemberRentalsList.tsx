@@ -59,40 +59,32 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
     listRentals, { ...params }, undefined, "member-rentals-list"
   );
 
+  const selectedRental = (rentals as Rental[]).find(r => r.id === selectedId);
+  const selectedStatus = selectedRental ? (selectedRental as any).status as RentalStatus : null;
+  const isCancellable  = selectedStatus == null || [RentalStatus.Active, RentalStatus.Pending, RentalStatus.PendingAgreement].includes(selectedStatus);
+  const isVacating     = selectedStatus === RentalStatus.Vacating;
+
   const openCancel = (rental: Rental) => {
-    setCancelTarget(rental);
-    setCancelStep("confirm");
-    setModalMode("cancel");
+    setCancelTarget(rental); setCancelStep("confirm"); setModalMode("cancel");
   };
 
   const openMarkVacated = (rental: Rental) => {
-    setCancelTarget(rental);
-    setModalMode("mark_vacated");
+    setCancelTarget(rental); setModalMode("mark_vacated");
   };
 
   const closeModal = () => {
-    setCancelTarget(null);
-    setCancelStep("confirm");
-    setModalMode("cancel");
+    setCancelTarget(null); setCancelStep("confirm"); setModalMode("cancel");
   };
 
   const onSuccess = React.useCallback(() => {
-    closeModal();
-    refresh();
-    changePage(0);
-    onUpdate && onUpdate();
+    closeModal(); refresh(); changePage(0); onUpdate && onUpdate();
   }, [refresh, changePage, onUpdate]);
 
   const { call: doCancel,      isRequesting: cancelling,     error: cancelError }      = useWriteTransaction(cancelRental,      onSuccess);
   const { call: doMarkVacated, isRequesting: markingVacated, error: markVacatedError } = useWriteTransaction(markRentalVacated, onSuccess);
 
-  const handleVacated = (vacated: boolean) => {
-    if (cancelTarget) doCancel({ id: cancelTarget.id, body: { vacated } });
-  };
-
-  const handleMarkVacated = () => {
-    if (cancelTarget) doMarkVacated({ id: cancelTarget.id });
-  };
+  const handleVacated    = (vacated: boolean) => { if (cancelTarget) doCancel({ id: cancelTarget.id, body: { vacated } }); };
+  const handleMarkVacated = () => { if (cancelTarget) doMarkVacated({ id: cancelTarget.id }); };
 
   const isRequesting2 = cancelling || markingVacated;
   const activeError   = cancelError || markVacatedError;
@@ -139,29 +131,6 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
         );
       },
     },
-    {
-      id: "actions", label: "",
-      cell: (row: Rental) => {
-        const status = (row as any).status as RentalStatus;
-        const cancellable = !status || status === RentalStatus.Active || status === RentalStatus.Pending || status === RentalStatus.PendingAgreement;
-        const vacating    = status === RentalStatus.Vacating;
-
-        return (
-          <div style={{ display: "flex", gap: "8px" }}>
-            {cancellable && (
-              <Button size="small" variant="outlined" color="secondary"
-                onClick={e => { e.stopPropagation(); openCancel(row); }}
-              >Cancel</Button>
-            )}
-            {vacating && (
-              <Button size="small" variant="outlined" color="secondary"
-                onClick={e => { e.stopPropagation(); openMarkVacated(row); }}
-              >Mark Vacated</Button>
-            )}
-          </div>
-        );
-      },
-    },
   ];
 
   const expiryDisplay = cancelTarget?.expiration
@@ -171,6 +140,23 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
   return (
     <Grid container spacing={3}>
       <Grid item xs={12}>
+        <Grid container justify="flex-end" alignItems="center" style={{ marginBottom: 8 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            {selectedRental && isCancellable && (
+              <Button variant="outlined" color="secondary"
+                onClick={() => openCancel(selectedRental)}>
+                Cancel Rental
+              </Button>
+            )}
+            {selectedRental && isVacating && (
+              <Button variant="outlined" color="secondary"
+                onClick={() => openMarkVacated(selectedRental)}>
+                Mark Vacated
+              </Button>
+            )}
+          </div>
+        </Grid>
+
         <StatefulTable
           id="member-rentals-table" title="My Rentals"
           loading={isRequesting} data={Object.values(rentals)} error={error}
@@ -218,13 +204,11 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
         <DialogActions>
           <Button onClick={closeModal} disabled={isRequesting2}>Back</Button>
           <Button variant="outlined" color="secondary" disabled={isRequesting2}
-            onClick={() => handleVacated(false)}
-          >
+            onClick={() => handleVacated(false)}>
             {isRequesting2 ? "Processing..." : "No, Not Yet"}
           </Button>
           <Button variant="contained" color="secondary" disabled={isRequesting2}
-            onClick={() => handleVacated(true)}
-          >
+            onClick={() => handleVacated(true)}>
             {isRequesting2 ? "Processing..." : "Yes, I Have Vacated"}
           </Button>
         </DialogActions>
@@ -245,8 +229,7 @@ const MemberRentalsList: React.FC<{ member: Member; onUpdate?: () => void }> = (
         <DialogActions>
           <Button onClick={closeModal} disabled={isRequesting2}>Cancel</Button>
           <Button variant="contained" color="secondary" disabled={isRequesting2}
-            onClick={handleMarkVacated}
-          >
+            onClick={handleMarkVacated}>
             {isRequesting2 ? "Processing..." : "Yes, I Have Vacated"}
           </Button>
         </DialogActions>

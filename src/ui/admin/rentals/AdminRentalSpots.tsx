@@ -7,6 +7,9 @@ import MenuItem from "@material-ui/core/MenuItem";
 import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Switch from "@material-ui/core/Switch";
 import Chip from "@material-ui/core/Chip";
+import EditIcon from "@material-ui/icons/Edit";
+import DeleteIcon from "@material-ui/icons/Delete";
+import AddIcon from "@material-ui/icons/Add";
 
 import { RentalSpot, RentalType } from "app/entities/rentalSpot";
 import StatefulTable from "ui/common/table/StatefulTable";
@@ -55,12 +58,15 @@ const AdminRentalSpots: React.FC = () => {
     adminListRentalSpots, { ...params }, undefined, "admin-rental-spots"
   );
 
+  const selectedSpot = (spots as RentalSpot[]).find(s => s.id === selectedId);
+
   const onSaveSuccess = React.useCallback(() => {
-    setModalOpen(false); setEditTarget(emptySpot()); setIsEditing(false); refresh();
+    setModalOpen(false); setEditTarget(emptySpot()); setIsEditing(false);
+    setSelectedId(undefined); refresh();
   }, [refresh]);
 
   const onDeleteSuccess = React.useCallback(() => {
-    setDeleteTarget(null); refresh(); changePage(0);
+    setDeleteTarget(null); setSelectedId(undefined); refresh(); changePage(0);
   }, [refresh, changePage]);
 
   const { call: createSpot, isRequesting: creating, error: createError } = useWriteTransaction(adminCreateRentalSpot, onSaveSuccess);
@@ -120,17 +126,6 @@ const AdminRentalSpots: React.FC = () => {
         ? <StatusLabel label="Active"   color={Status.Success} />
         : <StatusLabel label="Disabled" color={Status.Danger} />,
     },
-    {
-      id: "actions", label: "",
-      cell: (row: RentalSpot) => (
-        <div style={{ display: "flex", gap: "8px" }}>
-          <Button size="small" variant="outlined"
-            onClick={e => { e.stopPropagation(); openEdit(row); }}>Edit</Button>
-          <Button size="small" variant="outlined" color="secondary"
-            onClick={e => { e.stopPropagation(); setDeleteTarget(row); }}>Delete</Button>
-        </div>
-      ),
-    },
   ];
 
   return (
@@ -138,7 +133,23 @@ const AdminRentalSpots: React.FC = () => {
       <Grid item xs={12}>
         <Grid container justify="space-between" alignItems="center">
           <Typography variant="h6">Rental Spots</Typography>
-          <Button variant="contained" color="primary" onClick={openCreate}>Add Spot</Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            {selectedSpot && (
+              <>
+                <Button variant="outlined" color="primary" startIcon={<EditIcon />}
+                  onClick={() => openEdit(selectedSpot)}>
+                  Edit
+                </Button>
+                <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />}
+                  onClick={() => setDeleteTarget(selectedSpot)}>
+                  Delete
+                </Button>
+              </>
+            )}
+            <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={openCreate}>
+              Add Spot
+            </Button>
+          </div>
         </Grid>
       </Grid>
 
@@ -192,7 +203,7 @@ const AdminRentalSpots: React.FC = () => {
                 placeholder="Leave blank if not a sub-spot"
                 value={editTarget.parentNumber || ""}
                 onChange={e => setField("parentNumber", e.target.value || null)}
-                helperText="e.g. Shelf-1 for Shelf-1a or Shelf-1b (parent or sub rentals block each other)"
+                helperText="e.g. Shelf-1 for Shelf-1a or Shelf-1b"
               />
             </Grid>
             <Grid item xs={12}>

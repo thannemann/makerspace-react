@@ -26,11 +26,8 @@ import useWriteTransaction from "ui/hooks/useWriteTransaction";
 import extractTotalItems from "ui/utils/extractTotalItems";
 import { Shop, Tool } from "app/entities/toolCheckout";
 import {
-  listShops,
-  listTools,
-  adminCreateTool,
-  adminUpdateTool,
-  adminDeleteTool,
+  listShops, listTools,
+  adminCreateTool, adminUpdateTool, adminDeleteTool,
 } from "api/toolCheckouts";
 
 const rowId = (t: Tool) => t.id;
@@ -52,17 +49,13 @@ const AddToolModal: React.FC<AddToolModalProps> = ({ shops, tools, onClose, onSa
   const [shopId, setShopId] = React.useState(shops[0]?.id || "");
   const [prerequisiteIds, setPrerequisiteIds] = React.useState<string[]>([]);
 
-  const togglePrereq = (id: string) => {
-    setPrerequisiteIds(prev =>
-      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
-    );
-  };
+  const togglePrereq = (id: string) =>
+    setPrerequisiteIds(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
 
   const availablePrereqs = tools.filter(t => t.shopId === shopId);
 
   return (
-    <FormModal
-      id="add-tool" isOpen={true} title="Add Tool"
+    <FormModal id="add-tool" isOpen={true} title="Add Tool"
       closeHandler={onClose}
       onSubmit={() => name && shopId && onSave({ name, description, shopId, prerequisiteIds })}
       submitText="Add Tool" loading={loading} error={error}
@@ -70,7 +63,8 @@ const AddToolModal: React.FC<AddToolModalProps> = ({ shops, tools, onClose, onSa
       <Grid container spacing={2}>
         <Grid item xs={12}>
           <FormLabel style={{ fontSize: 12 }}>Shop *</FormLabel>
-          <Select native fullWidth value={shopId} onChange={e => { setShopId((e.target as HTMLSelectElement).value); setPrerequisiteIds([]); }}>
+          <Select native fullWidth value={shopId}
+            onChange={e => { setShopId((e.target as HTMLSelectElement).value); setPrerequisiteIds([]); }}>
             <option value="">— select shop —</option>
             {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
@@ -90,14 +84,10 @@ const AddToolModal: React.FC<AddToolModalProps> = ({ shops, tools, onClose, onSa
             </FormLabel>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {availablePrereqs.map(t => (
-                <Chip
-                  key={t.id}
-                  label={t.name}
-                  size="small"
+                <Chip key={t.id} label={t.name} size="small" clickable
                   onClick={() => togglePrereq(t.id)}
                   color={prerequisiteIds.includes(t.id) ? "primary" : "default"}
                   variant={prerequisiteIds.includes(t.id) ? "default" : "outlined"}
-                  clickable
                 />
               ))}
             </div>
@@ -164,10 +154,11 @@ const DeleteToolModal: React.FC<DeleteToolModalProps> = ({ target, onClose, onDe
 // ── ToolManager ───────────────────────────────────────────────────────────────
 
 const ToolManager: React.FC = () => {
-  const [addOpen, setAddOpen] = React.useState(false);
-  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [addOpen,      setAddOpen]      = React.useState(false);
+  const [editingId,    setEditingId]    = React.useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<Tool | null>(null);
-  const [shopFilter, setShopFilter] = React.useState<string>("");
+  const [shopFilter,   setShopFilter]   = React.useState<string>("");
+  const [selectedId,   setSelectedId]   = React.useState<string | undefined>(undefined);
 
   const { data: shops = [] } = useReadTransaction(listShops, {}, undefined, "shops-for-tools");
   const { isRequesting, data: tools = [], response, refresh, error: loadError } =
@@ -176,30 +167,34 @@ const ToolManager: React.FC = () => {
   const refreshRef = React.useRef(refresh);
   React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);
 
+  const selectedTool = (tools as Tool[]).find(t => t.id === selectedId);
+
   const onSuccess = React.useCallback(() => {
-    setAddOpen(false);
-    setEditingId(null);
-    setDeleteTarget(null);
-    refreshRef.current();
+    setAddOpen(false); setEditingId(null); setDeleteTarget(null);
+    setSelectedId(undefined); refreshRef.current();
   }, []);
 
-  const { call: createTool, isRequesting: creating, error: createError } =
-    useWriteTransaction(adminCreateTool, onSuccess);
-  const { call: updateTool, isRequesting: updating, error: updateError } =
-    useWriteTransaction(adminUpdateTool, onSuccess);
-  const { call: deleteTool, isRequesting: deleting, error: deleteError } =
-    useWriteTransaction(adminDeleteTool, onSuccess);
+  const { call: createTool, isRequesting: creating, error: createError } = useWriteTransaction(adminCreateTool, onSuccess);
+  const { call: updateTool, isRequesting: updating, error: updateError } = useWriteTransaction(adminUpdateTool, onSuccess);
+  const { call: deleteTool, isRequesting: deleting, error: deleteError } = useWriteTransaction(adminDeleteTool, onSuccess);
 
   const handleSave = React.useCallback((id: string, body: { name: string; description: string }) => {
     updateTool({ id, body });
   }, [updateTool]);
 
-  const handleCancel = React.useCallback(() => setEditingId(null), []);
+  const handleCancel = React.useCallback(() => {
+    setEditingId(null);
+    setSelectedId(undefined);
+  }, []);
+
+  const handleSelectId = React.useCallback((id: string | undefined) => {
+    setEditingId(null);
+    setSelectedId(id);
+  }, []);
 
   const columns: Column<Tool>[] = [
     {
-      id: "name",
-      label: "Tool",
+      id: "name", label: "Tool",
       defaultSortDirection: SortDirection.Asc,
       cell: (row: Tool) => editingId === row.id
         ? <EditToolRow tool={row} onSave={handleSave} onCancel={handleCancel} saving={updating} />
@@ -211,37 +206,16 @@ const ToolManager: React.FC = () => {
         ),
     },
     {
-      id: "shopName",
-      label: "Shop",
+      id: "shopName", label: "Shop",
       defaultSortDirection: SortDirection.Asc,
       cell: (row: Tool) => editingId === row.id ? null : <span>{row.shopName}</span>,
     },
     {
-      id: "prerequisites",
-      label: "Prerequisites",
+      id: "prerequisites", label: "Prerequisites",
       cell: (row: Tool) => editingId === row.id ? null : (
         <span style={{ color: row.prerequisiteNames?.length ? "inherit" : "#aaa" }}>
           {row.prerequisiteNames?.length ? row.prerequisiteNames.join(", ") : "None"}
         </span>
-      ),
-    },
-    {
-      id: "actions",
-      label: "",
-      cell: (row: Tool) => editingId === row.id ? null : (
-        <div style={{ display: "flex", gap: 4 }}>
-          <Tooltip title="Edit">
-            <IconButton size="small" onClick={e => { e.stopPropagation(); setEditingId(row.id); }}>
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton size="small" color="secondary"
-              onClick={e => { e.stopPropagation(); setDeleteTarget(row); }}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </div>
       ),
     },
   ];
@@ -256,11 +230,27 @@ const ToolManager: React.FC = () => {
               Manage tools within each shop. Tools with the same name in different shops are tracked independently.
             </Typography>
           </div>
-          <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
-            Add Tool
-          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            {selectedTool && !editingId && (
+              <>
+                <Button variant="outlined" color="primary" startIcon={<EditIcon />}
+                  onClick={() => setEditingId(selectedTool.id)}>
+                  Edit
+                </Button>
+                <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />}
+                  onClick={() => setDeleteTarget(selectedTool)}>
+                  Delete
+                </Button>
+              </>
+            )}
+            <Button variant="contained" color="primary" startIcon={<AddIcon />}
+              onClick={() => setAddOpen(true)}>
+              Add Tool
+            </Button>
+          </div>
         </Grid>
       </Grid>
+
       <Grid item xs={12} md={4}>
         <FormLabel style={{ fontSize: 12 }}>Filter by Shop</FormLabel>
         <Select native fullWidth value={shopFilter}
@@ -269,32 +259,34 @@ const ToolManager: React.FC = () => {
           {(shops as Shop[]).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </Select>
       </Grid>
+
       {(loadError || updateError) && <Grid item xs={12}><ErrorMessage error={loadError || updateError} /></Grid>}
+
       <Grid item xs={12} style={{ position: "relative" }}>
         <StatefulTable
           id="tools-table" title="Tools" loading={isRequesting}
           data={tools as Tool[]} error={loadError} columns={columns}
           rowId={rowId} totalItems={extractTotalItems(response)}
-          selectedIds={undefined} setSelectedIds={() => {}} renderSearch={true}
+          selectedIds={selectedId} setSelectedIds={handleSelectId}
+          renderSearch={true}
         />
         {updating && <LoadingOverlay id="tool-saving" contained />}
       </Grid>
+
       {addOpen && (
         <AddToolModal
-          shops={shops as Shop[]}
-          tools={tools as Tool[]}
+          shops={shops as Shop[]} tools={tools as Tool[]}
           onClose={() => setAddOpen(false)}
           onSave={(body) => createTool({ body })}
-          loading={creating}
-          error={createError}
+          loading={creating} error={createError}
         />
       )}
+
       <DeleteToolModal
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onDelete={() => deleteTarget && deleteTool({ id: deleteTarget.id })}
-        loading={deleting}
-        error={deleteError}
+        loading={deleting} error={deleteError}
       />
     </Grid>
   );

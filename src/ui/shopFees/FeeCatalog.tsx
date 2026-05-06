@@ -36,7 +36,6 @@ import {
 const rowId = (item: ShopFeeItem) => item.id;
 
 // ── AddFeeItemModal ───────────────────────────────────────────────────────────
-// Own component — typing only re-renders this, not FeeCatalog
 
 interface AddFeeItemModalProps {
   onClose: () => void;
@@ -50,54 +49,28 @@ const AddFeeItemModal: React.FC<AddFeeItemModalProps> = ({ onClose, onSave, load
   const [description, setDescription] = React.useState("");
   const [amount, setAmount] = React.useState("");
 
-  const handleSubmit = () => {
-    if (!name || !amount) return;
-    onSave({ name, description, amount });
-  };
-
   return (
     <FormModal
-      id="add-fee-item"
-      isOpen={true}
-      title="Add Catalog Item"
+      id="add-fee-item" isOpen={true} title="Add Catalog Item"
       closeHandler={onClose}
-      onSubmit={handleSubmit}
-      submitText="Add Item"
-      loading={loading}
-      error={error}
+      onSubmit={() => { if (!name || !amount) return; onSave({ name, description, amount }); }}
+      submitText="Add Item" loading={loading} error={error}
     >
       <Grid container spacing={2}>
         <Grid item xs={12}>
-          <TextField
-            fullWidth
-            required
-            label="Item Name"
+          <TextField fullWidth required label="Item Name"
             placeholder="e.g. Router Bit Replacement, Steel Stock 1ft"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            autoFocus
-          />
+            value={name} onChange={e => setName(e.target.value)} autoFocus />
         </Grid>
         <Grid item xs={12}>
-          <TextField
-            fullWidth
-            label="Description"
+          <TextField fullWidth label="Description"
             placeholder="Optional — shown on the invoice"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-          />
+            value={description} onChange={e => setDescription(e.target.value)} />
         </Grid>
         <Grid item xs={12}>
-          <TextField
-            fullWidth
-            required
-            label="Unit Price ($)"
-            placeholder="0.00"
-            type="number"
-            inputProps={{ min: "0.01", step: "0.01" }}
-            value={amount}
-            onChange={e => setAmount(e.target.value)}
-          />
+          <TextField fullWidth required label="Unit Price ($)" placeholder="0.00"
+            type="number" inputProps={{ min: "0.01", step: "0.01" }}
+            value={amount} onChange={e => setAmount(e.target.value)} />
         </Grid>
       </Grid>
     </FormModal>
@@ -114,31 +87,19 @@ interface DeleteFeeItemModalProps {
   error: string;
 }
 
-const DeleteFeeItemModal: React.FC<DeleteFeeItemModalProps> = ({
-  target, onClose, onDelete, loading, error,
-}) => (
-  <FormModal
-    id="delete-fee-item"
-    isOpen={!!target}
-    title="Delete Catalog Item"
-    closeHandler={onClose}
-    onSubmit={onDelete}
-    submitText="Delete"
-    loading={loading}
-    error={error}
-  >
+const DeleteFeeItemModal: React.FC<DeleteFeeItemModalProps> = ({ target, onClose, onDelete, loading, error }) => (
+  <FormModal id="delete-fee-item" isOpen={!!target} title="Delete Catalog Item"
+    closeHandler={onClose} onSubmit={onDelete} submitText="Delete" loading={loading} error={error}>
     {target && (
       <Typography>
-        Are you sure you want to remove <strong>{target.name}</strong> from the
-        catalog? This only removes it from the lookup list — existing invoices are
-        not affected.
+        Are you sure you want to remove <strong>{target.name}</strong> from the catalog?
+        This only removes it from the lookup list — existing invoices are not affected.
       </Typography>
     )}
   </FormModal>
 );
 
 // ── EditFeeItemRow ────────────────────────────────────────────────────────────
-// Own component — typing only re-renders this row, not FeeCatalog
 
 interface EditFeeItemRowProps {
   item: ShopFeeItem;
@@ -154,46 +115,20 @@ const EditFeeItemRow: React.FC<EditFeeItemRowProps> = ({ item, onSave, onCancel,
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <TextField
-        size="small"
-        value={name}
-        onChange={e => setName(e.target.value)}
-        placeholder="Item name"
-        style={{ flex: 2 }}
-        autoFocus
-      />
-      <TextField
-        size="small"
-        value={description}
-        onChange={e => setDescription(e.target.value)}
-        placeholder="Description"
-        style={{ flex: 2 }}
-      />
-      <TextField
-        size="small"
-        value={amount}
-        onChange={e => setAmount(e.target.value)}
-        placeholder="0.00"
-        type="number"
-        inputProps={{ min: "0.01", step: "0.01" }}
-        style={{ flex: 1 }}
-      />
-      <Tooltip title="Save changes">
-        <span>
-          <IconButton
-            size="small"
-            color="primary"
-            disabled={saving || !name || !amount}
-            onClick={() => onSave(item.id, { name, description, amount })}
-          >
-            <SaveIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
-      <Tooltip title="Cancel">
-        <IconButton size="small" onClick={onCancel}>
-          <CancelIcon fontSize="small" />
+      <TextField size="small" value={name} onChange={e => setName(e.target.value)}
+        placeholder="Item name" style={{ flex: 2 }} autoFocus />
+      <TextField size="small" value={description} onChange={e => setDescription(e.target.value)}
+        placeholder="Description" style={{ flex: 2 }} />
+      <TextField size="small" value={amount} onChange={e => setAmount(e.target.value)}
+        placeholder="0.00" type="number" inputProps={{ min: "0.01", step: "0.01" }} style={{ flex: 1 }} />
+      <Tooltip title="Save changes"><span>
+        <IconButton size="small" color="primary" disabled={saving || !name || !amount}
+          onClick={() => onSave(item.id, { name, description, amount })}>
+          <SaveIcon fontSize="small" />
         </IconButton>
+      </span></Tooltip>
+      <Tooltip title="Cancel">
+        <IconButton size="small" onClick={onCancel}><CancelIcon fontSize="small" /></IconButton>
       </Tooltip>
     </div>
   );
@@ -202,19 +137,14 @@ const EditFeeItemRow: React.FC<EditFeeItemRowProps> = ({ item, onSave, onCancel,
 // ── FeeCatalog ────────────────────────────────────────────────────────────────
 
 const FeeCatalog: React.FC = () => {
-  const [addOpen, setAddOpen] = React.useState(false);
+  const [addOpen,      setAddOpen]      = React.useState(false);
   const [deleteTarget, setDeleteTarget] = React.useState<ShopFeeItem | null>(null);
-  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [editingId,    setEditingId]    = React.useState<string | null>(null);
+  const [selectedId,   setSelectedId]   = React.useState<string | undefined>(undefined);
 
-  const {
-    isRequesting,
-    data: items = [],
-    response,
-    refresh,
-    error: loadError,
-  } = useReadTransaction(listShopFeeItems, {}, undefined, "shop-fee-items");
+  const { isRequesting, data: items = [], response, refresh, error: loadError } =
+    useReadTransaction(listShopFeeItems, {}, undefined, "shop-fee-items");
 
-  // Stable ref so onMutateSuccess doesn't change identity each render
   const refreshRef = React.useRef(refresh);
   React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);
 
@@ -222,6 +152,7 @@ const FeeCatalog: React.FC = () => {
     setAddOpen(false);
     setDeleteTarget(null);
     setEditingId(null);
+    setSelectedId(undefined);
     refreshRef.current();
   }, []);
 
@@ -232,81 +163,48 @@ const FeeCatalog: React.FC = () => {
   const { call: deleteItem, isRequesting: deleting, error: deleteError } =
     useWriteTransaction(adminDeleteShopFeeItem, onMutateSuccess);
 
-  // Stable callbacks passed down to EditFeeItemRow and action buttons
+  const selectedItem = (items as ShopFeeItem[]).find(i => i.id === selectedId);
+
   const handleSaveEdit = React.useCallback((id: string, patch: { name: string; description: string; amount: string }) => {
     updateItem({ id, body: patch as Partial<ShopFeeItem> });
   }, [updateItem]);
 
-  const handleCancelEdit = React.useCallback(() => setEditingId(null), []);
+  const handleCancelEdit = React.useCallback(() => {
+    setEditingId(null);
+    setSelectedId(undefined);
+  }, []);
+
+  const handleSelectId = React.useCallback((id: string | undefined) => {
+    setEditingId(null); // cancel any in-progress edit when selecting a different row
+    setSelectedId(id);
+  }, []);
 
   const columns: Column<ShopFeeItem>[] = [
     {
-      id: "item",
-      label: "Item",
+      id: "item", label: "Item",
       defaultSortDirection: SortDirection.Asc,
       cell: (row: ShopFeeItem) =>
         editingId === row.id ? (
-          <EditFeeItemRow
-            item={row}
-            onSave={handleSaveEdit}
-            onCancel={handleCancelEdit}
-            saving={updating}
-          />
+          <EditFeeItemRow item={row} onSave={handleSaveEdit} onCancel={handleCancelEdit} saving={updating} />
         ) : (
           <div>
             <Typography variant="body2"><strong>{row.name}</strong></Typography>
-            {row.description && (
-              <Typography variant="caption" color="textSecondary">{row.description}</Typography>
-            )}
+            {row.description && <Typography variant="caption" color="textSecondary">{row.description}</Typography>}
           </div>
         ),
     },
     {
-      id: "amount",
-      label: "Unit Price",
+      id: "amount", label: "Unit Price",
       defaultSortDirection: SortDirection.Desc,
-      cell: (row: ShopFeeItem) =>
-        editingId === row.id ? null : (
-          <strong>{numberAsCurrency(row.amount)}</strong>
-        ),
+      cell: (row: ShopFeeItem) => editingId === row.id ? null : <strong>{numberAsCurrency(row.amount)}</strong>,
     },
     {
-      id: "status",
-      label: "Status",
-      cell: (row: ShopFeeItem) =>
-        editingId === row.id ? null : (
-          row.disabled ? (
-            <StatusLabel label="Disabled" color={Status.Warn} />
-          ) : (
-            <StatusLabel label="Active" color={Status.Success} />
-          )
-        ),
-    },
-    {
-      id: "actions",
-      label: "",
-      cell: (row: ShopFeeItem) =>
-        editingId === row.id ? null : (
-          <div style={{ display: "flex", gap: 4 }}>
-            <Tooltip title="Edit">
-              <IconButton
-                size="small"
-                onClick={e => { e.stopPropagation(); setEditingId(row.id); }}
-              >
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Delete">
-              <IconButton
-                size="small"
-                color="secondary"
-                onClick={e => { e.stopPropagation(); setDeleteTarget(row); }}
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </div>
-        ),
+      id: "status", label: "Status",
+      cell: (row: ShopFeeItem) => editingId === row.id ? null : (
+        row.disabled
+          ? <StatusLabel label="Disabled" color={Status.Warn} />
+          : <StatusLabel label="Active"   color={Status.Success} />
+      ),
     },
   ];
 
@@ -321,40 +219,36 @@ const FeeCatalog: React.FC = () => {
               Prices can be overridden at invoice time.
             </Typography>
           </div>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => setAddOpen(true)}
-          >
-            Add Item
-          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            {selectedItem && !editingId && (
+              <>
+                <Button variant="outlined" color="primary" startIcon={<EditIcon />}
+                  onClick={() => setEditingId(selectedItem.id)}>
+                  Edit
+                </Button>
+                <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />}
+                  onClick={() => setDeleteTarget(selectedItem)}>
+                  Delete
+                </Button>
+              </>
+            )}
+            <Button variant="contained" color="primary" startIcon={<AddIcon />}
+              onClick={() => setAddOpen(true)}>
+              Add Item
+            </Button>
+          </div>
         </Grid>
       </Grid>
 
-      {loadError && (
-        <Grid item xs={12}>
-          <ErrorMessage error={loadError} />
-        </Grid>
-      )}
-      {updateError && (
-        <Grid item xs={12}>
-          <ErrorMessage error={updateError} />
-        </Grid>
-      )}
+      {loadError  && <Grid item xs={12}><ErrorMessage error={loadError}  /></Grid>}
+      {updateError && <Grid item xs={12}><ErrorMessage error={updateError} /></Grid>}
 
       <Grid item xs={12} style={{ position: "relative" }}>
         <StatefulTable
-          id="shop-fee-catalog-table"
-          title="Catalog Items"
-          loading={isRequesting}
-          data={items as ShopFeeItem[]}
-          error={loadError}
-          columns={columns}
-          rowId={rowId}
-          totalItems={extractTotalItems(response)}
-          selectedIds={undefined}
-          setSelectedIds={() => {}}
+          id="shop-fee-catalog-table" title="Catalog Items"
+          loading={isRequesting} data={items as ShopFeeItem[]} error={loadError}
+          columns={columns} rowId={rowId} totalItems={extractTotalItems(response)}
+          selectedIds={selectedId} setSelectedIds={handleSelectId}
           renderSearch={true}
         />
         {updating && <LoadingOverlay id="fee-catalog-saving" contained />}
@@ -364,8 +258,7 @@ const FeeCatalog: React.FC = () => {
         <AddFeeItemModal
           onClose={() => setAddOpen(false)}
           onSave={(item) => createItem({ body: item as Partial<ShopFeeItem> })}
-          loading={creating}
-          error={createError}
+          loading={creating} error={createError}
         />
       )}
 
@@ -373,8 +266,7 @@ const FeeCatalog: React.FC = () => {
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onDelete={() => deleteTarget && deleteItem({ id: deleteTarget.id })}
-        loading={deleting}
-        error={deleteError}
+        loading={deleting} error={deleteError}
       />
     </Grid>
   );

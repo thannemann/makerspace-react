@@ -6,8 +6,6 @@ import Select from "@material-ui/core/Select";
 import FormLabel from "@material-ui/core/FormLabel";
 import Chip from "@material-ui/core/Chip";
 import Button from "@material-ui/core/Button";
-import IconButton from "@material-ui/core/IconButton";
-import Tooltip from "@material-ui/core/Tooltip";
 import BlockIcon from "@material-ui/icons/Block";
 import AddIcon from "@material-ui/icons/Add";
 
@@ -26,11 +24,8 @@ import useWriteTransaction from "ui/hooks/useWriteTransaction";
 import extractTotalItems from "ui/utils/extractTotalItems";
 import { ToolCheckout, Shop, Tool } from "app/entities/toolCheckout";
 import {
-  listToolCheckouts,
-  adminCreateToolCheckout,
-  adminRevokeToolCheckout,
-  listShops,
-  listTools,
+  listToolCheckouts, adminCreateToolCheckout, adminRevokeToolCheckout,
+  listShops, listTools,
 } from "api/toolCheckouts";
 
 const rowId = (c: ToolCheckout) => c.id;
@@ -49,8 +44,7 @@ const RevokeModal: React.FC<RevokeModalProps> = ({ target, onClose, onRevoke, lo
   const [reason, setReason] = React.useState("");
   React.useEffect(() => { if (!target) setReason(""); }, [target]);
   return (
-    <FormModal
-      id="revoke-checkout" isOpen={!!target} title="Revoke Checkout"
+    <FormModal id="revoke-checkout" isOpen={!!target} title="Revoke Checkout"
       closeHandler={onClose}
       onSubmit={() => reason.trim() && onRevoke(reason)}
       submitText="Revoke" loading={loading} error={error}
@@ -67,8 +61,7 @@ const RevokeModal: React.FC<RevokeModalProps> = ({ target, onClose, onRevoke, lo
             </Typography>
           </Grid>
           <Grid item xs={12}>
-            <TextField
-              fullWidth required label="Reason for revocation (internal)"
+            <TextField fullWidth required label="Reason for revocation (internal)"
               placeholder="e.g. Failed to follow safety protocols"
               multiline rows={2} value={reason}
               onChange={e => setReason(e.target.value)} autoFocus
@@ -106,8 +99,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const selectedTool = tools.find(t => t.id === toolId);
 
   return (
-    <FormModal
-      id="create-checkout" isOpen={true} title="Check Out Member on Tool"
+    <FormModal id="create-checkout" isOpen={true} title="Check Out Member on Tool"
       closeHandler={onClose}
       onSubmit={() => selectedMember && toolId && onCheckout(selectedMember.value, toolId)}
       submitText="Check Out" loading={loading} error={error}
@@ -170,18 +162,19 @@ interface Props {
 }
 
 const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourceManager }) => {
-  const [shopFilter, setShopFilter] = React.useState("");
-  const [activeFilter, setActiveFilter] = React.useState<"all" | "active" | "revoked">("active");
-  const [revokeTarget, setRevokeTarget] = React.useState<ToolCheckout | null>(null);
-  const [checkoutOpen, setCheckoutOpen] = React.useState(false);
+  const [shopFilter,         setShopFilter]         = React.useState("");
+  const [activeFilter,       setActiveFilter]       = React.useState<"all" | "active" | "revoked">("active");
+  const [revokeTarget,       setRevokeTarget]       = React.useState<ToolCheckout | null>(null);
+  const [checkoutOpen,       setCheckoutOpen]       = React.useState(false);
   const [unmetPrerequisites, setUnmetPrerequisites] = React.useState<string[]>([]);
+  const [selectedId,         setSelectedId]         = React.useState<string | undefined>(undefined);
 
   const canManage = isAdmin || isResourceManager;
 
   const checkoutParams = {
     ...(preselectedMember && { memberId: preselectedMember.id }),
     ...(shopFilter && { shopId: shopFilter }),
-    ...(activeFilter === "active" && { active: true }),
+    ...(activeFilter === "active"  && { active: true }),
     ...(activeFilter === "revoked" && { active: false }),
   };
 
@@ -195,11 +188,14 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
   const refreshRef = React.useRef(refresh);
   React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);
 
+  const selectedCheckout = (checkouts as ToolCheckout[]).find(c => c.id === selectedId);
+
   const onSuccess = React.useCallback((state: any) => {
     const unmet = state?.response?.data?.unmetPrerequisites;
     if (unmet?.length) setUnmetPrerequisites(unmet);
     setCheckoutOpen(false);
     setRevokeTarget(null);
+    setSelectedId(undefined);
     refreshRef.current();
   }, []);
 
@@ -220,8 +216,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
 
   const columns: Column<ToolCheckout>[] = [
     {
-      id: "memberName",
-      label: "Member",
+      id: "memberName", label: "Member",
       defaultSortDirection: SortDirection.Asc,
       cell: (row: ToolCheckout) => (
         <div>
@@ -231,8 +226,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
       ),
     },
     {
-      id: "toolName",
-      label: "Tool",
+      id: "toolName", label: "Tool",
       defaultSortDirection: SortDirection.Asc,
       cell: (row: ToolCheckout) => (
         <div>
@@ -242,8 +236,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
       ),
     },
     {
-      id: "checkedOutAt",
-      label: "Checked Out",
+      id: "checkedOutAt", label: "Checked Out",
       defaultSortDirection: SortDirection.Desc,
       cell: (row: ToolCheckout) => (
         <div>
@@ -253,29 +246,15 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
       ),
     },
     {
-      id: "approvedByName",
-      label: "Approved By",
+      id: "approvedByName", label: "Approved By",
       cell: (row: ToolCheckout) => <span>{row.approvedByName || "—"}</span>,
     },
     {
-      id: "active",
-      label: "Status",
+      id: "active", label: "Status",
       cell: (row: ToolCheckout) => row.active
-        ? <StatusLabel label="Active" color={Status.Success} />
-        : <StatusLabel label="Revoked" color={Status.Danger} />,
+        ? <StatusLabel label="Active"  color={Status.Success} />
+        : <StatusLabel label="Revoked" color={Status.Danger}  />,
     },
-    ...canManage ? [{
-      id: "actions",
-      label: "",
-      cell: (row: ToolCheckout) => row.active ? (
-        <Tooltip title="Revoke checkout">
-          <IconButton size="small" color="secondary"
-            onClick={e => { e.stopPropagation(); setRevokeTarget(row); }}>
-            <BlockIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      ) : null,
-    }] : [],
   ];
 
   return (
@@ -289,22 +268,41 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
                 All member tool checkouts across all shops.
               </Typography>
             </div>
-            {canManage && (
-              <Button variant="contained" color="primary" startIcon={<AddIcon />}
-                onClick={() => { setUnmetPrerequisites([]); setCheckoutOpen(true); }}>
-                Check Out Member
-              </Button>
-            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              {canManage && selectedCheckout?.active && (
+                <Button variant="outlined" color="secondary" startIcon={<BlockIcon />}
+                  onClick={() => setRevokeTarget(selectedCheckout)}>
+                  Revoke Checkout
+                </Button>
+              )}
+              {canManage && (
+                <Button variant="contained" color="primary" startIcon={<AddIcon />}
+                  onClick={() => { setUnmetPrerequisites([]); setCheckoutOpen(true); }}>
+                  Check Out Member
+                </Button>
+              )}
+            </div>
           </Grid>
         </Grid>
       )}
 
       {preselectedMember && canManage && (
         <Grid item xs={12}>
-          <Button variant="outlined" color="primary" startIcon={<AddIcon />}
-            onClick={() => { setUnmetPrerequisites([]); setCheckoutOpen(true); }}>
-            Add Checkout
-          </Button>
+          <Grid container justify="space-between" alignItems="center">
+            <div />
+            <div style={{ display: "flex", gap: 8 }}>
+              {selectedCheckout?.active && (
+                <Button variant="outlined" color="secondary" startIcon={<BlockIcon />}
+                  onClick={() => setRevokeTarget(selectedCheckout)}>
+                  Revoke Checkout
+                </Button>
+              )}
+              <Button variant="outlined" color="primary" startIcon={<AddIcon />}
+                onClick={() => { setUnmetPrerequisites([]); setCheckoutOpen(true); }}>
+                Add Checkout
+              </Button>
+            </div>
+          </Grid>
         </Grid>
       )}
 
@@ -339,21 +337,19 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
           columns={columns}
           rowId={rowId}
           totalItems={extractTotalItems(response)}
-          selectedIds={undefined}
-          setSelectedIds={() => {}}
+          selectedIds={selectedId}
+          setSelectedIds={canManage ? setSelectedId : undefined}
           renderSearch={true}
         />
       </Grid>
 
       {checkoutOpen && (
         <CheckoutModal
-          shops={shops as Shop[]}
-          tools={tools as Tool[]}
+          shops={shops as Shop[]} tools={tools as Tool[]}
           preselectedMember={preselectedMember}
           onClose={() => setCheckoutOpen(false)}
           onCheckout={handleCheckout}
-          loading={creating}
-          error={createError}
+          loading={creating} error={createError}
           unmetPrerequisites={unmetPrerequisites}
         />
       )}
@@ -362,8 +358,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
         target={revokeTarget}
         onClose={() => setRevokeTarget(null)}
         onRevoke={handleRevoke}
-        loading={revoking}
-        error={revokeError}
+        loading={revoking} error={revokeError}
       />
     </Grid>
   );

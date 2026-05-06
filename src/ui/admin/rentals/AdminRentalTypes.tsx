@@ -7,6 +7,9 @@ import Select from "@material-ui/core/Select";
 import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Switch from "@material-ui/core/Switch";
 import FormLabel from "@material-ui/core/FormLabel";
+import EditIcon from "@material-ui/icons/Edit";
+import DeleteIcon from "@material-ui/icons/Delete";
+import AddIcon from "@material-ui/icons/Add";
 import { Link } from "react-router-dom";
 import { InvoiceOption, listInvoiceOptions, InvoiceableResource } from "makerspace-ts-api-client";
 
@@ -16,7 +19,6 @@ import { SortDirection } from "ui/common/table/constants";
 import { Column } from "ui/common/table/Table";
 import { Status } from "ui/constants";
 import StatusLabel from "ui/common/StatusLabel";
-import ErrorMessage from "ui/common/ErrorMessage";
 import FormModal from "ui/common/FormModal";
 import useReadTransaction from "ui/hooks/useReadTransaction";
 import useWriteTransaction from "ui/hooks/useWriteTransaction";
@@ -45,7 +47,6 @@ const AdminRentalTypes: React.FC = () => {
   const [selectedId,   setSelectedId]   = React.useState<string>(undefined);
   const { params, changePage } = useQueryContext();
 
-  // Load rental invoice options for the dropdown using existing listInvoiceOptions
   const { data: invoiceOptions = [] } = useReadTransaction(
     listInvoiceOptions,
     { types: [InvoiceableResource.Rental] },
@@ -57,12 +58,15 @@ const AdminRentalTypes: React.FC = () => {
     adminListRentalTypes, { ...params }, undefined, "admin-rental-types"
   );
 
+  const selectedType = (rentalTypes as RentalType[]).find(t => t.id === selectedId);
+
   const onSaveSuccess = React.useCallback(() => {
-    setModalOpen(false); setEditTarget(emptyType()); setIsEditing(false); refresh();
+    setModalOpen(false); setEditTarget(emptyType()); setIsEditing(false);
+    setSelectedId(undefined); refresh();
   }, [refresh]);
 
   const onDeleteSuccess = React.useCallback(() => {
-    setDeleteTarget(null); refresh(); changePage(0);
+    setDeleteTarget(null); setSelectedId(undefined); refresh(); changePage(0);
   }, [refresh, changePage]);
 
   const { call: createType, isRequesting: creating, error: createError } = useWriteTransaction(adminCreateRentalType, onSaveSuccess);
@@ -109,29 +113,38 @@ const AdminRentalTypes: React.FC = () => {
         ? <StatusLabel label="Active" color={Status.Success} />
         : <StatusLabel label="Disabled" color={Status.Danger} />,
     },
-    {
-      id: "actions", label: "",
-      cell: (row: RentalType) => (
-        <div style={{ display: "flex", gap: "8px" }}>
-          <Button size="small" variant="outlined" onClick={e => { e.stopPropagation(); openEdit(row); }}>Edit</Button>
-          <Button size="small" variant="outlined" color="secondary" onClick={e => { e.stopPropagation(); setDeleteTarget(row); }}>Delete</Button>
-        </div>
-      ),
-    },
   ];
 
   return (
     <Grid container spacing={3}>
       <Grid item xs={12}>
         <Grid container justify="space-between" alignItems="center">
-          <Typography variant="h6">Rental Types</Typography>
-          <Button variant="contained" color="primary" onClick={openCreate}>Add Type</Button>
+          <div>
+            <Typography variant="h6">Rental Types</Typography>
+            <Typography variant="body2" color="textSecondary" style={{ marginTop: "8px" }}>
+              Each rental type links to a billing plan. Spots are assigned a type and members
+              are billed via that type's plan when they claim a spot.
+              If a type has no billing plan, <Link to={billingPath}>create one in Billing Options →</Link>
+            </Typography>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {selectedType && (
+              <>
+                <Button variant="outlined" color="primary" startIcon={<EditIcon />}
+                  onClick={() => openEdit(selectedType)}>
+                  Edit
+                </Button>
+                <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />}
+                  onClick={() => setDeleteTarget(selectedType)}>
+                  Delete
+                </Button>
+              </>
+            )}
+            <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={openCreate}>
+              Add Type
+            </Button>
+          </div>
         </Grid>
-        <Typography variant="body2" color="textSecondary" style={{ marginTop: "8px" }}>
-          Each rental type links to a billing plan. Spots are assigned a type and members
-          are billed via that type's plan when they claim a spot.
-          If a type has no billing plan, <Link to={billingPath}>create one in Billing Options →</Link>
-        </Typography>
       </Grid>
 
       <Grid item xs={12}>

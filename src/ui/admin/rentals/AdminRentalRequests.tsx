@@ -53,6 +53,8 @@ const AdminRentalRequests: React.FC = () => {
   const { call: doDeny,    isRequesting: denying,   error: denyError }    = useWriteTransaction(denyRental,   onActionSuccess);
   const isActing = approving || denying;
 
+  const selectedRental = (rentals as Rental[]).find(r => r.id === selectedId);
+
   const columns: Column<Rental>[] = [
     {
       id: "number", label: "Spot",
@@ -75,27 +77,37 @@ const AdminRentalRequests: React.FC = () => {
       id: "status", label: "Status",
       cell: () => <StatusLabel label="Pending Approval" color={Status.Warn} />,
     },
-    {
-      id: "actions", label: "Actions",
-      cell: (row: Rental) => (
-        <div style={{ display: "flex", gap: "8px" }}>
-          <Button size="small" variant="contained" color="primary"
-            onClick={e => { e.stopPropagation(); setActionTarget({ rental: row, action: "approve" }); }}
-          >Approve</Button>
-          <Button size="small" variant="outlined" color="secondary"
-            onClick={e => { e.stopPropagation(); setActionTarget({ rental: row, action: "deny" }); }}
-          >Deny</Button>
-        </div>
-      ),
-    },
   ];
 
   return (
     <Grid container spacing={3}>
       <Grid item xs={12}>
-        {!isRequesting && rentals.length === 0 && (
+        <Grid container justify="space-between" alignItems="center" style={{ marginBottom: 8 }}>
+          <Typography variant="h6">Pending Rental Requests</Typography>
+          <div style={{ display: "flex", gap: 8 }}>
+            {selectedRental && (
+              <>
+                <Button
+                  variant="contained" color="primary" disabled={isActing}
+                  onClick={() => setActionTarget({ rental: selectedRental, action: "approve" })}
+                >
+                  Approve
+                </Button>
+                <Button
+                  variant="outlined" color="secondary" disabled={isActing}
+                  onClick={() => setActionTarget({ rental: selectedRental, action: "deny" })}
+                >
+                  Deny
+                </Button>
+              </>
+            )}
+          </div>
+        </Grid>
+
+        {!isRequesting && (rentals as Rental[]).length === 0 && (
           <Typography color="textSecondary">No pending rental requests.</Typography>
         )}
+
         <StatefulTable
           id="admin-rental-requests-table"
           title="Pending Rental Requests"
