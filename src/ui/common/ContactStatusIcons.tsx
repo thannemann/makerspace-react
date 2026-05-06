@@ -4,18 +4,19 @@ import CheckCircleIcon from '@material-ui/icons/CheckCircle';
 import ErrorIcon from '@material-ui/icons/Error';
 import InfoOutlined from '@material-ui/icons/InfoOutlined';
 
-// Mailtrap statuses considered healthy
-const GOOD_STATUSES = ['delivered', 'opened', 'clicked'];
+// Mailtrap webhook event values (event field, not status)
+const GOOD_STATUSES = ['delivery', 'open', 'click'];
 
 const STATUS_LABELS: Record<string, string> = {
-  delivered:    'Email delivered successfully',
-  opened:       'Email opened by recipient',
-  clicked:      'Email link clicked by recipient',
-  bounced:      'Email bounced — address may be invalid',
-  soft_bounced: 'Email soft bounced — temporary delivery failure',
-  spam:         'Email marked as spam by recipient',
-  unsubscribed: 'Recipient has unsubscribed from emails',
-  rejected:     'Email rejected by mail server',
+  'delivery':    'Email delivered successfully',
+  'open':        'Email opened by recipient',
+  'click':       'Email link clicked by recipient',
+  'bounce':      'Email bounced — address may be invalid',
+  'soft bounce': 'Email soft bounced — temporary delivery failure',
+  'spam':        'Email marked as spam by recipient',
+  'unsubscribe': 'Recipient has unsubscribed from emails',
+  'reject':      'Email rejected by mail server',
+  'suspension':  'Email suspended — domain verification issue',
 };
 
 export interface MailtrapData {
