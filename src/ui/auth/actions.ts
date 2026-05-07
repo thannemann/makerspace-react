@@ -4,7 +4,7 @@ import { AnyAction } from "redux";
 import { AuthState, AuthForm, SignUpForm, AuthMember } from "ui/auth/interfaces";
 import { Action as AuthAction } from "ui/auth/constants";
 import { TransactionAction } from "ui/reducer";
-import { memberIsAdmin, memberIsResourceManager } from "ui/member/utils";
+import { memberIsAdmin, memberIsBoardMember, memberIsResourceManager } from "ui/member/utils";
 import {
   signIn,
   listMembersPermissions,
@@ -94,6 +94,7 @@ const defaultState: AuthState = {
     email: undefined,
     expirationTime: undefined,
     isAdmin: false,
+    isBoardMember: false,
     isResourceManager: false,
   } as AuthMember,
   permissions: {},
@@ -118,6 +119,7 @@ export const authReducer = (state: AuthState = defaultState, action: AnyAction) 
         currentUser: {
           ...member,
           isAdmin: memberIsAdmin(member),
+          isBoardMember: memberIsBoardMember(member),
           isResourceManager: memberIsResourceManager(member),
         },
         permissions,

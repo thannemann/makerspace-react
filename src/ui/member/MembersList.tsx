@@ -87,9 +87,9 @@ const MembersList: React.FC = () => {
   const [selectedId, setSelectedId] = React.useState<string>();
   const { history } = useReactRouter();
   const { params, setParam } = useQueryContext({ currentMembers: true });
-  const { currentUser: { isAdmin, isResourceManager } } = useAuthState();
+  const { currentUser: { isAdmin, isBoardMember, isResourceManager } } = useAuthState();
 
-  const canViewAll = isAdmin || isResourceManager;
+  const canViewAll = isAdmin || isBoardMember || isResourceManager;
   const updateFilter = React.useCallback(
     () => setParam('currentMembers', !params.currentMembers),
     [params, setParam]
@@ -118,7 +118,7 @@ const MembersList: React.FC = () => {
             />
           </Grid>
         )}
-        {isResourceManager && (
+        {isResourceManager && !isBoardMember && (
           <Grid>
             <Typography variant='body2' color='textSecondary' style={{ marginBottom: 8 }} data-testid='rm-notice'>
               You are viewing members in read-only mode as a Resource Manager.

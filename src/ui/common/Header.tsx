@@ -9,6 +9,8 @@ import IconButton from "@material-ui/core/IconButton";
 import Typography from "@material-ui/core/Typography";
 import Menu from "@material-ui/core/Menu";
 import MenuItem from "@material-ui/core/MenuItem";
+import Divider from "@material-ui/core/Divider";
+import Chip from "@material-ui/core/Chip";
 import MenuIcon from "@material-ui/icons/Menu";
 
 import Logo from "../../assets/FilledLaserableLogo.svg";
@@ -16,12 +18,11 @@ import Logo from "../../assets/FilledLaserableLogo.svg";
 import { ScopedThunkDispatch, State as ReduxState } from "ui/reducer";
 import { logoutUserAction } from "ui/auth/actions";
 import { AuthMember } from "ui/auth/interfaces";
-import { memberIsAdmin, memberIsResourceManager } from "ui/member/utils";
+import { memberIsAdmin, memberIsBoardMember, memberIsResourceManager } from "ui/member/utils";
 import { Routing, Whitelists } from "app/constants";
 import Help from "ui/common/Help";
 
-interface OwnProps extends RouteComponentProps<any> {
-}
+interface OwnProps extends RouteComponentProps<any> {}
 interface StateProps {
   currentUser: AuthMember;
   authRequesting: boolean;
@@ -31,22 +32,60 @@ interface StateProps {
 interface DispatchProps {
   logout: () => void;
 }
-
 interface Props extends OwnProps, StateProps, DispatchProps {}
-
 interface State {
   authOpen: boolean;
   anchorEl: HTMLElement;
 }
 
+const roleBadge = (currentUser: AuthMember): JSX.Element | null => {
+  if (currentUser.isAdmin) {
+    return (
+      <Chip
+        label="Admin"
+        size="small"
+        style={{
+          marginLeft: 8, height: 20, fontSize: 10,
+          backgroundColor: "#d32f2f", color: "#fff",
+          fontWeight: 700, letterSpacing: "0.05em"
+        }}
+      />
+    );
+  }
+  if (currentUser.isBoardMember) {
+    return (
+      <Chip
+        label="Board"
+        size="small"
+        style={{
+          marginLeft: 8, height: 20, fontSize: 10,
+          backgroundColor: "#7b1fa2", color: "#fff",
+          fontWeight: 700, letterSpacing: "0.05em"
+        }}
+      />
+    );
+  }
+  if (currentUser.isResourceManager) {
+    return (
+      <Chip
+        label="RM"
+        size="small"
+        style={{
+          marginLeft: 8, height: 20, fontSize: 10,
+          backgroundColor: "#1565c0", color: "#fff",
+          fontWeight: 700, letterSpacing: "0.05em"
+        }}
+      />
+    );
+  }
+  return null;
+};
+
 class Header extends React.Component<Props, State> {
 
-  constructor(props: Props){
-    super(props)
-    this.state = {
-      authOpen: false,
-      anchorEl: null,
-    };
+  constructor(props: Props) {
+    super(props);
+    this.state = { authOpen: false, anchorEl: null };
   }
 
   private attachMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -60,22 +99,20 @@ class Header extends React.Component<Props, State> {
   private renderMenuNavLink = (path: string, label: string, id: string) => {
     const match = this.props.location && this.props.location.pathname === path;
     return (
-      <Link id={id} to={path} style={{ outline: 'none',textDecoration: 'none', color: 'unset' }} onClick={this.detachMenu}>
-        <MenuItem selected={match}>
-          {label}
-        </MenuItem>
+      <Link key={id} id={id} to={path} style={{ outline: "none", textDecoration: "none", color: "unset" }} onClick={this.detachMenu}>
+        <MenuItem selected={match}>{label}</MenuItem>
       </Link>
-    )
+    );
   }
 
   private renderLoginLink = () => {
     return (
-      <Link to={Routing.Login} style={{ outline: 'none', textDecoration: 'none', color: 'unset' }}>
+      <Link to={Routing.Login} style={{ outline: "none", textDecoration: "none", color: "unset" }}>
         <MenuItem component={Typography as any}>
           Already a member? Login
         </MenuItem>
       </Link>
-    )
+    );
   }
 
   private renderHambMenu = (): JSX.Element => {
@@ -83,21 +120,45 @@ class Header extends React.Component<Props, State> {
     const { anchorEl } = this.state;
     const menuOpen = Boolean(anchorEl);
     const profileUrl = Routing.Profile.replace(Routing.PathPlaceholder.MemberId, currentUser.id);
-    const isAdmin = memberIsAdmin(currentUser);
-    const isRM = memberIsResourceManager(currentUser);
-    const canManageShopFees = isAdmin || isRM;
-    const canManageCheckouts = isAdmin || isRM || (currentUser as any).isCheckoutApprover;
-    const canManageVolunteer = isAdmin || isRM;
+    const settingsUrl = Routing.Settings.replace(Routing.PathPlaceholder.MemberId, currentUser.id);
+
+    const isAdmin = currentUser.isAdmin;
+    const isBoardMember = currentUser.isBoardMember;
+    const isRM = currentUser.isResourceManager;
+
+    // Access levels
+    const isAdminOrBoard = isAdmin || isBoardMember;
+    const isPrivileged   = isAdmin || isBoardMember || isRM;
+    const canManageShopFees    = isPrivileged;
+    const canManageCheckouts   = isPrivileged || (currentUser as any).isCheckoutApprover;
+    const canManageVolunteer   = isPrivileged;
+    const canManageRentals     = isPrivileged;
+
+    // Privileged menu items — alphabetized
+    const privilegedItems: JSX.Element[] = [
+      ...(billingEnabled && isAdminOrBoard ? [this.renderMenuNavLink(Routing.Billing, "Billing", "billing")] : []),
+      ...(earnedMembershipEnabled && isAdminOrBoard ? [this.renderMenuNavLink(Routing.EarnedMemberships, "Earned Memberships", "earnedMembership")] : []),
+      ...(isPrivileged ? [this.renderMenuNavLink(Routing.Members, "Members", "members")] : []),
+      ...(isAdmin ? [this.renderMenuNavLink(Routing.SystemSettings, "Portal Settings", "system-settings")] : []),
+      ...(canManageRentals ? [this.renderMenuNavLink(Routing.AdminRentals, "Rentals", "rentals")] : []),
+      ...(canManageShopFees ? [this.renderMenuNavLink(Routing.ShopFees, "Shop Fees", "shop-fees")] : []),
+      ...(canManageCheckouts ? [this.renderMenuNavLink(Routing.ToolCheckouts, "Tool Checkouts", "tool-checkouts")] : []),
+      ...(canManageVolunteer ? [this.renderMenuNavLink(Routing.Volunteer, "Volunteer", "volunteer")] : []),
+    ];
 
     return (
       <>
-      <Typography variant="body1" color="secondary">
-        {currentUser.firstname}
-      </Typography>
+        <span style={{ display: "inline-flex", alignItems: "center" }}>
+          <Typography variant="body1" color="secondary">
+            {currentUser.firstname}
+          </Typography>
+          {roleBadge(currentUser)}
+        </span>
         <IconButton
           id="menu-button"
           className="menu-button"
-          color="inherit" aria-label="Menu"
+          color="inherit"
+          aria-label="Menu"
           onClick={this.attachMenu}
         >
           <MenuIcon />
@@ -106,31 +167,27 @@ class Header extends React.Component<Props, State> {
           id="menu-appbar"
           anchorEl={anchorEl}
           transitionDuration={0}
-          anchorOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
+          anchorOrigin={{ vertical: "top", horizontal: "right" }}
+          transformOrigin={{ vertical: "top", horizontal: "right" }}
           open={menuOpen}
           onClose={this.detachMenu}
         >
+          {/* Member section */}
+          {this.renderMenuNavLink(settingsUrl, "Account Settings", "settings")}
           {this.renderMenuNavLink(profileUrl, "My Profile", "profile")}
-          {this.renderMenuNavLink(Routing.Members, "Members", "members")}
-          {(isAdmin || isRM) && this.renderMenuNavLink(Routing.AdminRentals, "Rentals", "rentals")}
-          {canManageShopFees && this.renderMenuNavLink(Routing.ShopFees, "Shop Fees", "shop-fees")}
-          {canManageCheckouts && this.renderMenuNavLink(Routing.ToolCheckouts, "Tool Checkouts", "tool-checkouts")}
-          {canManageVolunteer && this.renderMenuNavLink(Routing.Volunteer, "Volunteer", "volunteer")}
-          {billingEnabled && isAdmin && this.renderMenuNavLink(Routing.Billing, "Billing", "billing")}
-          {earnedMembershipEnabled && this.renderMenuNavLink(Routing.EarnedMemberships, "Earned Memberships", "earnedMembership")}
-          {isAdmin && this.renderMenuNavLink(Routing.SystemSettings, "Member Portal Settings", "system-settings")}
-          {this.renderMenuNavLink(Routing.Settings.replace(Routing.PathPlaceholder.MemberId, currentUser.id), "Account Settings", "settings")}
-          <MenuItem id="logout" onClick={this.logoutUser}>Logout</MenuItem>
+
+          {/* Privileged section */}
+          {privilegedItems.length > 0 && <Divider />}
+          {privilegedItems}
+
+          {/* Logout */}
+          <Divider />
+          <MenuItem id="logout" onClick={this.logoutUser} style={{ color: "#d32f2f" }}>
+            Logout
+          </MenuItem>
         </Menu>
       </>
-    )
+    );
   }
 
   private logoutUser = () => {
@@ -145,35 +202,28 @@ class Header extends React.Component<Props, State> {
       <AppBar style={{ marginBottom: "1em" }} position="static" color="default" title="Manchester Makerspace">
         <Toolbar>
           <Typography variant="h6" color="inherit" className="flex">
-            <Logo alt="Manchester Makerspace" viewBox="0 0 960 580" preserveAspectRatio="xMinYMin"/>
+            <Logo alt="Manchester Makerspace" viewBox="0 0 960 580" preserveAspectRatio="xMinYMin" />
           </Typography>
           <Help />
-          {currentUser.id ? this.renderHambMenu() : (!authRequesting && this.renderLoginLink()) }
+          {currentUser.id ? this.renderHambMenu() : (!authRequesting && this.renderLoginLink())}
         </Toolbar>
       </AppBar>
-    )
+    );
   }
 }
 
 const mapStateToProps = (state: ReduxState, _ownProps: OwnProps): StateProps => {
-  const {
-    auth: { currentUser, isRequesting, permissions }
-  } = state;
-
+  const { auth: { currentUser, isRequesting, permissions } } = state;
   return {
     currentUser,
     billingEnabled: !!permissions[Whitelists.billing] || false,
-    earnedMembershipEnabled: memberIsAdmin(currentUser) && !!permissions[Whitelists.earnedMembership] || false,
+    earnedMembershipEnabled: (memberIsAdmin(currentUser) || memberIsBoardMember(currentUser)) && !!permissions[Whitelists.earnedMembership] || false,
     authRequesting: isRequesting
-  }
-}
+  };
+};
 
-const mapDispatchToProps = (
-  dispatch: ScopedThunkDispatch
-): DispatchProps => {
-  return {
-    logout: () => dispatch(logoutUserAction()),
-  }
-}
+const mapDispatchToProps = (dispatch: ScopedThunkDispatch): DispatchProps => {
+  return { logout: () => dispatch(logoutUserAction()) };
+};
 
 export default withRouter(connect(mapStateToProps, mapDispatchToProps)(Header));

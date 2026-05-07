@@ -17,6 +17,10 @@ export const memberIsAdmin = (member: Member | MemberSummary): boolean => {
   return member && member.role && member.role.includes(MemberRole.Admin);
 }
 
+export const memberIsBoardMember = (member: Member | MemberSummary): boolean => {
+  return member && (member.role as string) === "board_member";
+}
+
 export const memberIsResourceManager = (member: Member | MemberSummary): boolean => {
   return member && (member.role as string) === "resource_manager";
 }
