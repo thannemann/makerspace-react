@@ -11,8 +11,7 @@ import PublicRouting from 'app/PublicRouting';
 import { Routing } from 'app/constants';
 import { buildProfileRouting } from 'ui/member/utils';
 import ErrorBoundary from 'ui/common/ErrorBoundary';
-import { setupGlobalAuthInterceptor } from 'ui/common/globalAuthInterceptor';
-import { getStore } from 'app/main';
+import { setupGlobalAuthInterceptor, setGlobalDispatch } from 'ui/common/globalAuthInterceptor';
 
 const publicPaths = [Routing.Login, Routing.SignUp, Routing.PasswordReset];
 
@@ -22,7 +21,8 @@ const App: React.FC = () => {
 
   // Register global 401 interceptor once on mount
   React.useEffect(() => {
-    setupGlobalAuthInterceptor(getStore(), history);
+    setupGlobalAuthInterceptor(dispatch);
+    setGlobalDispatch(dispatch);
   }, []);
   const { currentUser, currentUser: { id: currentUserId, isAdmin, isResourceManager }, permissions, isRequesting, error } = useAuthState();
   const isCheckoutApprover = !!(currentUser as any)?.isCheckoutApprover;
