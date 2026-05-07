@@ -31,6 +31,7 @@ import ChargeButton from "ui/shopFees/ChargeButton";
 import MemberCheckoutsTab from "ui/toolCheckouts/MemberCheckoutsTab";
 import MemberVolunteerTab from "ui/volunteer/MemberVolunteerTab";
 import { EmailStatusIcon, SlackStatusIcon } from "ui/common/ContactStatusIcons";
+import GoogleDriveInviteButton from "ui/member/GoogleDriveInviteButton";
 
 const MemberProfile: React.FC = () => {
   const { match: { params: { memberId, resource } }, history } = useReactRouter<{ memberId: string, resource: string }>();
@@ -152,7 +153,8 @@ const MemberProfile: React.FC = () => {
             <RenewMember member={member} key="renew-member" onRenew={refreshMember}/>,
             <AccessCardForm memberId={memberId} key="card-form"/>,
             <AdminChangePasswordModal member={member} key="change-password"/>,
-            <HouseholdModal member={member} key="household" onUpdate={refreshMember}/>
+            <HouseholdModal member={member} key="household" onUpdate={refreshMember}/>,
+            <GoogleDriveInviteButton member={member} key="google-drive-invite" />
           ] : [],
           // Send Charge button — admin and RM, not on own profile
           ...canChargeMember && member.id ? [
