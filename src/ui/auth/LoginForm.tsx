@@ -10,13 +10,15 @@ import { Routing } from "app/constants";
 import { emailValid } from "app/utils";
 
 import { State as ReduxState, ScopedThunkDispatch } from "ui/reducer";
-import { loginUserAction } from "ui/auth/actions";
+import { loginUserAction, firebaseLoginAction } from "ui/auth/actions";
 import { LoginFields, loginPrefix } from "ui/auth/constants";
 import { AuthForm } from "ui/auth/interfaces";
 import ErrorMessage from "ui/common/ErrorMessage";
 import Form from "ui/common/Form";
 import FormModal from "ui/common/FormModal";
 import { requestPasswordReset, isApiErrorResponse } from "makerspace-ts-api-client";
+import FirebaseAuthButtons from "ui/auth/FirebaseAuthButtons";
+import { signInWithGoogle, signInWithApple, signInWithGitHub, signInWithMicrosoft } from "ui/auth/firebase";
 
 const formPrefix = "request-password-reset";
 const passwordFields = {
@@ -32,6 +34,7 @@ const passwordFields = {
 interface OwnProps {}
 interface DispatchProps {
   loginUser: (authForm: AuthForm) => Promise<void>;
+  firebaseLogin: (idToken: string) => Promise<void>;
   pushLocation: (location: string) => void;
 }
 interface StateProps {
@@ -44,6 +47,12 @@ interface State {
   passwordError: string;
   openPassword: boolean;
   email: string;
+  firebaseLoading: boolean;
+  firebaseError: string;
+  firebaseGoogleEnabled: boolean;
+  firebaseAppleEnabled: boolean;
+  firebaseGithubEnabled: boolean;
+  firebaseMicrosoftEnabled: boolean;
 }
 interface Props extends OwnProps, DispatchProps, StateProps {}
 
@@ -59,7 +68,13 @@ class LoginForm extends React.Component<Props, State> {
       requestingPassword: false,
       openPassword: false,
       passwordError: "",
-      email: ""
+      email: "",
+      firebaseLoading: false,
+      firebaseError: "",
+      firebaseGoogleEnabled: false,
+      firebaseAppleEnabled: false,
+      firebaseGithubEnabled: false,
+      firebaseMicrosoftEnabled: false,
     }
   }
 
@@ -78,6 +93,35 @@ class LoginForm extends React.Component<Props, State> {
       pushLocation(Routing.Members);
     }
   }
+
+  async componentDidMount() {
+    const { data } = await getSystemConfigs();
+    if (data && data.flags) {
+      this.setState({
+        firebaseGoogleEnabled:    !!data.flags.firebase_google_enabled,
+        firebaseAppleEnabled:     !!data.flags.firebase_apple_enabled,
+        firebaseGithubEnabled:    !!data.flags.firebase_github_enabled,
+        firebaseMicrosoftEnabled: !!data.flags.firebase_microsoft_enabled,
+      });
+    }
+  }
+
+  private handleFirebaseSignIn = async (signInFn: () => Promise<void>) => {
+    this.setState({ firebaseLoading: true, firebaseError: '' });
+    try {
+      // This redirects the browser to the provider — page will navigate away
+      await signInFn();
+    } catch (err) {
+      const message = (err && (err as any).message) || 'Sign in failed. Please try again.';
+      this.setState({ firebaseError: message, firebaseLoading: false });
+    }
+    // Note: firebaseLoading stays true until redirect — intentional
+  };
+
+  private handleGoogleSignIn    = () => this.handleFirebaseSignIn(signInWithGoogle);
+  private handleAppleSignIn     = () => this.handleFirebaseSignIn(signInWithApple);
+  private handleGitHubSignIn    = () => this.handleFirebaseSignIn(signInWithGitHub);
+  private handleMicrosoftSignIn = () => this.handleFirebaseSignIn(signInWithMicrosoft);
 
   private submitLogin = async (form: Form) => {
     const validAuth: AuthForm = await form.simpleValidate<AuthForm>(LoginFields);
@@ -152,6 +196,18 @@ class LoginForm extends React.Component<Props, State> {
 
     return (
       <>
+        <FirebaseAuthButtons
+          onGoogleSignIn={this.handleGoogleSignIn}
+          onAppleSignIn={this.handleAppleSignIn}
+          onGitHubSignIn={this.handleGitHubSignIn}
+          onMicrosoftSignIn={this.handleMicrosoftSignIn}
+          loading={this.state.firebaseLoading}
+          error={this.state.firebaseError}
+          googleEnabled={this.state.firebaseGoogleEnabled}
+          appleEnabled={this.state.firebaseAppleEnabled}
+          githubEnabled={this.state.firebaseGithubEnabled}
+          microsoftEnabled={this.state.firebaseMicrosoftEnabled}
+        />
         <Form
           ref={this.setFormRef}
           id={loginPrefix}
@@ -211,6 +267,7 @@ const mapDispatchToProps = (
 ): DispatchProps => {
   return {
     loginUser: (authForm) => dispatch(loginUserAction(authForm)),
+    firebaseLogin: (idToken) => dispatch(firebaseLoginAction(idToken)),
     pushLocation: (location) => dispatch(push(location)),
   };
 }

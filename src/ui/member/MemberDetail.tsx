@@ -32,6 +32,7 @@ import MemberCheckoutsTab from "ui/toolCheckouts/MemberCheckoutsTab";
 import MemberVolunteerTab from "ui/volunteer/MemberVolunteerTab";
 import { EmailStatusIcon, SlackStatusIcon } from "ui/common/ContactStatusIcons";
 import GoogleDriveInviteButton from "ui/member/GoogleDriveInviteButton";
+import FirebaseUnlinkButton from "ui/auth/FirebaseUnlinkButton";
 
 const MemberProfile: React.FC = () => {
   const { match: { params: { memberId, resource } }, history } = useReactRouter<{ memberId: string, resource: string }>();

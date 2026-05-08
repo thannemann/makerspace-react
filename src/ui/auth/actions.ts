@@ -15,6 +15,7 @@ import {
   ApiErrorResponse,
   ApiDataResponse
 } from "makerspace-ts-api-client";
+import { firebaseSignOut } from "ui/auth/firebase";
 import { CartAction } from "../checkout/cart";
 
 const handleAuthWithPermissions = async (
@@ -72,10 +73,44 @@ export const logoutUserAction = (
 ): ThunkAction<Promise<void>, {}, {}, AnyAction> => async (dispatch) => {
   dispatch({ type: AuthAction.StartAuthRequest });
   await signOut();
+  await firebaseSignOut().catch(() => {}); // Sign out of Firebase too (no-op if not signed in)
   dispatch({ type: TransactionAction.Reset });
   dispatch({ type: CartAction.EmptyCart });
   dispatch({ type: AuthAction.LogoutSuccess });
 }
+
+export const firebaseLoginAction = (
+  idToken: string
+): ThunkAction<Promise<void>, {}, {}, AnyAction> => async (dispatch) => {
+  dispatch({ type: AuthAction.StartAuthRequest });
+
+  const response = await fetch('/api/auth/firebase_login', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-XSRF-TOKEN': (() => {
+        const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : '';
+      })(),
+    },
+    body: JSON.stringify({ id_token: idToken }),
+  });
+
+  if (response.ok) {
+    const member = await response.json();
+    await handleAuthWithPermissions(
+      { data: member, response } as any,
+      dispatch
+    );
+  } else {
+    const body = await response.json().catch(() => ({}));
+    dispatch({
+      type: AuthAction.AuthUserFailure,
+      error: body?.message || 'Firebase login failed. Please try again.',
+    });
+  }
+};
 
 export const submitSignUpAction = (
   signUpForm: SignUpForm

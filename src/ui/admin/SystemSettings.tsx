@@ -152,6 +152,81 @@ const SystemSettings: React.FC = () => {
         </Card>
       </Grid>
 
+      {/* Authentication Providers */}
+      <Grid item xs={12}>
+        <Card>
+          <CardHeader
+            title="Authentication Providers"
+            subheader="Enable or disable social sign-in options on the login page. Providers must also be configured in the Firebase console before enabling."
+          />
+          <Divider />
+          <CardContent>
+            {[
+              {
+                key:         'firebase_google_enabled',
+                label:       'Google',
+                description: 'Allow members to sign in with their Google account.',
+                ready:       true,
+              },
+              {
+                key:         'firebase_apple_enabled',
+                label:       'Apple',
+                description: 'Allow members to sign in with Apple ID. Requires Apple Developer account.',
+                ready:       false,
+                note:        'Pending Apple Developer account setup',
+              },
+              {
+                key:         'firebase_github_enabled',
+                label:       'GitHub',
+                description: 'Allow members to sign in with GitHub. Requires GitHub OAuth app setup.',
+                ready:       false,
+                note:        'Pending GitHub OAuth app setup',
+              },
+              {
+                key:         'firebase_microsoft_enabled',
+                label:       'Microsoft',
+                description: 'Allow members to sign in with Microsoft/Azure account. Requires Azure app registration.',
+                ready:       false,
+                note:        'Pending Azure app registration',
+              },
+            ].map(provider => (
+              <div key={provider.key} style={{ marginBottom: 16 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={config.flags[provider.key as keyof typeof config.flags] as boolean || false}
+                      onChange={() => handleToggleFlag(provider.key, config.flags[provider.key as keyof typeof config.flags] as boolean || false)}
+                      disabled={togglingFlag === provider.key}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <span>
+                      <Typography variant="body1" component="span">
+                        {provider.label}
+                        {!provider.ready && (
+                          <Chip
+                            label="Not configured"
+                            size="small"
+                            style={{ marginLeft: 8, fontSize: 10, height: 18 }}
+                          />
+                        )}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" component="p">
+                        {provider.description}
+                        {provider.note && !provider.ready && (
+                          <span style={{ color: '#f57c00' }}> — {provider.note}</span>
+                        )}
+                      </Typography>
+                    </span>
+                  }
+                />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </Grid>
+
       {/* Scheduled Jobs */}
       <Grid item xs={12}>
         <Card>

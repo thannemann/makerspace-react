@@ -7,6 +7,7 @@ import { SignUpWorkflow } from 'pages/registration/SignUpWorkflow/SignUpWorkflow
 import PasswordReset from 'ui/auth/PasswordReset';
 import LoginPage from 'ui/auth/LoginPage';
 import UnsubscribeEmails from "ui/member/UnsubscribeEmails";
+import FirebaseCallback from 'ui/auth/FirebaseCallback';
 
 
 const PublicRouting: React.SFC<{ }> = () => {
@@ -18,6 +19,7 @@ const PublicRouting: React.SFC<{ }> = () => {
       <Route exact path={Routing.SignUp} component={SignUpWorkflow}/>
       <Route exact path={Routing.Root} component={LandingPage} />
       <Route exact path={Routing.Unsubscribe} component={UnsubscribeEmails} />
+      <Route exact path='/auth/callback' component={FirebaseCallback} />
       <Redirect to="/"/>
     </Switch>
   );
