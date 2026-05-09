@@ -9,7 +9,7 @@ const GOOD_STATUSES = ['delivery', 'open', 'click'];
 
 const STATUS_LABELS: Record<string, string> = {
   'delivery':    'Email delivered successfully',
-  'open':        'Email opened by recipient',
+  'open':        'Email opened (may include automated prefetch)',
   'click':       'Email link clicked by recipient',
   'bounce':      'Email bounced — address may be invalid',
   'soft bounce': 'Email soft bounced — temporary delivery failure',

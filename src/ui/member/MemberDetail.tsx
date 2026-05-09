@@ -169,11 +169,15 @@ const MemberProfile: React.FC = () => {
                 {member.email ? <a id="member-detail-email" href={`mailto:${member.email}`}>{member.email}</a> : "N/A"}
                 {(isAdmin || isResourceManager) && (
                   <>
-                    <EmailStatusIcon mailtrap={(member as any).mailtrap} />
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#555' }}>Email status:</span>
+                      <EmailStatusIcon mailtrap={(member as any).mailtrap} />
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#555' }}>Slack status:</span>
                       <SlackStatusIcon slack={(member as any).slack} />
                       {(member as any).slack && (
-                        <span style={{ fontSize: "0.8rem", color: "#555" }}>{(member as any).slack.name}</span>
+                        <span style={{ fontSize: '0.8rem', color: '#555' }}>{(member as any).slack.name}</span>
                       )}
                     </span>
                   </>
