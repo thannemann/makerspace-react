@@ -31,14 +31,58 @@ import ChargeButton from "ui/shopFees/ChargeButton";
 import MemberCheckoutsTab from "ui/toolCheckouts/MemberCheckoutsTab";
 import MemberVolunteerTab from "ui/volunteer/MemberVolunteerTab";
 import { EmailStatusIcon, SlackStatusIcon } from "ui/common/ContactStatusIcons";
-import { useCapabilities } from "app/permissions";
 import GoogleDriveInviteButton from "ui/member/GoogleDriveInviteButton";
 import FirebaseUnlinkButton from "ui/auth/FirebaseUnlinkButton";
 
+
+const getCsrfToken = (): string => {
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+};
+
+const Reset2FAButton: React.FC<{ memberId: string; onReset: () => void }> = ({ memberId, onReset }) => {
+  const [loading, setLoading] = React.useState(false);
+  const [msg, setMsg]         = React.useState('');
+
+  const handleReset = async () => {
+    if (!window.confirm('Reset this member\'s two-factor authentication? They will be signed out of all active sessions immediately.')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/members/${memberId}/totp`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'X-XSRF-TOKEN': getCsrfToken() },
+      });
+      if (res.ok) {
+        setMsg('2FA reset successfully.');
+        onReset();
+      } else {
+        setMsg('Failed to reset 2FA.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <ActionButton
+        key="reset-2fa"
+        id="member-detail-reset-2fa"
+        color="secondary"
+        variant="outlined"
+        disabled={loading || !memberId}
+        label="Reset 2FA"
+        onClick={handleReset}
+      />
+      {msg && <span style={{ fontSize: '0.8rem', marginLeft: 8 }}>{msg}</span>}
+    </>
+  );
+};
+
 const MemberProfile: React.FC = () => {
   const { match: { params: { memberId, resource } }, history } = useReactRouter<{ memberId: string, resource: string }>();
-  const { currentUser: { id: currentUserId }, permissions } = useAuthState();
-  const caps = useCapabilities();
+  const { currentUser: { id: currentUserId, isAdmin, isResourceManager }, permissions } = useAuthState();
 
   const {
     isNewMember
@@ -52,7 +96,7 @@ const MemberProfile: React.FC = () => {
 
   const isOwnProfile = currentUserId === memberId;
   const billingEnabled = !!permissions[Whitelists.billing];
-  const canChargeMember = caps.canManageRentals && !isOwnProfile;
+  const canChargeMember = (isAdmin || isResourceManager) && !isOwnProfile;
 
   const goToSettings = React.useCallback(() => {
     history.push(Routing.Settings.replace(Routing.PathPlaceholder.MemberId, currentUserId));
@@ -86,7 +130,7 @@ const MemberProfile: React.FC = () => {
   }, [initRender, isOwnProfile, rentals]);
 
   const { customerId, earnedMembershipId } = member;
-  const isEarnedMember = !!earnedMembershipId && (isOwnProfile || caps.canManageEarnedMemberships);
+  const isEarnedMember = !!earnedMembershipId && (isOwnProfile || isAdmin);
 
   const setSearchQuery = useSetSearchQuery();
   const closeNotification = React.useCallback(() => {
@@ -151,13 +195,16 @@ const MemberProfile: React.FC = () => {
               label="Account Settings"
               onClick={goToSettings}
             />] : [],
-          ...caps.canEditMembers ? [
+          ...isAdmin ? [
             <EditMember member={member} key="edit-member" onEdit={refreshMember}/>,
             <RenewMember member={member} key="renew-member" onRenew={refreshMember}/>,
             <AccessCardForm memberId={memberId} key="card-form"/>,
             <AdminChangePasswordModal member={member} key="change-password"/>,
             <HouseholdModal member={member} key="household" onUpdate={refreshMember}/>,
-            <GoogleDriveInviteButton member={member} key="google-drive-invite" />
+            <GoogleDriveInviteButton member={member} key="google-drive-invite" />,
+            ...((member as any).totp_enabled ? [
+              <Reset2FAButton key="reset-2fa" memberId={memberId} onReset={refreshMember} />
+            ] : [])
           ] : [],
           // Send Charge button — admin and RM, not on own profile
           ...canChargeMember && member.id ? [
@@ -169,17 +216,13 @@ const MemberProfile: React.FC = () => {
             <KeyValueItem label="Email">
               <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 {member.email ? <a id="member-detail-email" href={`mailto:${member.email}`}>{member.email}</a> : "N/A"}
-                {caps.canViewEmailStatus && (
+                {(isAdmin || isResourceManager) && (
                   <>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '0.8rem', color: '#555' }}>Email status:</span>
-                      <EmailStatusIcon mailtrap={(member as any).mailtrap} />
-                    </span>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '0.8rem', color: '#555' }}>Slack status:</span>
+                    <EmailStatusIcon mailtrap={(member as any).mailtrap} />
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
                       <SlackStatusIcon slack={(member as any).slack} />
                       {(member as any).slack && (
-                        <span style={{ fontSize: '0.8rem', color: '#555' }}>{(member as any).slack.name}</span>
+                        <span style={{ fontSize: "0.8rem", color: "#555" }}>{(member as any).slack.name}</span>
                       )}
                     </span>
                   </>
@@ -201,7 +244,7 @@ const MemberProfile: React.FC = () => {
                         Manage Subscription
                       </Link>
                     )}
-                    {!isOwnProfile && caps.canManageBilling && (
+                    {!isOwnProfile && isAdmin && (
                         <Link to={
                           `${
                             Routing.Billing}/${
@@ -214,7 +257,7 @@ const MemberProfile: React.FC = () => {
                     )}
                   </span>
                 )}
-                {caps.canManageBilling && member.customerId && (
+                {isAdmin && member.customerId && (
                   <a target="blank" href={`https://www.braintreegateway.com/merchants/vfx5f27bnwwjjyqx/customers/${member.customerId}`}>
                     View in Braintree
                   </a>
@@ -223,7 +266,7 @@ const MemberProfile: React.FC = () => {
             {member.notes && <KeyValueItem label="Notes">
               <div id="member-detail-notes" className="preformatted">{member.notes}</div>
             </KeyValueItem>}
-            {((member as any).groupName || caps.canEditMembers) && (
+            {((member as any).groupName || isAdmin) && (
               <KeyValueItem label="Household">
                 {(member as any).householdRole === "primary" && (
                   <span id="member-detail-household-role">Primary Member</span>
@@ -231,7 +274,7 @@ const MemberProfile: React.FC = () => {
                 {(member as any).householdRole === "secondary" && (
                   <span id="member-detail-household-role">Secondary Member</span>
                 )}
-                {!(member as any).groupName && caps.canEditMembers && (
+                {!(member as any).groupName && isAdmin && (
                   <span id="member-detail-household-role" style={{ color: "grey" }}>None</span>
                 )}
               </KeyValueItem>
@@ -240,7 +283,7 @@ const MemberProfile: React.FC = () => {
           </>
         )}
         activeResourceName={resource}
-        resources={(isOwnProfile || caps.canEditMembers) && [
+        resources={(isOwnProfile || isAdmin) && [
           ...isEarnedMember ?
           [{
             name: "membership",

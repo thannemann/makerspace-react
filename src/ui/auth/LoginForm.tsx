@@ -10,7 +10,8 @@ import { Routing } from "app/constants";
 import { emailValid } from "app/utils";
 
 import { State as ReduxState, ScopedThunkDispatch } from "ui/reducer";
-import { loginUserAction, firebaseLoginAction } from "ui/auth/actions";
+import { loginUserAction, firebaseLoginAction, totpLoginSuccessAction } from "ui/auth/actions";
+import { Action as AuthAction } from "ui/auth/constants";
 import { LoginFields, loginPrefix } from "ui/auth/constants";
 import { AuthForm } from "ui/auth/interfaces";
 import ErrorMessage from "ui/common/ErrorMessage";
@@ -18,6 +19,7 @@ import Form from "ui/common/Form";
 import FormModal from "ui/common/FormModal";
 import { requestPasswordReset, isApiErrorResponse } from "makerspace-ts-api-client";
 import FirebaseAuthButtons from "ui/auth/FirebaseAuthButtons";
+import TotpVerifyForm from "ui/auth/TotpVerifyForm";
 import { signInWithGoogle, signInWithApple, signInWithGitHub, signInWithMicrosoft } from "ui/auth/firebase";
 
 const formPrefix = "request-password-reset";
@@ -35,12 +37,16 @@ interface OwnProps {}
 interface DispatchProps {
   loginUser: (authForm: AuthForm) => Promise<void>;
   firebaseLogin: (idToken: string) => Promise<void>;
+  totpLoginSuccess: (member: any) => Promise<void>;
   pushLocation: (location: string) => void;
+  clearTotpRequired: () => void;
 }
 interface StateProps {
   isRequesting: boolean;
   error: string;
   auth: boolean;
+  totpRequired: boolean;
+  totpEnrollmentRequired: boolean;
 }
 interface State {
   requestingPassword: boolean;
@@ -49,6 +55,8 @@ interface State {
   email: string;
   firebaseLoading: boolean;
   firebaseError: string;
+  totpLoading: boolean;
+  totpError: string;
 }
 interface Props extends OwnProps, DispatchProps, StateProps {}
 
@@ -67,6 +75,8 @@ class LoginForm extends React.Component<Props, State> {
       email: "",
       firebaseLoading: false,
       firebaseError: "",
+      totpLoading: false,
+      totpError: "",
     }
   }
 
@@ -80,10 +90,13 @@ class LoginForm extends React.Component<Props, State> {
 
   public componentDidUpdate(prevProps: Props) {
     const { isRequesting: wasRequesting } = prevProps;
-
-    const { isRequesting, auth, error, pushLocation} = this.props;
-    if (wasRequesting && !isRequesting && !error && auth) {
+    const { isRequesting, auth, error, pushLocation, totpEnrollmentRequired } = this.props;
+    if (wasRequesting && !isRequesting && !error && auth && !totpEnrollmentRequired) {
       pushLocation(Routing.Members);
+    }
+    // Privileged member needs to enroll in TOTP — redirect to security settings
+    if (totpEnrollmentRequired && !prevProps.totpEnrollmentRequired && auth) {
+      pushLocation('/members/settings/security');
     }
   }
 
@@ -103,6 +116,41 @@ class LoginForm extends React.Component<Props, State> {
   private handleAppleSignIn     = () => this.handleFirebaseSignIn(signInWithApple);
   private handleGitHubSignIn    = () => this.handleFirebaseSignIn(signInWithGitHub);
   private handleMicrosoftSignIn = () => this.handleFirebaseSignIn(signInWithMicrosoft);
+
+  private submitTotpCode = async (code: string) => {
+    this.setState({ totpLoading: true, totpError: '' });
+    try {
+      const res = await fetch('/api/members/totp_sessions', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': (() => {
+            const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+            return match ? decodeURIComponent(match[1]) : '';
+          })(),
+        },
+        body: JSON.stringify({ code }),
+      });
+      if (res.ok) {
+        const member = await res.json();
+        // Dispatch success through the existing firebase login path (takes raw member)
+        await this.props.totpLoginSuccess(member);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        this.setState({ totpError: body?.error || 'Invalid code. Please try again.' });
+      }
+    } catch {
+      this.setState({ totpError: 'An unexpected error occurred.' });
+    } finally {
+      this.setState({ totpLoading: false });
+    }
+  };
+
+  private cancelTotp = () => {
+    this.props.clearTotpRequired();
+    this.setState({ totpError: '' });
+  };
 
   private submitLogin = async (form: Form) => {
     const validAuth: AuthForm = await form.simpleValidate<AuthForm>(LoginFields);
@@ -173,7 +221,19 @@ class LoginForm extends React.Component<Props, State> {
   private closePasswordReset = () => this.setState({ openPassword: false });
 
   public render(): JSX.Element {
-    const { isRequesting, error } = this.props;
+    const { isRequesting, error, totpRequired } = this.props;
+    const { totpLoading, totpError } = this.state;
+
+    if (totpRequired) {
+      return (
+        <TotpVerifyForm
+          onSubmit={this.submitTotpCode}
+          onCancel={this.cancelTotp}
+          isRequesting={totpLoading}
+          error={totpError}
+        />
+      );
+    }
 
     return (
       <>
@@ -236,6 +296,8 @@ const mapStateToProps = (
     isRequesting,
     error,
     auth: currentUser && !!currentUser.email,
+    totpRequired: state.auth.totpRequired,
+    totpEnrollmentRequired: state.auth.totpEnrollmentRequired,
   }
 }
 
@@ -245,7 +307,9 @@ const mapDispatchToProps = (
   return {
     loginUser: (authForm) => dispatch(loginUserAction(authForm)),
     firebaseLogin: (idToken) => dispatch(firebaseLoginAction(idToken)),
+    totpLoginSuccess: (member) => dispatch(totpLoginSuccessAction(member)),
     pushLocation: (location) => dispatch(push(location)),
+    clearTotpRequired: () => dispatch({ type: AuthAction.ClearTotpRequired }),
   };
 }
 export default connect(mapStateToProps, mapDispatchToProps)(LoginForm);

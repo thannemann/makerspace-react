@@ -7,6 +7,8 @@ export interface AuthState {
   permissions: CollectionOf<Permission>;
   isRequesting: boolean;
   error: string;
+  totpRequired: boolean;
+  totpEnrollmentRequired: boolean;
 }
 
 export interface AuthForm {
@@ -32,4 +34,5 @@ export type AuthMember = Member & {
   isAdmin: boolean;
   isBoardMember: boolean;
   isResourceManager: boolean;
+  totpEnabled?: boolean;
 };

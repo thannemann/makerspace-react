@@ -6,6 +6,9 @@ export enum Action {
   AuthUserSuccess = "AUTH/LOGIN_SUCCESS",
   AuthUserFailure = "AUTH/LOGIN_FAILURE",
   LogoutSuccess = "AUTH/LOGOUT",
+  TotpRequired = "AUTH/TOTP_REQUIRED",
+  TotpEnrollmentRequired = "AUTH/TOTP_ENROLLMENT_REQUIRED",
+  ClearTotpRequired = "AUTH/CLEAR_TOTP_REQUIRED",
 }
 
 export const EmailExistsError = "Email is already taken";

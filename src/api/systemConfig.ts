@@ -50,20 +50,30 @@ export interface VolunteerSettings {
   volunteer_bounty_token: string;
 }
 
+export interface TotpSettings {
+  require_totp_admin: boolean;
+  require_totp_board: boolean;
+  require_totp_rm: boolean;
+}
+
 export interface SystemConfigData {
   flags: {
     slack_sync_enabled: boolean;
     volunteer_bounty_token_enabled: boolean;
+    require_totp_admin: boolean;
+    require_totp_board: boolean;
+    require_totp_rm: boolean;
   };
   jobs: JobStatus[];
   slack: SlackSettings;
   volunteer: VolunteerSettings;
+  totp: TotpSettings;
 }
 
 export const getSystemConfigs = () =>
   buildResponse<SystemConfigData>(api.get('/api/admin/system_configs'));
 
-export const updateSystemFlag = ({ key, value }: { key: string; value: boolean }) =>
+export const updateSystemFlag = (key: string, value: boolean) =>
   buildResponse<{ key: string; value: string }>(
     api.put('/api/admin/system_configs/update_flag', { key, value: value.toString() })
   );

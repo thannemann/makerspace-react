@@ -12,6 +12,7 @@ import PaymentMethodsContainer from "ui/checkout/PaymentMethodsContainer";
 import { Whitelists } from "app/constants";
 import { useAuthState } from "../reducer/hooks";
 import EditMember from "ui/member/EditMember";
+import SecuritySettings from "ui/settings/SecuritySettings";
 import { getMember, Member } from "makerspace-ts-api-client";
 import useReadTransaction from "ui/hooks/useReadTransaction";
 import LoadingOverlay from "ui/common/LoadingOverlay";
@@ -19,7 +20,6 @@ import SubscriptionSettings from "ui/settings/SubscriptionSettings";
 import useSubresourcePath from "ui/hooks/useSubresourcePath";
 import { useDispatch } from "react-redux";
 import { loginUserAction } from "ui/auth/actions";
-import ChangePasswordForm from "ui/member/ChangePasswordForm";
 
 export enum SubRoutes {
   Profile = "profile",
@@ -86,7 +86,7 @@ const SettingsContainer: React.FC = () => {
             </>
           )}
           <ListItem button selected={selectedIndex === 3} onClick={onSelectItem(3, "security")}>
-            <ListItemText id="settings-security" primary="Password" />
+            <ListItemText id="settings-security" primary="Security" />
           </ListItem>
         </List>
       </Grid>
@@ -112,7 +112,7 @@ const SettingsContainer: React.FC = () => {
                   <PaymentMethodsContainer title="Manage Payment Methods" managingMethods={true} />
                 )}
                 {selectedIndex === 3 && (
-                  <ChangePasswordForm memberId={targetMemberId} memberEmail={member.email} />
+                  <SecuritySettings memberId={targetMemberId} memberEmail={member.email} />
                 )}
               </Grid>
             </Grid>

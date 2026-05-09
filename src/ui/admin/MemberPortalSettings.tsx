@@ -33,12 +33,13 @@ import {
   JobStatus,
 } from 'api/systemConfig';
 
-type TabKey = 'slack' | 'volunteer' | 'jobs';
+type TabKey = 'slack' | 'volunteer' | 'jobs' | 'security';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'slack',     label: 'Slack' },
   { key: 'volunteer', label: 'Volunteer' },
   { key: 'jobs',      label: 'Jobs' },
+  { key: 'security',  label: 'Security' },
 ];
 
 const JOB_LABELS: Record<string, string> = {
@@ -444,6 +445,124 @@ const JobsTab: React.FC<JobsTabProps> = ({ config, onRunJob, runningJob, jobMess
   </Grid>
 );
 
+// ── Security Tab ──────────────────────────────────────────────────────────────
+
+interface TotpToggleProps {
+  label: string;
+  description: string;
+  flagKey: string;
+  value: boolean;
+  onToggle: (key: string, value: boolean) => Promise<void>;
+  saving: boolean;
+}
+
+const TotpToggle: React.FC<TotpToggleProps> = ({ label, description, flagKey, value, onToggle, saving }) => (
+  <Grid item xs={12}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '12px 0' }}>
+      <div style={{ flex: 1, paddingRight: 16 }}>
+        <Typography variant='body1'><strong>{label}</strong></Typography>
+        <Typography variant='body2' color='textSecondary'>{description}</Typography>
+      </div>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={value}
+            onChange={e => onToggle(flagKey, e.target.checked)}
+            disabled={saving}
+            color='primary'
+          />
+        }
+        label={value ? 'Required' : 'Optional'}
+        labelPlacement='start'
+      />
+    </div>
+  </Grid>
+);
+
+const SecurityTab: React.FC = () => {
+  const [loading, setLoading]   = React.useState(true);
+  const [saving, setSaving]     = React.useState(false);
+  const [error, setError]       = React.useState('');
+  const [flags, setFlags]       = React.useState({
+    require_totp_admin: false,
+    require_totp_board: false,
+    require_totp_rm:    false,
+  });
+
+  React.useEffect(() => {
+    getSystemConfigs()
+      .then(result => {
+        const totp = (result as any)?.data?.totp;
+        if (totp) {
+          setFlags({
+            require_totp_admin: !!totp.require_totp_admin,
+            require_totp_board: !!totp.require_totp_board,
+            require_totp_rm:    !!totp.require_totp_rm,
+          });
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        setError('Failed to load security settings.');
+        setLoading(false);
+      });
+  }, []);
+
+  const handleToggle = async (key: string, value: boolean) => {
+    setSaving(true);
+    setError('');
+    try {
+      await updateSystemFlag(key, value);
+      setFlags(prev => ({ ...prev, [key]: value }));
+    } catch {
+      setError('Failed to save setting.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <CircularProgress />;
+
+  return (
+    <Grid container spacing={2}>
+      <Grid item xs={12}>
+        <Typography variant='h6' gutterBottom>Two-Factor Authentication Enforcement</Typography>
+        <Typography variant='body2' color='textSecondary' style={{ marginBottom: 16 }}>
+          When required, privileged members who have not enrolled in 2FA will be redirected
+          to their Security settings immediately after login and cannot access the portal until enrolled.
+          All members can optionally enable 2FA from their Account Settings → Security tab.
+        </Typography>
+      </Grid>
+      {error && <Grid item xs={12}><Typography color='error'>{error}</Typography></Grid>}
+      <TotpToggle
+        label='Require 2FA for Admins'
+        description='Admin accounts must have two-factor authentication enabled.'
+        flagKey='require_totp_admin'
+        value={flags.require_totp_admin}
+        onToggle={handleToggle}
+        saving={saving}
+      />
+      <TotpToggle
+        label='Require 2FA for Board Members'
+        description='Board member accounts must have two-factor authentication enabled.'
+        flagKey='require_totp_board'
+        value={flags.require_totp_board}
+        onToggle={handleToggle}
+        saving={saving}
+      />
+      <TotpToggle
+        label='Require 2FA for Resource Managers'
+        description='Resource manager accounts must have two-factor authentication enabled.'
+        flagKey='require_totp_rm'
+        value={flags.require_totp_rm}
+        onToggle={handleToggle}
+        saving={saving}
+      />
+    </Grid>
+  );
+};
+
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 const MemberPortalSettings: React.FC = () => {
@@ -472,7 +591,7 @@ const MemberPortalSettings: React.FC = () => {
 
   const handleFlagToggle = React.useCallback(async (key: string, current: boolean) => {
     setTogglingFlag(key);
-    const { error: err } = await updateSystemFlag({ key, value: !current });
+    const { error: err } = await updateSystemFlag(key, !current);
     if (!err && config) {
       setConfig({
         ...config,
@@ -570,6 +689,7 @@ const MemberPortalSettings: React.FC = () => {
             savingKey={savingKey}
           />
         )}
+        {activeTab === 'security' && <SecurityTab />}
         {activeTab === 'jobs' && (
           <JobsTab
             config={config}

@@ -56,14 +56,61 @@ export const loginUserAction = (
 ): ThunkAction<Promise<void>, {}, {}, AnyAction>  => async (dispatch) => {
   dispatch({ type: AuthAction.StartAuthRequest });
 
-  const response = await signIn({ body: { member: loginForm } });
-  await handleAuthWithPermissions(response, dispatch);
+  if (!loginForm) {
+    // Session restore — no TOTP intercept needed
+    const response = await signIn({ body: {} });
+    await handleAuthWithPermissions(response, dispatch, true);
+    return;
+  }
+
+  // Use raw fetch so we can inspect 202 totp_required responses
+  const res = await fetch('/api/members/sign_in', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-XSRF-TOKEN': (() => {
+        const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : '';
+      })(),
+    },
+    body: JSON.stringify({ member: loginForm }),
+  });
+
+  if (res.status === 202) {
+    // TOTP code required — stay on login page, show code entry
+    dispatch({ type: AuthAction.TotpRequired });
+    return;
+  }
+
+  if (res.ok) {
+    const member = await res.json();
+    if (member.totp_enrollment_required) {
+      const permissionsResponse = await listMembersPermissions({ id: member.id });
+      if (isApiErrorResponse(permissionsResponse)) {
+        dispatch({ type: AuthAction.AuthUserFailure, error: permissionsResponse.error.message });
+      } else {
+        dispatch({
+          type: AuthAction.AuthUserSuccess,
+          data: { member, permissions: permissionsResponse.data }
+        });
+        dispatch({ type: AuthAction.TotpEnrollmentRequired });
+      }
+    } else {
+      await handleAuthWithPermissions(
+        { data: member, response: res } as any,
+        dispatch
+      );
+    }
+  } else {
+    const body = await res.json().catch(() => ({}));
+    dispatch({ type: AuthAction.AuthUserFailure, error: body?.error?.message || 'Invalid email or password.' });
+  }
 }
 
 export const sessionLoginUserAction = (): ThunkAction<Promise<void>, {}, {}, AnyAction> => async (dispatch) => {
   dispatch({ type: AuthAction.StartAuthRequest });
-
-  const response = await signIn({ body: {}});
+  const response = await signIn({ body: {} });
   await handleAuthWithPermissions(response, dispatch, true);
 }
 
@@ -112,6 +159,22 @@ export const firebaseLoginAction = (
   }
 };
 
+export const totpLoginSuccessAction = (
+  member: any
+): ThunkAction<Promise<void>, {}, {}, AnyAction> => async (dispatch) => {
+  // Member is already authenticated server-side via totp_sessions.
+  // Just fetch permissions and dispatch AuthUserSuccess directly.
+  const permissionsResponse = await listMembersPermissions({ id: member.id });
+  if (isApiErrorResponse(permissionsResponse)) {
+    dispatch({ type: AuthAction.AuthUserFailure, error: permissionsResponse.error.message });
+  } else {
+    dispatch({
+      type: AuthAction.AuthUserSuccess,
+      data: { member, permissions: permissionsResponse.data }
+    });
+  }
+};
+
 export const submitSignUpAction = (
   signUpForm: SignUpForm
 ): ThunkAction<Promise<void>, {}, {}, AnyAction> => async (dispatch) => {
@@ -122,6 +185,8 @@ export const submitSignUpAction = (
 }
 
 const defaultState: AuthState = {
+  totpRequired: false,
+  totpEnrollmentRequired: false,
   currentUser: {
     id: undefined,
     firstname: undefined,
@@ -156,9 +221,12 @@ export const authReducer = (state: AuthState = defaultState, action: AnyAction) 
           isAdmin: memberIsAdmin(member),
           isBoardMember: memberIsBoardMember(member),
           isResourceManager: memberIsResourceManager(member),
+          totpEnabled: !!(member as any).totp_enabled,
         },
         permissions,
         isRequesting: false,
+        totpRequired: false,
+        totpEnrollmentRequired: false,
         error: ""
       };
     case AuthAction.AuthUserFailure:
@@ -168,6 +236,25 @@ export const authReducer = (state: AuthState = defaultState, action: AnyAction) 
         isRequesting: false,
         error
       }
+    case AuthAction.TotpRequired:
+      return {
+        ...state,
+        isRequesting: false,
+        totpRequired: true,
+        error: ''
+      };
+    case AuthAction.ClearTotpRequired:
+      return {
+        ...state,
+        isRequesting: false,
+        totpRequired: false,
+        error: ''
+      };
+    case AuthAction.TotpEnrollmentRequired:
+      return {
+        ...state,
+        totpEnrollmentRequired: true,
+      };
     case AuthAction.LogoutSuccess:
       return {
         ...defaultState
