@@ -5,19 +5,15 @@
  * Avoids Node/TypeScript version incompatibilities with the Firebase npm package.
  *
  * Flow:
- *  1. Call createAuthUri to get the provider OAuth URL
- *  2. Redirect browser to that URL
+ *  1. fetchConfig() loads FIREBASE_API_KEY and FIREBASE_PROJECT_ID from Rails
+ *     GET /api/config at runtime — keys never baked into the JS bundle.
+ *  2. Call initiateProviderSignIn to redirect to OAuth provider
  *  3. Provider redirects back to /auth/callback
- *  4. Call signInWithIdp to exchange for a Firebase ID token
+ *  4. Call completeProviderSignIn to exchange for a Firebase ID token
  *  5. POST the ID token to Rails /api/auth/firebase_login
- *
- * Required env vars (webpack build time):
- *   FIREBASE_API_KEY       — Firebase console > Project settings > Web app
- *   FIREBASE_APPLE_ENABLED — "true" to show Apple button
  */
 
-const API_KEY = process.env.FIREBASE_API_KEY || '';
-const BASE    = 'https://identitytoolkit.googleapis.com/v1';
+const BASE = 'https://identitytoolkit.googleapis.com/v1';
 
 const PROVIDERS: Record<string, string> = {
   google:    'google.com',
@@ -28,20 +24,51 @@ const PROVIDERS: Record<string, string> = {
 
 export type ProviderKey = 'google' | 'apple' | 'github' | 'microsoft';
 
+// Runtime config cache — fetched once from /api/config
+interface FirebaseConfig {
+  apiKey:    string;
+  projectId: string;
+}
+
+let _config: FirebaseConfig | null = null;
+
+const fetchConfig = async (): Promise<FirebaseConfig> => {
+  if (_config) return _config;
+
+  const response = await fetch('/api/config', {
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to load Firebase configuration from server.');
+  }
+
+  const data = await response.json();
+
+  if (!data.firebase_api_key) {
+    throw new Error('Firebase is not configured. Set FIREBASE_API_KEY in your environment.');
+  }
+
+  _config = {
+    apiKey:    data.firebase_api_key,
+    projectId: data.firebase_project_id,
+  };
+
+  return _config;
+};
+
 /**
  * Redirect the browser to the provider OAuth page.
  * Stores sessionId so completeProviderSignIn can finish the flow.
  */
 export const initiateProviderSignIn = async (provider: ProviderKey): Promise<void> => {
-  if (!API_KEY) {
-    throw new Error('Firebase is not configured. Set FIREBASE_API_KEY in your environment.');
-  }
+  const { apiKey } = await fetchConfig();
 
   const continueUri = `${window.location.origin}/auth/callback`;
   const providerId  = PROVIDERS[provider];
 
   const response = await fetch(
-    `${BASE}/accounts:createAuthUri?key=${API_KEY}`,
+    `${BASE}/accounts:createAuthUri?key=${apiKey}`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -70,6 +97,8 @@ export const initiateProviderSignIn = async (provider: ProviderKey): Promise<voi
  * Returns a Firebase ID token.
  */
 export const completeProviderSignIn = async (): Promise<string> => {
+  const { apiKey } = await fetchConfig();
+
   const requestUri = window.location.href;
   const sessionId  = sessionStorage.getItem('firebase_session_id');
 
@@ -81,7 +110,7 @@ export const completeProviderSignIn = async (): Promise<string> => {
   sessionStorage.removeItem('firebase_provider');
 
   const response = await fetch(
-    `${BASE}/accounts:signInWithIdp?key=${API_KEY}`,
+    `${BASE}/accounts:signInWithIdp?key=${apiKey}`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
