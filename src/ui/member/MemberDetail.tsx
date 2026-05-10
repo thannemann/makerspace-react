@@ -18,6 +18,7 @@ import ReportList from "ui/reports/ReportList";
 import TransactionsList from "ui/transactions/TransactionsList";
 import useReadTransaction from "../hooks/useReadTransaction";
 import { useAuthState } from "../reducer/hooks";
+import { useCapabilities } from "app/permissions";
 import EditMember from "./EditMember";
 import RenewMember from "./RenewMember";
 import NotificationModal, { Notification } from "./NotificationModal";
@@ -82,7 +83,14 @@ const Reset2FAButton: React.FC<{ memberId: string; onReset: () => void }> = ({ m
 
 const MemberProfile: React.FC = () => {
   const { match: { params: { memberId, resource } }, history } = useReactRouter<{ memberId: string, resource: string }>();
-  const { currentUser: { id: currentUserId, isAdmin, isResourceManager }, permissions } = useAuthState();
+  const { currentUser: { id: currentUserId, isAdmin }, permissions } = useAuthState();
+  const {
+    canEditMembers,
+    canChangeOtherPasswords,
+    canViewEmailStatus,
+    canManageBilling,
+    canManageShopFees,
+  } = useCapabilities();
 
   const {
     isNewMember
@@ -96,7 +104,7 @@ const MemberProfile: React.FC = () => {
 
   const isOwnProfile = currentUserId === memberId;
   const billingEnabled = !!permissions[Whitelists.billing];
-  const canChargeMember = (isAdmin || isResourceManager) && !isOwnProfile;
+  const canChargeMember = canManageShopFees && !isOwnProfile;
 
   const goToSettings = React.useCallback(() => {
     history.push(Routing.Settings.replace(Routing.PathPlaceholder.MemberId, currentUserId));
@@ -130,7 +138,7 @@ const MemberProfile: React.FC = () => {
   }, [initRender, isOwnProfile, rentals]);
 
   const { customerId, earnedMembershipId } = member;
-  const isEarnedMember = !!earnedMembershipId && (isOwnProfile || isAdmin);
+  const isEarnedMember = !!earnedMembershipId && (isOwnProfile || canEditMembers);
 
   const setSearchQuery = useSetSearchQuery();
   const closeNotification = React.useCallback(() => {
@@ -195,7 +203,7 @@ const MemberProfile: React.FC = () => {
               label="Account Settings"
               onClick={goToSettings}
             />] : [],
-          ...isAdmin ? [
+          ...canEditMembers ? [
             <EditMember member={member} key="edit-member" onEdit={refreshMember}/>,
             <RenewMember member={member} key="renew-member" onRenew={refreshMember}/>,
             <AccessCardForm memberId={memberId} key="card-form"/>,
@@ -216,7 +224,7 @@ const MemberProfile: React.FC = () => {
             <KeyValueItem label="Email">
               <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 {member.email ? <a id="member-detail-email" href={`mailto:${member.email}`}>{member.email}</a> : "N/A"}
-                {(isAdmin || isResourceManager) && (
+                {canViewEmailStatus && (
                   <>
                     <EmailStatusIcon mailtrap={(member as any).mailtrap} />
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
@@ -244,7 +252,7 @@ const MemberProfile: React.FC = () => {
                         Manage Subscription
                       </Link>
                     )}
-                    {!isOwnProfile && isAdmin && (
+                    {!isOwnProfile && canManageBilling && (
                         <Link to={
                           `${
                             Routing.Billing}/${
@@ -266,7 +274,7 @@ const MemberProfile: React.FC = () => {
             {member.notes && <KeyValueItem label="Notes">
               <div id="member-detail-notes" className="preformatted">{member.notes}</div>
             </KeyValueItem>}
-            {((member as any).groupName || isAdmin) && (
+            {((member as any).groupName || canEditMembers) && (
               <KeyValueItem label="Household">
                 {(member as any).householdRole === "primary" && (
                   <span id="member-detail-household-role">Primary Member</span>
@@ -274,7 +282,7 @@ const MemberProfile: React.FC = () => {
                 {(member as any).householdRole === "secondary" && (
                   <span id="member-detail-household-role">Secondary Member</span>
                 )}
-                {!(member as any).groupName && isAdmin && (
+                {!(member as any).groupName && canEditMembers && (
                   <span id="member-detail-household-role" style={{ color: "grey" }}>None</span>
                 )}
               </KeyValueItem>
@@ -283,7 +291,7 @@ const MemberProfile: React.FC = () => {
           </>
         )}
         activeResourceName={resource}
-        resources={(isOwnProfile || isAdmin) && [
+        resources={(isOwnProfile || canEditMembers) && [
           ...isEarnedMember ?
           [{
             name: "membership",
