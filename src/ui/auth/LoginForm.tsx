@@ -45,6 +45,7 @@ interface StateProps {
   isRequesting: boolean;
   error: string;
   auth: boolean;
+  currentUserId: string;
   totpRequired: boolean;
   totpEnrollmentRequired: boolean;
 }
@@ -90,13 +91,13 @@ class LoginForm extends React.Component<Props, State> {
 
   public componentDidUpdate(prevProps: Props) {
     const { isRequesting: wasRequesting } = prevProps;
-    const { isRequesting, auth, error, pushLocation, totpEnrollmentRequired } = this.props;
+    const { isRequesting, auth, error, pushLocation, totpEnrollmentRequired, currentUserId } = this.props;
     if (wasRequesting && !isRequesting && !error && auth && !totpEnrollmentRequired) {
       pushLocation(Routing.Members);
     }
     // Privileged member needs to enroll in TOTP — redirect to security settings
     if (totpEnrollmentRequired && !prevProps.totpEnrollmentRequired && auth) {
-      pushLocation('/members/settings/security');
+      pushLocation(`/members/${currentUserId}/settings/security`);
     }
   }
 
@@ -296,6 +297,7 @@ const mapStateToProps = (
     isRequesting,
     error,
     auth: currentUser && !!currentUser.email,
+    currentUserId: currentUser?.id,
     totpRequired: state.auth.totpRequired,
     totpEnrollmentRequired: state.auth.totpEnrollmentRequired,
   }

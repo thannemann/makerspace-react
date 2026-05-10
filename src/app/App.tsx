@@ -64,7 +64,7 @@ const App: React.FC = () => {
 
           // Don't redirect after a user signs up
         } else if (!pathname.startsWith(Routing.SignUp)) {
-          history.push(buildProfileRouting(currentUserId));
+          history.push(buildProfileRouting(currentUserId));      
         }
         setAuthSettled(true);
       }

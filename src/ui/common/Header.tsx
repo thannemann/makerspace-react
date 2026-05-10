@@ -28,6 +28,7 @@ interface StateProps {
   authRequesting: boolean;
   billingEnabled: boolean;
   earnedMembershipEnabled: boolean;
+  totpEnrollmentRequired: boolean;
 }
 interface DispatchProps {
   logout: () => void;
@@ -197,7 +198,7 @@ class Header extends React.Component<Props, State> {
   }
 
   public render(): JSX.Element {
-    const { currentUser, authRequesting } = this.props;
+    const { currentUser, authRequesting, totpEnrollmentRequired } = this.props;
     return (
       <AppBar style={{ marginBottom: "1em" }} position="static" color="default" title="Manchester Makerspace">
         <Toolbar>
@@ -205,7 +206,10 @@ class Header extends React.Component<Props, State> {
             <Logo alt="Manchester Makerspace" viewBox="0 0 960 580" preserveAspectRatio="xMinYMin" />
           </Typography>
           <Help />
-          {currentUser.id ? this.renderHambMenu() : (!authRequesting && this.renderLoginLink())}
+          {currentUser.id
+            ? (!totpEnrollmentRequired && this.renderHambMenu())
+            : (!authRequesting && this.renderLoginLink())
+          }
         </Toolbar>
       </AppBar>
     );
@@ -213,12 +217,13 @@ class Header extends React.Component<Props, State> {
 }
 
 const mapStateToProps = (state: ReduxState, _ownProps: OwnProps): StateProps => {
-  const { auth: { currentUser, isRequesting, permissions } } = state;
+  const { auth: { currentUser, isRequesting, permissions, totpEnrollmentRequired } } = state;
   return {
     currentUser,
     billingEnabled: !!permissions[Whitelists.billing] || false,
     earnedMembershipEnabled: (memberIsAdmin(currentUser) || memberIsBoardMember(currentUser)) && !!permissions[Whitelists.earnedMembership] || false,
-    authRequesting: isRequesting
+    authRequesting: isRequesting,
+    totpEnrollmentRequired,
   };
 };
 
