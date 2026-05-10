@@ -11,6 +11,9 @@ import LockIcon from '@material-ui/icons/Lock';
 import ErrorMessage from 'ui/common/ErrorMessage';
 import ChangePasswordForm from 'ui/member/ChangePasswordForm';
 import { useAuthState } from 'ui/reducer/hooks';
+import { useDispatch } from 'react-redux';
+import { push } from 'connected-react-router';
+import { Action as AuthAction } from 'ui/auth/constants';
 
 type EnrollStep = 'idle' | 'qr' | 'verify' | 'done';
 
@@ -31,7 +34,7 @@ const apiCall = async (method: string, path: string, body?: object) => {
   });
 };
 
-const TotpSection: React.FC<{ memberId: string; initialEnabled: boolean }> = ({ memberId, initialEnabled }) => {
+const TotpSection: React.FC<{ memberId: string; initialEnabled: boolean; onEnrollmentComplete?: () => void }> = ({ memberId, initialEnabled, onEnrollmentComplete }) => {
   const [enabled, setEnabled]     = React.useState(initialEnabled);
   const [step, setStep]           = React.useState<EnrollStep>('idle');
   const [qrSvg, setQrSvg]         = React.useState('');
@@ -68,6 +71,10 @@ const TotpSection: React.FC<{ memberId: string; initialEnabled: boolean }> = ({ 
         setEnabled(true);
         setStep('done');
         setCode('');
+        // Clear the enrollment requirement from Redux so App.tsx stops redirecting here
+        if (onEnrollmentComplete) {
+          onEnrollmentComplete();
+        }
       } else {
         const body = await res.json().catch(() => ({}));
         setError(body?.error || 'Invalid code. Please try again.');
@@ -227,13 +234,27 @@ interface Props {
 }
 
 const SecuritySettings: React.FC<Props> = ({ memberId, memberEmail }) => {
-  const { currentUser } = useAuthState();
+  const { currentUser, totpEnrollmentRequired } = useAuthState() as any;
   const totpEnabled = !!(currentUser as any).totpEnabled;
+  const dispatch = useDispatch();
+
+  const onEnrollmentComplete = React.useCallback(() => {
+    dispatch({ type: AuthAction.ClearEnrollmentRequired });
+    // Redirect to their profile now that enrollment is done
+    dispatch(push(`/members/${memberId}`));
+  }, [dispatch, memberId]);
 
   return (
     <Grid container spacing={4}>
       <Grid item xs={12}>
-        <TotpSection memberId={memberId} initialEnabled={totpEnabled} />
+        {totpEnrollmentRequired && (
+          <div style={{ padding: '12px 16px', marginBottom: 16, backgroundColor: '#fff3e0', borderLeft: '4px solid #ff9800', borderRadius: 4 }}>
+            <Typography variant='body2' style={{ color: '#e65100' }}>
+              <strong>Action required:</strong> Two-factor authentication is required for your account. Please set it up below before continuing.
+            </Typography>
+          </div>
+        )}
+        <TotpSection memberId={memberId} initialEnabled={totpEnabled} onEnrollmentComplete={onEnrollmentComplete} />
       </Grid>
       <Grid item xs={12}>
         <Divider />

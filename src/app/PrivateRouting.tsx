@@ -23,6 +23,7 @@ import ToolCheckoutsPage from 'ui/toolCheckouts/ToolCheckoutsPage';
 import MemberPortalSettings from 'ui/admin/MemberPortalSettings';
 import AdminVolunteerPage from 'ui/volunteer/AdminVolunteerPage';
 import { useCapabilities } from 'app/permissions';
+import { useAuthState } from 'ui/reducer/hooks';
 
 interface Props {
   currentUserId: string,
@@ -31,8 +32,23 @@ interface Props {
 
 const PrivateRouting: React.SFC<Props> = ({ currentUserId, permissions }) => {
   const caps = useCapabilities();
+  const { totpEnrollmentRequired } = useAuthState();
   const billingEnabled = permissions[Whitelists.billing] || false;
   const earnedMembershipEnabled = caps.canManageEarnedMemberships && permissions[Whitelists.earnedMembership];
+
+  // Hard gate — member must enroll in TOTP before accessing anything else
+  if (totpEnrollmentRequired) {
+    return (
+      <Switch>
+        <Route
+          exact
+          path={`${Routing.Settings}/${Routing.PathPlaceholder.Resource}${Routing.PathPlaceholder.Optional}`}
+          component={SettingsContainer}
+        />
+        <Redirect to={`/members/${currentUserId}/settings/security`} />
+      </Switch>
+    );
+  }
 
   return (
     <Switch>

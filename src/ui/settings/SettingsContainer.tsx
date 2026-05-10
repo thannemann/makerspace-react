@@ -18,8 +18,6 @@ import useReadTransaction from "ui/hooks/useReadTransaction";
 import LoadingOverlay from "ui/common/LoadingOverlay";
 import SubscriptionSettings from "ui/settings/SubscriptionSettings";
 import useSubresourcePath from "ui/hooks/useSubresourcePath";
-import { useDispatch } from "react-redux";
-import { loginUserAction } from "ui/auth/actions";
 
 export enum SubRoutes {
   Profile = "profile",
@@ -31,15 +29,9 @@ export enum SubRoutes {
 const SettingsContainer: React.FC = () => {
   const { currentUser: { id: currentUserId }, permissions } = useAuthState();
   const billingEnabled = !!permissions[Whitelists.billing];
-  const dispatch = useDispatch();
-
   const { match: { params: { memberId: routeMemberId, resource }} } = useReactRouter<{ memberId: string, resource: string }>();
   // Use the route memberId (supports admin viewing another member's settings)
   const targetMemberId = routeMemberId || currentUserId;
-
-  React.useEffect(() => {
-    dispatch(loginUserAction());
-  }, [dispatch]);
 
   const [selectedIndex, setIndex] = React.useState(0);
   const {

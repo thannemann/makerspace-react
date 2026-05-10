@@ -43,16 +43,16 @@ const App: React.FC = () => {
     setLoginAttempted(true);
   }, []);
 
-  // Redirect to security settings immediately if TOTP enrollment is required
+  // If TOTP enrollment is required, redirect immediately — takes priority over everything
   React.useEffect(() => {
-    if (totpEnrollmentRequired && currentUserId) {
+    if (totpEnrollmentRequired && currentUserId && !pathname.includes('/settings/security')) {
       history.push(`/members/${currentUserId}/settings/security`);
     }
-  }, [totpEnrollmentRequired, currentUserId]);
+  }, [totpEnrollmentRequired, currentUserId, pathname]);
 
-  // Redirect after login if they were navigation elsewhere
+  // Redirect after login if they were navigating elsewhere — skip if enrollment is pending
   React.useEffect(() => {
-    if (!error && !isRequesting && !authSettled) {
+    if (!error && !isRequesting && !authSettled && !totpEnrollmentRequired) {
       loginAttempted && setAttemptingLogin(false);
       if (currentUserId) {
         if (
@@ -75,7 +75,7 @@ const App: React.FC = () => {
     <ErrorBoundary>
       <div className="root">
         <Header />
-        {attemptingLogin ?
+        {(attemptingLogin || totpEnrollmentRequired) ?
           <LoadingOverlay id="body" />
           : (currentUserId
               ? <PrivateRouting
