@@ -24,7 +24,7 @@ const App: React.FC = () => {
     setupGlobalAuthInterceptor(dispatch);
     setGlobalDispatch(dispatch);
   }, []);
-  const { currentUser, currentUser: { id: currentUserId }, permissions, isRequesting, error } = useAuthState();
+  const { currentUser, currentUser: { id: currentUserId }, permissions, isRequesting, error, totpEnrollmentRequired } = useAuthState();
   const [attemptingLogin, setAttemptingLogin] = React.useState(true);
   const [loginAttempted, setLoginAttempted] = React.useState<boolean>();
   const [authSettled, setAuthSettled] = React.useState<boolean>();
@@ -42,6 +42,13 @@ const App: React.FC = () => {
   React.useEffect(() => {
     setLoginAttempted(true);
   }, []);
+
+  // Redirect to security settings immediately if TOTP enrollment is required
+  React.useEffect(() => {
+    if (totpEnrollmentRequired && currentUserId) {
+      history.push(`/members/${currentUserId}/settings/security`);
+    }
+  }, [totpEnrollmentRequired, currentUserId]);
 
   // Redirect after login if they were navigation elsewhere
   React.useEffect(() => {
