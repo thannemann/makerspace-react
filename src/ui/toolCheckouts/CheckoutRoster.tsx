@@ -24,7 +24,7 @@ import useWriteTransaction from "ui/hooks/useWriteTransaction";
 import extractTotalItems from "ui/utils/extractTotalItems";
 import { ToolCheckout, Shop, Tool } from "app/entities/toolCheckout";
 import {
-  listToolCheckouts, adminCreateToolCheckout, adminRevokeToolCheckout,
+  listToolCheckouts, listMemberCheckouts, adminCreateToolCheckout, adminRevokeToolCheckout,
   listShops, listTools,
 } from "api/toolCheckouts";
 
@@ -178,12 +178,25 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
     ...(activeFilter === "revoked" && { active: false }),
   };
 
+  // Admin/RM path — skipped (delay=true) when the viewer is a plain member.
+  const adminRead = useReadTransaction(listToolCheckouts, checkoutParams, !canManage,
+    `checkouts-admin-${preselectedMember?.id || "all"}-${shopFilter}-${activeFilter}`);
+
+  // Member self-view path — skipped (delay=true) when the viewer can manage.
+  const memberParams = {
+    ...(preselectedMember && { memberId: preselectedMember.id }),
+    ...(shopFilter && { shopId: shopFilter }),
+    ...(activeFilter === "active"  && { active: true }),
+    ...(activeFilter === "revoked" && { active: false }),
+  };
+  const memberRead = useReadTransaction(listMemberCheckouts, memberParams, canManage,
+    `checkouts-self-${preselectedMember?.id || "me"}-${shopFilter}-${activeFilter}`);
+
   const { isRequesting, data: checkouts = [], response, refresh, error: loadError } =
-    useReadTransaction(listToolCheckouts, checkoutParams, undefined,
-      `checkouts-${preselectedMember?.id || "all"}-${shopFilter}-${activeFilter}`);
+    canManage ? adminRead : memberRead;
 
   const { data: shops = [] } = useReadTransaction(listShops, {}, undefined, "shops-roster");
-  const { data: tools = [] } = useReadTransaction(listTools, {}, undefined, "tools-roster");
+  const { data: tools = [] } = useReadTransaction(listTools, {}, !canManage, "tools-roster");
 
   const refreshRef = React.useRef(refresh);
   React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);

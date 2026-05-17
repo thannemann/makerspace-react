@@ -31,7 +31,7 @@ const buildResponse = async <T>(request: Promise<any>) => {
 // ── Shops ─────────────────────────────────────────────────────────────────────
 
 export const listShops = (_params?: any) =>
-  buildResponse<Shop[]>(api.get("/api/admin/shops"));
+  buildResponse<Shop[]>(api.get("/api/shops"));
 
 export const adminCreateShop = ({ body }: { body: Partial<Shop> }) =>
   buildResponse<Shop>(api.post("/api/admin/shops", {
