@@ -8,11 +8,25 @@ export interface VolunteerCredit {
   taskTitle: string | null;
   description: string;
   creditValue: number;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'reversal';
   discountApplied: boolean;
   discountAppliedAt: string | null;
+  // Reversal fields on the original credit
+  reversed: boolean;
+  reversedById: string | null;
+  reversedByName: string | null;
+  reversedAt: string | null;
+  // Fields on the negative offsetting (reversal) record
+  reversalOfId: string | null;
+  reversalReason: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AttendeeRemoval {
+  memberId: string;
+  removedById: string;
+  removedAt: string;
 }
 
 export interface VolunteerTask {
@@ -52,6 +66,7 @@ export interface VolunteerEvent {
   closedAt: string | null;
   attendeeIds: string[];
   attendeeNames: string[];
+  attendeeRemovals: AttendeeRemoval[];
   attendeeCount: number;
   createdAt: string;
   updatedAt: string;

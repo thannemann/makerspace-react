@@ -45,7 +45,9 @@ export interface SlackSettings {
 export interface VolunteerSettings {
   volunteer_credits_per_discount: string;
   volunteer_max_discounts_per_year: string;
-  volunteer_discount_amount: string;
+  /** Braintree discount ID for volunteer awards. Empty string = no credit active.
+   *  The discount ID must contain 'volunteer' (e.g. volunteer_discount_10). */
+  volunteer_discount_id: string;
   volunteer_task_max_credit: string;
   volunteer_bounty_token: string;
 }
@@ -70,6 +72,14 @@ export interface SystemConfigData {
   totp: TotpSettings;
 }
 
+/** A Braintree discount as returned by /api/billing/discounts */
+export interface BraintreeDiscount {
+  id: string;
+  name: string;
+  description: string;
+  amount: string;
+}
+
 export const getSystemConfigs = () =>
   buildResponse<SystemConfigData>(api.get('/api/admin/system_configs'));
 
@@ -86,4 +96,14 @@ export const updateSystemSetting = ({ key, value }: { key: string; value: string
 export const runSystemJob = ({ key }: { key: string }) =>
   buildResponse<{ message: string }>(
     api.post('/api/admin/system_configs/run_job', { key })
+  );
+
+/**
+ * Fetches Braintree discounts filtered to the 'volunteer' type.
+ * Only discounts whose ID contains 'volunteer' are returned.
+ * Used to populate the volunteer discount selector in admin settings.
+ */
+export const getBraintreeDiscounts = () =>
+  buildResponse<BraintreeDiscount[]>(
+    api.get('/api/billing/discounts', { params: { types: ['volunteer'] } })
   );

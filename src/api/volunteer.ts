@@ -59,6 +59,10 @@ export const completeVolunteerTask = ({ id }: { id: string }) =>
 export const checkinVolunteerEvent = ({ id }: { id: string }) =>
   buildResponse<VolunteerEvent>(api.post(`/api/volunteer/events/${id}/checkin`));
 
+/** Member removes their own check-in. Blocked once event is closed. */
+export const removeCheckinVolunteerEvent = ({ id }: { id: string }) =>
+  buildResponse<VolunteerEvent>(api.delete(`/api/volunteer/events/${id}/checkin`));
+
 // ── Admin endpoints ───────────────────────────────────────────────────────────
 
 export const adminListVolunteerCredits = (params?: { memberId?: string; status?: string }) =>
@@ -75,6 +79,10 @@ export const adminApproveVolunteerCredit = ({ id }: { id: string }) =>
 
 export const adminRejectVolunteerCredit = ({ id }: { id: string }) =>
   buildResponse<VolunteerCredit>(api.post(`/api/admin/volunteer_credits/${id}/reject`));
+
+/** Reverse an approved credit. Admin/board only. Creates a negative offsetting record. */
+export const adminReverseVolunteerCredit = ({ id, reason }: { id: string; reason: string }) =>
+  buildResponse<VolunteerCredit>(api.post(`/api/admin/volunteer_credits/${id}/reverse`, { reason }));
 
 export const adminDeleteVolunteerCredit = ({ id }: { id: string }) =>
   buildResponse<{}>(api.delete(`/api/admin/volunteer_credits/${id}`));
@@ -132,6 +140,12 @@ export const adminCloseVolunteerEvent = ({ id }: { id: string }) =>
 export const adminAddEventAttendee = ({ id, memberId }: { id: string; memberId: string }) =>
   buildResponse<VolunteerEvent>(api.post(`/api/admin/volunteer_events/${id}/add_attendee`, {
     member_id: memberId,
+  }));
+
+/** Admin removes a member's check-in from an open event. DMs the member. */
+export const adminRemoveEventAttendee = ({ id, memberId }: { id: string; memberId: string }) =>
+  buildResponse<VolunteerEvent>(api.delete(`/api/admin/volunteer_events/${id}/remove_attendee`, {
+    data: { member_id: memberId },
   }));
 
 export const adminDeleteVolunteerEvent = ({ id }: { id: string }) =>
