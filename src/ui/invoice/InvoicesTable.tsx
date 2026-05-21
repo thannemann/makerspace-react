@@ -54,7 +54,7 @@ const InvoicesTable: React.FC<{ stageInvoice(invoice: Invoice): void }> = ({ sta
     pastDue: undefined,
     refundRequested: undefined,
     orphaned: undefined,
-    memberId: [memberId],
+    ...(memberId ? { memberId: [memberId] } : {}),
   });
 
   const [selectedInvoice, setSelectedInvoice] = React.useState<Invoice>();
