@@ -114,7 +114,7 @@ const AccessCardForm: React.FC<{ memberId: string }> = ({ memberId }) => {
               </Button>
             </div>
           </li>
-          <li>Confirm new ID is displayed here:
+          <li>Confirm new card identifier is displayed here:
             <span id="card-form-key-confirmation">
               {
                 rejectionCard ?
@@ -125,7 +125,7 @@ const AccessCardForm: React.FC<{ memberId: string }> = ({ memberId }) => {
           </li>
           <ul>
             <li>If 'No Card Found', check for error message in this form.  If no error, try steps 1 and 2 again</li>
-            <li>If ID displayed, click 'Submit' button</li>
+            <li>If card number displayed, click 'Submit' button</li>
           </ul>
         </ol>
 
@@ -143,7 +143,11 @@ const AccessCardForm: React.FC<{ memberId: string }> = ({ memberId }) => {
               }
               label="Verified member's name and address with valid identification"
             />
-          </Grid>
+          </Grid><table border=2>
+          <tr><td colspan=3>{member.address_street}</td></tr>
+          <tr><td>Unit: </td><td colspan=2>{member.address_unit}</td></tr>
+          <tr><td>{member.address_city}</td><td>{member.address_state}</td><td>{member.address_postal_code}</td></tr>
+          </table>
       </FormModal>}
     </>
   );
