@@ -1,11 +1,13 @@
 import * as React from "react";
 import useReactRouter from "use-react-router";
 import { Link } from "react-router-dom";
+import Button from "@material-ui/core/Button";
 
 import { adminListInvoices, listInvoices, getMember, Invoice } from "makerspace-ts-api-client";
 import { useAuthState } from "../reducer/hooks";
 import { useCapabilities } from "app/permissions";
 import useReadTransaction from "../hooks/useReadTransaction";
+import useWriteTransaction from "../hooks/useWriteTransaction";
 import StatefulTable from "../common/table/StatefulTable";
 import { InvoiceableResourceDisplay } from "app/entities/invoice";
 import { SortDirection } from "ui/common/table/constants";
@@ -24,6 +26,21 @@ import InvoiceFilters from "./InvoiceFilters";
 import { SubRoutes } from "ui/settings/SettingsContainer";
 import { Routing } from "app/constants";
 
+const forceCancelInvoice = ({ id }: { id: string }) =>
+  fetch(`/api/admin/invoices/${id}/force_cancel`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-XSRF-TOKEN": (() => {
+        const m = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : "";
+      })(),
+    },
+  }).then(res => {
+    if (!res.ok) return res.json().then(d => Promise.reject(d));
+    return {};
+  });
+
 
 const InvoicesTable: React.FC<{ stageInvoice(invoice: Invoice): void }> = ({ stageInvoice }) => {
   const { match: { params: { memberId } } } =  useReactRouter<{ memberId: string }>();
@@ -36,10 +53,13 @@ const InvoicesTable: React.FC<{ stageInvoice(invoice: Invoice): void }> = ({ sta
     refunded: undefined,
     pastDue: undefined,
     refundRequested: undefined,
-    memberId: [memberId],
+    orphaned: undefined,
+    ...(memberId ? { memberId: [memberId] } : {}),
   });
 
   const [selectedInvoice, setSelectedInvoice] = React.useState<Invoice>();
+  const [cleanupLoading, setCleanupLoading] = React.useState(false);
+  const [cleanupError, setCleanupError] = React.useState<string | null>(null);
 
   const { refresh: refreshMember } = useReadTransaction(getMember, { id: memberId });
 
@@ -69,6 +89,26 @@ const InvoicesTable: React.FC<{ stageInvoice(invoice: Invoice): void }> = ({ sta
     refreshMember();
     refresh();
   }, [refresh, refreshMember]);
+
+  const handleForceCancel = React.useCallback(async (invoice: Invoice) => {
+    if (!window.confirm(
+      `Clean up orphaned invoices for subscription ${invoice.subscriptionId}?\n\n` +
+      `This will destroy all unsettled invoices tied to this subscription and clear ` +
+      `the member's subscription fields. Only do this if the Braintree subscription ` +
+      `is already cancelled.`
+    )) return;
+
+    setCleanupLoading(true);
+    setCleanupError(null);
+    try {
+      await forceCancelInvoice({ id: invoice.id });
+      onSuccess();
+    } catch (e) {
+      setCleanupError((e as any)?.error || 'Failed to clean up invoice.');
+    } finally {
+      setCleanupLoading(false);
+    }
+  }, [onSuccess]);
 
   const rowId = React.useCallback(invoice => invoice.id, []);
   const fields: Column<Invoice>[] = [
@@ -122,7 +162,24 @@ const InvoicesTable: React.FC<{ stageInvoice(invoice: Invoice): void }> = ({ sta
         };
         return <ViewInvoiceModal invoice={row} onUpdate={onSuccess} />;
       }
-    }
+    },
+    ...(isAdmin && (params as any).orphaned === true ? [
+      {
+        id: "cleanup",
+        label: "Cleanup",
+        cell: (row: Invoice) => (
+          <Button
+            size="small"
+            variant="outlined"
+            color="secondary"
+            disabled={cleanupLoading}
+            onClick={() => handleForceCancel(row)}
+          >
+            Clean Up
+          </Button>
+        )
+      }
+    ] : [])
   ];
   const payNow = viewingOwnInvoices && isInvoicePayable(selectedInvoice);
 
@@ -147,6 +204,9 @@ const InvoicesTable: React.FC<{ stageInvoice(invoice: Invoice): void }> = ({ sta
         onClick={goToCheckout}
         label="Pay Selected Dues"
       />
+    )}
+    {cleanupError && (
+      <div style={{ color: '#c62828', marginBottom: 8, fontSize: '0.875rem' }}>{cleanupError}</div>
     )}
     <StatefulTable
       id="invoices-table"

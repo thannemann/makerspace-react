@@ -3,9 +3,11 @@ import Grid from '@material-ui/core/Grid';
 import Typography from '@material-ui/core/Typography';
 import Button from '@material-ui/core/Button';
 import Divider from '@material-ui/core/Divider';
+import Tooltip from '@material-ui/core/Tooltip';
 import AssignmentIcon from '@material-ui/icons/Assignment';
 import CheckIcon from '@material-ui/icons/Check';
 import EventIcon from '@material-ui/icons/Event';
+import CancelIcon from '@material-ui/icons/Cancel';
 import { Member } from 'makerspace-ts-api-client';
 
 import StatefulTable from 'ui/common/table/StatefulTable';
@@ -28,6 +30,7 @@ import {
   claimVolunteerTask,
   completeVolunteerTask,
   checkinVolunteerEvent,
+  removeCheckinVolunteerEvent,
 } from 'api/volunteer';
 
 interface Props {
@@ -39,6 +42,7 @@ const creditStatusLabel = (status: string): { label: string; color: Status } => 
     case 'approved':  return { label: 'Approved',          color: Status.Success };
     case 'pending':   return { label: 'Awaiting Approval', color: Status.Warn };
     case 'rejected':  return { label: 'Rejected',          color: Status.Danger };
+    case 'reversal':  return { label: 'Reversed',          color: Status.Danger };
     default:          return { label: status,              color: Status.Default };
   }
 };
@@ -67,15 +71,39 @@ const CreditHistoryInner: React.FC = () => {
       defaultSortDirection: SortDirection.Asc,
       cell: (row: VolunteerCredit) => (
         <div>
-          <Typography variant='body2'>{row.description}</Typography>
-          {row.taskTitle && <Typography variant='caption' color='textSecondary'>Task: {row.taskTitle}</Typography>}
+          <Typography
+            variant='body2'
+            style={{ color: row.status === 'reversal' ? '#c62828' : undefined }}
+          >
+            {row.description}
+          </Typography>
+          {row.taskTitle && (
+            <Typography variant='caption' color='textSecondary'>Task: {row.taskTitle}</Typography>
+          )}
+          {row.status === 'reversal' && row.reversalReason && (
+            <Typography variant='caption' color='error' style={{ display: 'block' }}>
+              Reason: {row.reversalReason}
+            </Typography>
+          )}
+          {row.reversed && (
+            <Typography variant='caption' color='error' style={{ display: 'block' }}>
+              This credit has been reversed
+            </Typography>
+          )}
         </div>
       ),
     },
     {
       id: 'creditValue',
       label: 'Credits',
-      cell: (row: VolunteerCredit) => <Typography variant='body2'>{row.creditValue}</Typography>,
+      cell: (row: VolunteerCredit) => (
+        <Typography
+          variant='body2'
+          style={{ color: row.creditValue < 0 ? '#c62828' : undefined }}
+        >
+          {row.creditValue > 0 ? `+${row.creditValue}` : row.creditValue}
+        </Typography>
+      ),
     },
     {
       id: 'date',
@@ -91,7 +119,14 @@ const CreditHistoryInner: React.FC = () => {
       label: 'Status',
       cell: (row: VolunteerCredit) => {
         const s = creditStatusLabel(row.status);
-        return <StatusLabel label={s.label} color={s.color} />;
+        return (
+          <div>
+            <StatusLabel label={s.label} color={s.color} />
+            {row.discountApplied && !row.reversed && (
+              <div><StatusLabel label='Discount Applied' color={Status.Primary} /></div>
+            )}
+          </div>
+        );
       },
     },
   ];
@@ -136,8 +171,8 @@ const TasksTableInner: React.FC<TasksTableProps> = ({ member, onRefresh }) => {
     onRefresh();
   }, [onRefresh]);
 
-  const { call: claimTask, isRequesting: claiming, error: claimError } = useWriteTransaction(claimVolunteerTask, onSuccess);
-  const { call: markComplete, isRequesting: completing, error: completeError } = useWriteTransaction(completeVolunteerTask, onSuccess);
+  const { call: claimTask,    isRequesting: claiming,    error: claimError }    = useWriteTransaction(claimVolunteerTask, onSuccess);
+  const { call: markComplete, isRequesting: completing,  error: completeError } = useWriteTransaction(completeVolunteerTask, onSuccess);
 
   const myActiveTask = (tasks as VolunteerTask[]).find(
     t => t.claimedById === member.id && ['claimed', 'pending'].includes(t.status)
@@ -248,7 +283,8 @@ const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh }) => 
     onRefresh();
   }, [onRefresh]);
 
-  const { call: checkin, isRequesting: checkingIn, error: checkinError } = useWriteTransaction(checkinVolunteerEvent, onSuccess);
+  const { call: checkin,        isRequesting: checkingIn,   error: checkinError }  = useWriteTransaction(checkinVolunteerEvent, onSuccess);
+  const { call: removeCheckin,  isRequesting: removingCheckin, error: removeError } = useWriteTransaction(removeCheckinVolunteerEvent, onSuccess);
 
   const selectedEvent = selectedIds.length === 1
     ? (events as VolunteerEvent[]).find(e => e.id === selectedIds[0])
@@ -256,6 +292,10 @@ const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh }) => 
 
   const alreadyCheckedIn = selectedEvent
     ? selectedEvent.attendeeIds.includes(member.id)
+    : false;
+
+  const eventDatePassed = selectedEvent && selectedEvent.eventDate
+    ? new Date(selectedEvent.eventDate) < new Date(new Date().toDateString())
     : false;
 
   const columns: Column<VolunteerEvent>[] = [
@@ -288,10 +328,17 @@ const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh }) => 
       id: 'checkedIn',
       label: 'Checked In',
       cell: (row: VolunteerEvent) => (
-        <StatusLabel
-          label={row.attendeeIds.includes(member.id) ? 'Yes' : 'No'}
-          color={row.attendeeIds.includes(member.id) ? Status.Success : Status.Default}
-        />
+        <Tooltip
+          title={row.attendeeIds.includes(member.id) ? 'Member self checked into the event' : ''}
+          placement='top'
+        >
+          <span>
+            <StatusLabel
+              label={row.attendeeIds.includes(member.id) ? 'Yes' : 'No'}
+              color={row.attendeeIds.includes(member.id) ? Status.Success : Status.Default}
+            />
+          </span>
+        </Tooltip>
       ),
     },
   ];
@@ -300,7 +347,7 @@ const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh }) => 
 
   return (
     <Grid container spacing={2}>
-      {selectedEvent && !alreadyCheckedIn && (
+      {selectedEvent && !alreadyCheckedIn && !eventDatePassed && (
         <Grid item xs={12}>
           <Button variant='contained' color='primary' size='small'
             disabled={checkingIn} startIcon={<EventIcon />}
@@ -310,7 +357,31 @@ const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh }) => 
           {checkinError && <ErrorMessage error={checkinError} />}
         </Grid>
       )}
-      {selectedEvent && alreadyCheckedIn && (
+      {selectedEvent && !alreadyCheckedIn && eventDatePassed && (
+        <Grid item xs={12}>
+          <Typography variant='body2' color='textSecondary'>
+            Check-in is no longer available — this event's date has passed.
+          </Typography>
+        </Grid>
+      )}
+      {selectedEvent && alreadyCheckedIn && !eventDatePassed && (
+        <Grid item xs={12}>
+          <Grid container spacing={2} alignItems='center'>
+            <Grid item>
+              <Typography variant='body2' color='textSecondary'>✅ You're checked in to this event</Typography>
+            </Grid>
+            <Grid item>
+              <Button variant='outlined' color='secondary' size='small'
+                disabled={removingCheckin} startIcon={<CancelIcon />}
+                onClick={() => removeCheckin({ id: selectedEvent.id })}>
+                Remove Check-in
+              </Button>
+            </Grid>
+          </Grid>
+          {removeError && <ErrorMessage error={removeError} />}
+        </Grid>
+      )}
+      {selectedEvent && alreadyCheckedIn && eventDatePassed && (
         <Grid item xs={12}>
           <Typography variant='body2' color='textSecondary'>✅ You're checked in to this event</Typography>
         </Grid>

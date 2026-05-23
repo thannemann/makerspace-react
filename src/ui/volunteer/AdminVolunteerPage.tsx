@@ -8,12 +8,20 @@ import TextField from '@material-ui/core/TextField';
 import Select from '@material-ui/core/Select';
 import MenuItem from '@material-ui/core/MenuItem';
 import FormLabel from '@material-ui/core/FormLabel';
+import List from '@material-ui/core/List';
+import ListItem from '@material-ui/core/ListItem';
+import ListItemText from '@material-ui/core/ListItemText';
+import ListItemSecondaryAction from '@material-ui/core/ListItemSecondaryAction';
+import IconButton from '@material-ui/core/IconButton';
 import CheckIcon from '@material-ui/icons/Check';
 import CloseIcon from '@material-ui/icons/Close';
 import AddIcon from '@material-ui/icons/Add';
 import DeleteIcon from '@material-ui/icons/Delete';
 import EditIcon from '@material-ui/icons/Edit';
 import PersonAddIcon from '@material-ui/icons/PersonAdd';
+import PeopleIcon from '@material-ui/icons/People';
+import UndoIcon from '@material-ui/icons/Undo';
+import RemoveCircleIcon from '@material-ui/icons/RemoveCircle';
 
 import FormModal from 'ui/common/FormModal';
 import ErrorMessage from 'ui/common/ErrorMessage';
@@ -36,6 +44,7 @@ import {
   adminListVolunteerCredits,
   adminApproveVolunteerCredit,
   adminRejectVolunteerCredit,
+  adminReverseVolunteerCredit,
   adminDeleteVolunteerCredit,
   adminListVolunteerTasks,
   adminCreateVolunteerTask,
@@ -49,6 +58,7 @@ import {
   adminCreateVolunteerEvent,
   adminCloseVolunteerEvent,
   adminAddEventAttendee,
+  adminRemoveEventAttendee,
   adminDeleteVolunteerEvent,
 } from 'api/volunteer';
 
@@ -67,6 +77,7 @@ const creditStatusLabel = (status: string): { label: string; color: Status } => 
     case 'approved':  return { label: 'Approved',  color: Status.Success };
     case 'pending':   return { label: 'Pending',   color: Status.Warn };
     case 'rejected':  return { label: 'Rejected',  color: Status.Danger };
+    case 'reversal':  return { label: 'Reversed',  color: Status.Danger };
     default:          return { label: status,      color: Status.Default };
   }
 };
@@ -120,16 +131,23 @@ const CreditsTabInner: React.FC = () => {
 
   const [statusFilter, setStatusFilter] = React.useState('');
   const [selectedIds, setSelectedIds]   = React.useState<string[]>([]);
+  const [reverseTarget, setReverseTarget] = React.useState<string | null>(null);
 
   const { isRequesting, data: credits = [], response, refresh, error: loadError } =
     useReadTransaction(adminListVolunteerCredits, { status: statusFilter || undefined }, undefined, `volunteer-credits-${statusFilter}`);
 
   const refreshRef = React.useRef(refresh);
   React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);
-  const onSuccess = React.useCallback(() => { setSelectedIds([]); refreshRef.current(); }, []);
+
+  const onSuccess = React.useCallback(() => {
+    setSelectedIds([]);
+    setReverseTarget(null);
+    refreshRef.current();
+  }, []);
 
   const { call: approveCredit, isRequesting: approving, error: approveError } = useWriteTransaction(adminApproveVolunteerCredit, onSuccess);
   const { call: rejectCredit,  isRequesting: rejecting, error: rejectError }  = useWriteTransaction(adminRejectVolunteerCredit, onSuccess);
+  const { call: reverseCredit, isRequesting: reversing, error: reverseError } = useWriteTransaction(adminReverseVolunteerCredit, onSuccess);
   const { call: deleteCredit,  isRequesting: deleting,  error: deleteError }  = useWriteTransaction(adminDeleteVolunteerCredit, onSuccess);
 
   const selectedCredit = selectedIds.length === 1
@@ -143,11 +161,18 @@ const CreditsTabInner: React.FC = () => {
       defaultSortDirection: SortDirection.Asc,
       cell: (row: VolunteerCredit) => (
         <div>
-          <Typography variant='body2'><strong>{row.memberName}</strong></Typography>
+          <Typography variant='body2' style={{ color: row.status === 'reversal' ? '#c62828' : undefined }}>
+            <strong>{row.memberName}</strong>
+          </Typography>
           <Typography variant='caption' color='textSecondary'>
             {new Date(row.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             {row.issuedByName && ` — ${row.issuedByName}`}
           </Typography>
+          {row.status === 'reversal' && row.reversedByName && (
+            <Typography variant='caption' color='error' style={{ display: 'block' }}>
+              Reversed by: {row.reversedByName}
+            </Typography>
+          )}
         </div>
       ),
     },
@@ -157,14 +182,30 @@ const CreditsTabInner: React.FC = () => {
       cell: (row: VolunteerCredit) => (
         <div>
           <Typography variant='body2'>{row.description}</Typography>
-          {row.taskTitle && <Typography variant='caption' color='textSecondary'>Task: {row.taskTitle}</Typography>}
+          {row.taskTitle && (
+            <Typography variant='caption' color='textSecondary'>Task: {row.taskTitle}</Typography>
+          )}
+          {row.status === 'reversal' && row.reversalReason && (
+            <Typography variant='caption' color='error' style={{ display: 'block' }}>
+              Reason: {row.reversalReason}
+            </Typography>
+          )}
+          {row.reversed && (
+            <Typography variant='caption' color='error' style={{ display: 'block' }}>
+              Reversed — see reversal record
+            </Typography>
+          )}
         </div>
       ),
     },
     {
       id: 'creditValue',
       label: 'Credits',
-      cell: (row: VolunteerCredit) => <Typography variant='body2'>{row.creditValue}</Typography>,
+      cell: (row: VolunteerCredit) => (
+        <Typography variant='body2' style={{ color: row.creditValue < 0 ? '#c62828' : undefined }}>
+          {row.creditValue > 0 ? `+${row.creditValue}` : row.creditValue}
+        </Typography>
+      ),
     },
     {
       id: 'status',
@@ -174,7 +215,9 @@ const CreditsTabInner: React.FC = () => {
         return (
           <div>
             <StatusLabel label={s.label} color={s.color} />
-            {row.discountApplied && <div><StatusLabel label='Discount Applied' color={Status.Primary} /></div>}
+            {row.discountApplied && !row.reversed && (
+              <div><StatusLabel label='Discount Applied' color={Status.Primary} /></div>
+            )}
           </div>
         );
       },
@@ -183,7 +226,6 @@ const CreditsTabInner: React.FC = () => {
 
   return (
     <Grid container spacing={2}>
-      {/* Filter + Actions row */}
       <Grid item xs={12}>
         <Grid container spacing={2} alignItems='center'>
           <Grid item xs={12} sm={3}>
@@ -191,13 +233,13 @@ const CreditsTabInner: React.FC = () => {
             <Select
               value={statusFilter}
               onChange={e => { setStatusFilter(e.target.value as string); setSelectedIds([]); }}
-              fullWidth
-              displayEmpty
+              fullWidth displayEmpty
             >
               <MenuItem value=''>All</MenuItem>
               <MenuItem value='pending'>Pending</MenuItem>
               <MenuItem value='approved'>Approved</MenuItem>
               <MenuItem value='rejected'>Rejected</MenuItem>
+              <MenuItem value='reversal'>Reversals</MenuItem>
             </Select>
           </Grid>
           <Grid item xs={12} sm={9}>
@@ -219,6 +261,15 @@ const CreditsTabInner: React.FC = () => {
                     </Button>
                   </Grid>
                 </>
+              )}
+              {isAdmin && selectedCredit?.status === 'approved' && !selectedCredit.reversed && (
+                <Grid item>
+                  <Button variant='outlined' color='secondary' size='small'
+                    startIcon={<UndoIcon />}
+                    onClick={() => setReverseTarget(selectedCredit.id)}>
+                    Reverse Credit
+                  </Button>
+                </Grid>
               )}
               {isAdmin && selectedIds.length > 0 && (
                 <Grid item>
@@ -255,6 +306,15 @@ const CreditsTabInner: React.FC = () => {
           renderSearch={true}
         />
       </Grid>
+
+      <ReasonModal
+        title='Reverse Credit'
+        isOpen={!!reverseTarget}
+        onClose={() => setReverseTarget(null)}
+        onSubmit={reason => reverseCredit({ id: reverseTarget, reason })}
+        loading={reversing}
+        error={reverseError}
+      />
     </Grid>
   );
 };
@@ -354,13 +414,13 @@ const TasksTabInner: React.FC = () => {
     refreshRef.current();
   }, []);
 
-  const { call: createTask, isRequesting: creating, error: createError } = useWriteTransaction(adminCreateVolunteerTask, onSuccess);
-  const { call: updateTask, isRequesting: updating, error: updateError } = useWriteTransaction(adminUpdateVolunteerTask, onSuccess);
+  const { call: createTask,   isRequesting: creating,   error: createError }   = useWriteTransaction(adminCreateVolunteerTask, onSuccess);
+  const { call: updateTask,   isRequesting: updating,   error: updateError }   = useWriteTransaction(adminUpdateVolunteerTask, onSuccess);
   const { call: completeTask, isRequesting: completing, error: completeError } = useWriteTransaction(adminCompleteVolunteerTask, onSuccess);
   const { call: cancelTask }  = useWriteTransaction(adminCancelVolunteerTask, onSuccess);
   const { call: deleteTask }  = useWriteTransaction(adminDeleteVolunteerTask, onSuccess);
-  const { call: releaseTask, isRequesting: releasing, error: releaseError } = useWriteTransaction(adminReleaseVolunteerTask, onSuccess);
-  const { call: rejectTask,  isRequesting: rejecting, error: rejectError }  = useWriteTransaction(adminRejectPendingVolunteerTask, onSuccess);
+  const { call: releaseTask,  isRequesting: releasing,  error: releaseError }  = useWriteTransaction(adminReleaseVolunteerTask, onSuccess);
+  const { call: rejectTask,   isRequesting: rejecting,  error: rejectError }   = useWriteTransaction(adminRejectPendingVolunteerTask, onSuccess);
 
   const selectedTask = selectedIds.length === 1
     ? (tasks as VolunteerTask[]).find(t => t.id === selectedIds[0])
@@ -407,7 +467,6 @@ const TasksTabInner: React.FC = () => {
 
   return (
     <Grid container spacing={2}>
-      {/* Filter + Actions row */}
       <Grid item xs={12}>
         <Grid container spacing={2} alignItems='center'>
           <Grid item xs={12} sm={3}>
@@ -597,13 +656,66 @@ const AddAttendeeModal: React.FC<AddAttendeeModalProps> = ({ eventId, onClose, o
   );
 };
 
+// Modal showing current attendee list for an open event, with per-attendee remove buttons
+interface ManageAttendeesModalProps {
+  event: VolunteerEvent | null;
+  onClose: () => void;
+  onRemove: (memberId: string) => void;
+  removing: boolean;
+  error: string;
+}
+
+const ManageAttendeesModal: React.FC<ManageAttendeesModalProps> = ({ event, onClose, onRemove, removing, error }) => {
+  if (!event) return null;
+  return (
+    <FormModal
+      id='manage-event-attendees'
+      title={`Attendees — ${event.title}`}
+      isOpen={!!event}
+      closeHandler={onClose}
+      onSubmit={onClose}
+      submitText='Done'
+      loading={false}
+      error={error}
+    >
+      {event.attendeeIds.length === 0 ? (
+        <Typography variant='body2' color='textSecondary'>No attendees checked in yet.</Typography>
+      ) : (
+        <List dense>
+          {event.attendeeIds.map((id, index) => (
+            <ListItem key={id} divider={index < event.attendeeIds.length - 1}>
+              <ListItemText
+                primary={event.attendeeNames[index] || id}
+              />
+              {event.status === 'open' && (
+                <ListItemSecondaryAction>
+                  <IconButton
+                    edge='end'
+                    size='small'
+                    disabled={removing}
+                    onClick={() => onRemove(id)}
+                    title='Remove check-in'
+                  >
+                    <RemoveCircleIcon fontSize='small' color='error' />
+                  </IconButton>
+                </ListItemSecondaryAction>
+              )}
+            </ListItem>
+          ))}
+        </List>
+      )}
+    </FormModal>
+  );
+};
+
 const EventsTabInner: React.FC = () => {
   const { canDeleteVolunteerRecords: isAdmin } = useCapabilities();
 
-  const [statusFilter, setStatusFilter]     = React.useState('open');
-  const [selectedIds, setSelectedIds]       = React.useState<string[]>([]);
-  const [createOpen, setCreateOpen]         = React.useState(false);
-  const [addAttendeeTarget, setAddAttendee] = React.useState<string | null>(null);
+  const [statusFilter, setStatusFilter]       = React.useState('open');
+  const [selectedIds, setSelectedIds]         = React.useState<string[]>([]);
+  const [createOpen, setCreateOpen]           = React.useState(false);
+  const [addAttendeeTarget, setAddAttendee]   = React.useState<string | null>(null);
+  const [manageAttendeesEvent, setManageAttendees] = React.useState<VolunteerEvent | null>(null);
 
   const { isRequesting, data: events = [], response, refresh, error: loadError } =
     useReadTransaction(adminListVolunteerEvents, { status: statusFilter || undefined }, undefined, `volunteer-events-${statusFilter}`);
@@ -614,12 +726,23 @@ const EventsTabInner: React.FC = () => {
   const onSuccess = React.useCallback(() => {
     setCreateOpen(false); setAddAttendee(null); setSelectedIds([]);
     refreshRef.current();
+    // Keep manage attendees modal open but refresh event data
   }, []);
 
-  const { call: createEvent, isRequesting: creating, error: createError } = useWriteTransaction(adminCreateVolunteerEvent, onSuccess);
-  const { call: closeEvent,  isRequesting: closing,  error: closeError }  = useWriteTransaction(adminCloseVolunteerEvent, onSuccess);
-  const { call: addAttendee, isRequesting: addingAttendee, error: addAttendeeError } = useWriteTransaction(adminAddEventAttendee, onSuccess);
-  const { call: deleteEvent } = useWriteTransaction(adminDeleteVolunteerEvent, onSuccess);
+  const onRemoveSuccess = React.useCallback(() => {
+    refreshRef.current();
+    // Update the manage attendees modal with fresh event data after removal
+    setManageAttendees(prev => {
+      if (!prev) return null;
+      return (events as VolunteerEvent[]).find(e => e.id === prev.id) || null;
+    });
+  }, [events]);
+
+  const { call: createEvent,    isRequesting: creating,         error: createError }       = useWriteTransaction(adminCreateVolunteerEvent, onSuccess);
+  const { call: closeEvent,     isRequesting: closing,          error: closeError }        = useWriteTransaction(adminCloseVolunteerEvent, onSuccess);
+  const { call: addAttendee,    isRequesting: addingAttendee,   error: addAttendeeError }  = useWriteTransaction(adminAddEventAttendee, onSuccess);
+  const { call: removeAttendee, isRequesting: removingAttendee, error: removeAttendeeError } = useWriteTransaction(adminRemoveEventAttendee, onRemoveSuccess);
+  const { call: deleteEvent }   = useWriteTransaction(adminDeleteVolunteerEvent, onSuccess);
 
   const selectedEvent = selectedIds.length === 1
     ? (events as VolunteerEvent[]).find(e => e.id === selectedIds[0])
@@ -668,7 +791,6 @@ const EventsTabInner: React.FC = () => {
 
   return (
     <Grid container spacing={2}>
-      {/* Filter + Actions */}
       <Grid item xs={12}>
         <Grid container spacing={2} alignItems='center'>
           <Grid item xs={12} sm={3}>
@@ -688,6 +810,14 @@ const EventsTabInner: React.FC = () => {
                   Create Event
                 </Button>
               </Grid>
+              {selectedEvent && (
+                <Grid item>
+                  <Button variant='outlined' size='small' startIcon={<PeopleIcon />}
+                    onClick={() => setManageAttendees(selectedEvent)}>
+                    Manage Attendees
+                  </Button>
+                </Grid>
+              )}
               {selectedEvent?.status === 'open' && (
                 <>
                   <Grid item>
@@ -749,6 +879,14 @@ const EventsTabInner: React.FC = () => {
       <AddAttendeeModal eventId={addAttendeeTarget} onClose={() => setAddAttendee(null)}
         onAdd={memberId => addAttendee({ id: addAttendeeTarget, memberId })}
         loading={addingAttendee} error={addAttendeeError} />
+
+      <ManageAttendeesModal
+        event={manageAttendeesEvent}
+        onClose={() => setManageAttendees(null)}
+        onRemove={memberId => removeAttendee({ id: manageAttendeesEvent.id, memberId })}
+        removing={removingAttendee}
+        error={removeAttendeeError}
+      />
     </Grid>
   );
 };

@@ -88,6 +88,15 @@ const InvoiceFilters: React.FC<{ close: () => void, onChange: () => void }> = ({
       </Grid>
       <Grid item xs={12} style={{ marginBottom: "1em" }}>
         <FormControl component="fieldset">
+          <FormLabel component="legend">Filter by Orphaned</FormLabel>
+          <RadioGroup name="orphaned" value={paramToVal(params.orphaned)} onChange={toggleRadio("orphaned")}>
+            <FormControlLabel value="true" control={<Radio />} label="Orphaned Only" />
+            <FormControlLabel value="both" control={<Radio />} label="All" />
+          </RadioGroup>
+        </FormControl>
+      </Grid>
+      <Grid item xs={12} style={{ marginBottom: "1em" }}>
+        <FormControl component="fieldset">
           <FormLabel component="legend">Filter by Paid</FormLabel>
           <RadioGroup name="settled" value={paramToVal(params.settled)} onChange={toggleRadio("settled")}>
             <FormControlLabel value="true" control={<Radio />} label="Paid" />
