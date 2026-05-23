@@ -143,9 +143,8 @@ const AccessCardForm: React.FC<{ memberId: string }> = ({ memberId }) => {
               }
               label="Verified member's name and address with valid identification"
             />
-          </Grid><table border="2">
-          <tr><td colspan="3">{member.address_street}</td></tr>
-          <tr><td>Unit: </td><td colspan="2">{member.address_unit}</td></tr>
+          </Grid><table>
+          <tr><td>{member.address_street}</td><td>Unit: </td><td>{member.address_unit}</td></tr>
           <tr><td>{member.address_city}</td><td>{member.address_state}</td><td>{member.address_postal_code}</td></tr>
           </table>
       </FormModal>}
