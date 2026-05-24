@@ -7,8 +7,12 @@ import { test, expect } from '@playwright/test';
 test('app loads and membership options are present after seed', async ({ page }) => {
   await page.goto('/');
 
-  // The membership select table is rendered on the home page.
-  // If it loads, Rails is up, MongoDB is seeded, and the React bundle is being served.
-  const table = page.locator('#membership-select-table');
-  await expect(table).toBeVisible({ timeout: 30_000 });
+  // Verify the page heading is present
+  await expect(page.getByRole('heading', { name: 'Our Membership Options' }))
+    .toBeVisible({ timeout: 30_000 });
+
+  // Verify seeded invoice options are present in the table
+  await expect(page.getByRole('cell', { name: 'One Month' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Three Months' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'One Year' })).toBeVisible();
 });
