@@ -35,7 +35,7 @@ const linkStyle: React.CSSProperties = {
 const mailtoHref = `mailto:${"contact@manchestermakerspace.org"}?subject=${encodeURIComponent("Member Portal assistance request")}`;
 
 const FooterBase: React.FC<Props> = ({ logout }) => {
-  const logoutAndGo = async (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+  const logoutAndGo = async (event: any, href: string) => {
     event.preventDefault();
     try {
       await logout();
@@ -69,4 +69,4 @@ const mapDispatchToProps = (dispatch: ScopedThunkDispatch): DispatchProps => ({
   logout: () => dispatch(logoutUserAction()),
 });
 
-export default connect(null, mapDispatchToProps)(FooterBase);
+export default connect<{}, DispatchProps, {}, any>(null, mapDispatchToProps)(FooterBase as any);
