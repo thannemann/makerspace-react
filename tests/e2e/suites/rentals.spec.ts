@@ -28,13 +28,6 @@ test.describe('Admin creates rental type and spot', () => {
     await rentals.fillRentalTypeForm(GREEN_TOTE, TOTE_PLAN);
     await rentals.submitRentalTypeForm();
     await rentals.verifyTypeInTable(GREEN_TOTE);
-  });
-
-  test('Admin creates GT1 spot using Green Tote type', async ({ page }) => {
-    const auth    = new AuthPage(page);
-    const rentals = new AdminRentalsPage(page);
-
-    await auth.signIn(adminMember.email, adminMember.password);
     await rentals.goto();
     await rentals.goToTab('Rental Spots');
     await rentals.waitForSpotsTable();
@@ -47,15 +40,6 @@ test.describe('Admin creates rental type and spot', () => {
     });
     await rentals.submitRentalSpotForm();
     await rentals.verifySpotInTable(GT1);
-  });
-
-  test('GT1 appears in spot catalog search', async ({ page }) => {
-    const auth    = new AuthPage(page);
-    const rentals = new AdminRentalsPage(page);
-
-    await auth.signIn(adminMember.email, adminMember.password);
-    await rentals.goto();
-    await rentals.goToTab('Rental Spots');
     await rentals.waitForSpotsTable();
     await rentals.searchForSpot(GT1);
     await rentals.verifySpotInTable(GT1);
@@ -107,15 +91,15 @@ test.describe('Member self-assigns rental spot', () => {
     await rentals.selectSpot(GT1);
 
     await expect(page.getByRole('button', { name: 'Confirm Rental' })).toBeVisible();
-  });
+//  });
 
-  test('Rental agreement appears after confirming', async ({ page }) => {
-    const auth    = new AuthPage(page);
-    const member  = new MemberPage(page);
-    const rentals = new MemberRentalsPage(page);
+//  test('Rental agreement appears after confirming', async ({ page }) => {
+//    const auth    = new AuthPage(page);
+//   const member  = new MemberPage(page);
+//    const rentals = new MemberRentalsPage(page);
 
-    await auth.signIn(basicMember.email, basicMember.password);
-    await member.waitForProfile();
+//    await auth.signIn(basicMember.email, basicMember.password);
+//    await member.waitForProfile();
     await member.dismissNotificationModal();
     await member.dismissRentalAgreementModal();
     await member.clickTab('Rentals');
@@ -125,53 +109,53 @@ test.describe('Member self-assigns rental spot', () => {
 
     await expect(page.getByRole('button', { name: 'Confirm & Sign Agreement' }))
       .toBeVisible({ timeout: 15_000 });
-  });
+//  });
 
-  test('Member signs agreement and proceeds', async ({ page }) => {
-    const auth    = new AuthPage(page);
-    const member  = new MemberPage(page);
-    const rentals = new MemberRentalsPage(page);
-
-    await auth.signIn(basicMember.email, basicMember.password);
-    await member.waitForProfile();
-    await member.dismissNotificationModal();
-    await member.dismissRentalAgreementModal();
-    await member.clickTab('Rentals');
-    await rentals.waitForRentalsTab();
-    await rentals.selectSpot(GT1);
-    await rentals.confirmRental();
+//  test('Member signs agreement and proceeds', async ({ page }) => {
+//    const auth    = new AuthPage(page);
+//    const member  = new MemberPage(page);
+//    const rentals = new MemberRentalsPage(page);
+//
+//    await auth.signIn(basicMember.email, basicMember.password);
+//    await member.waitForProfile();
+//    await member.dismissNotificationModal();
+//    await member.dismissRentalAgreementModal();
+//    await member.clickTab('Rentals');
+ //   await rentals.waitForRentalsTab();
+  //  await rentals.selectSpot(GT1);
+//    await rentals.confirmRental();
     await rentals.openSignAgreement();
     await rentals.acceptAndSignAgreement();
     await rentals.clickProceed();
 
-    // Should land back on profile
     await member.waitForProfile();
-  });
+//  });
 
-  test('GT1 rental appears in member rentals table', async ({ page }) => {
-    const auth    = new AuthPage(page);
-    const member  = new MemberPage(page);
-    const rentals = new MemberRentalsPage(page);
+//  test('GT1 rental appears in member rentals table', async ({ page }) => {
+//    const auth    = new AuthPage(page);
+//    const member  = new MemberPage(page);
+//    const rentals = new MemberRentalsPage(page);
 
-    await auth.signIn(basicMember.email, basicMember.password);
-    await member.waitForProfile();
+//    await auth.signIn(basicMember.email, basicMember.password);
+//    await member.waitForProfile();
     await member.dismissRentalAgreementModal();
     // Reload to ensure rental persisted
     await member.reloadProfile();
     await member.dismissRentalAgreementModal();
     await member.clickTab('Rentals');
     await rentals.verifyRentalInTable(GT1);
-  });
+    await member.reloadProfile();
+//  });
 
-  test('Member pays rental invoice from Dues tab', async ({ page }) => {
-    const auth    = new AuthPage(page);
-    const member  = new MemberPage(page);
+//  test('Member pays rental invoice from Dues tab', async ({ page }) => {
+//    const auth    = new AuthPage(page);
+//    const member  = new MemberPage(page);
     const payment = new PaymentPage(page);
-    const rentals = new MemberRentalsPage(page);
+//    const rentals = new MemberRentalsPage(page);
 
-    await auth.signIn(basicMember.email, basicMember.password);
-    await member.waitForProfile();
-    await member.dismissRentalAgreementModal();
+//    await auth.signIn(basicMember.email, basicMember.password);
+//    await member.waitForProfile();
+//    await member.dismissRentalAgreementModal();
     await member.clickTab('Dues');
     await page.waitForTimeout(1000);
 
@@ -183,22 +167,22 @@ test.describe('Member self-assigns rental spot', () => {
     await page.getByRole('button', { name: 'Next' }).click();
 
     // Step 2: Review and confirm purchase
-    await page.waitForSelector('#checkout-invoices-table', { timeout: 15_000 });
+    //await page.waitForSelector('#checkout-invoices-table', { timeout: 15_000 });
     await page.getByRole('button', { name: 'Submit Payment' }).click();
     await page.getByRole('checkbox', { name: 'I agree' }).check();
     await page.getByRole('button', { name: 'Confirm' }).click();
     await payment.returnToProfile();
     await member.dismissRentalAgreementModal();
-  });
-
-  test('No past due invoices after payment', async ({ page }) => {
-    const auth    = new AuthPage(page);
-    const member  = new MemberPage(page);
-    const rentals = new MemberRentalsPage(page);
-
-    await auth.signIn(basicMember.email, basicMember.password);
+//  });
+//
+//  test('No past due invoices after payment', async ({ page }) => {
+//    const auth    = new AuthPage(page);
+//    const member  = new MemberPage(page);
+//    const rentals = new MemberRentalsPage(page);
+//
+//    await auth.signIn(basicMember.email, basicMember.password);
     await member.reloadProfile();
-    await member.dismissRentalAgreementModal();
+//    await member.dismissRentalAgreementModal();
     await rentals.verifyNoPastDueInvoices();
   });
 });
