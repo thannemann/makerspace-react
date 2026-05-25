@@ -222,7 +222,7 @@ class Header extends React.Component<Props, State> {
       <AppBar style={{ marginBottom: "1em" }} position="static" color="default" title="Manchester Makerspace">
         <Toolbar>
           <Typography variant="h6" color="inherit" className="flex">
-            <Logo alt="Manchester Makerspace" viewBox="0 0 960 580" preserveAspectRatio="xMinYMin" />
+            <a href="https://www.manchestermakerspace.org"><Logo alt="Manchester Makerspace" viewBox="0 0 960 580" preserveAspectRatio="xMinYMin" /></a>
           </Typography>
           <Help />
           {currentUser.id
