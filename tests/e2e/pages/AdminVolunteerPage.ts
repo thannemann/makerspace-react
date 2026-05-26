@@ -85,12 +85,20 @@ export class MemberVolunteerPage {
     await this.page.waitForTimeout(500);
   }
 
+  private async getBountyTasksTable() {
+    // Scope to the Bounty Tasks section by finding its heading and walking up to
+    // the shared parent that contains both the heading and the table
+    const heading = this.page.getByRole('heading', { name: 'Bounty Tasks' });
+    await heading.waitFor({ state: 'visible', timeout: 10_000 });
+    // The heading and table share a common ancestor — walk up two levels
+    return heading.locator('../..').locator('table').first();
+  }
+
   async selectFirstAvailableTask(): Promise<void> {
-    // Tasks table is below events — select first row in bounty tasks table
-    const table = this.page.locator('#member-volunteer-tasks-table');
-    await table.waitFor({ state: 'visible', timeout: 10_000 });
-    await table.locator('input[type="checkbox"]').first().check();
-    // Wait for Claim Task button to appear (only visible after selection)
+    const table = await this.getBountyTasksTable();
+    const firstRow = table.getByRole('row').filter({ hasText: /Available/i }).first();
+    await firstRow.waitFor({ state: 'visible', timeout: 10_000 });
+    await firstRow.locator('input[type="checkbox"]').check();
     await this.page.getByRole('button', { name: 'Claim Task' }).waitFor({ state: 'visible', timeout: 5_000 });
   }
 
@@ -100,8 +108,10 @@ export class MemberVolunteerPage {
   }
 
   async selectClaimedTask(): Promise<void> {
-    const table = this.page.locator('#member-volunteer-tasks-table');
-    await table.locator('input[type="checkbox"]').first().check();
+    const table = await this.getBountyTasksTable();
+    const firstRow = table.getByRole('row').filter({ hasText: /Claimed|Available/i }).first();
+    await firstRow.waitFor({ state: 'visible', timeout: 10_000 });
+    await firstRow.locator('input[type="checkbox"]').check();
     await this.page.getByRole('button', { name: 'Mark Complete' }).waitFor({ state: 'visible', timeout: 5_000 });
   }
 

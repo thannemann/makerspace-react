@@ -78,19 +78,35 @@ export class AdminToolCheckoutsPage {
     await this.page.getByRole('button', { name: 'Check Out Member' }).click();
     await this.page.waitForSelector('[role="dialog"]', { timeout: 10_000 });
 
-    // Full name search supported via Member.name_search_criteria Rails fix
-    await this.page.locator('input[id^="react-select"]').last().fill(memberName);
-    await this.page.waitForTimeout(1000);
+    // Member search — type slowly to trigger debounce correctly
+    await this.page.locator('div').filter({ hasText: /^Search by name or email$/ }).nth(1).click();
+    await this.page.locator('input[id^="react-select"]').last().type(memberName, { delay: 50 });
+    await this.page.waitForTimeout(1500);
     await this.page.getByRole('option', { name: new RegExp(memberName, 'i') }).first().click();
 
-    // Select shop
+    // Scope to dialog — page also has comboboxes behind the modal
     const dialog = this.page.locator('[role="dialog"]');
-    const selects = dialog.locator('select');
-    await selects.nth(0).selectOption({ label: shopName });
-    await this.page.waitForTimeout(300);
 
-    // Select tool
-    await selects.nth(1).selectOption({ label: toolName });
+    // Select shop by value — options are in DOM, shop value by text match
+    const shopCombobox = dialog.getByRole('combobox').first();
+    await expect(shopCombobox.locator('option').filter({ hasText: shopName }))
+      .toHaveCount(1, { timeout: 10_000 });
+    const shopValue = await shopCombobox.locator('option')
+      .filter({ hasText: shopName })
+      .getAttribute('value');
+    if (!shopValue) throw new Error(`Shop option not found: ${shopName}`);
+    await shopCombobox.selectOption(shopValue);
+    await this.page.waitForTimeout(500);
+
+    // Wait for tool options to populate after shop selection
+    const toolCombobox = dialog.getByRole('combobox').nth(1);
+    await expect(toolCombobox.locator('option').filter({ hasText: toolName }))
+      .toHaveCount(1, { timeout: 10_000 });
+    const toolValue = await toolCombobox.locator('option')
+      .filter({ hasText: toolName })
+      .getAttribute('value');
+    if (!toolValue) throw new Error(`Tool option not found: ${toolName}`);
+    await toolCombobox.selectOption(toolValue);
     await this.page.waitForTimeout(300);
 
     await this.page.getByRole('button', { name: 'Check Out' }).click();
@@ -105,9 +121,9 @@ export class AdminToolCheckoutsPage {
   }
 
   async verifyCheckoutInTable(memberName: string, toolName: string): Promise<void> {
-    await expect(this.page.getByText(new RegExp(memberName, 'i')).first())
+    await expect(this.page.getByRole('cell', { name: new RegExp(memberName, 'i') }).first())
       .toBeVisible({ timeout: 10_000 });
-    await expect(this.page.getByText(new RegExp(toolName, 'i')).first())
+    await expect(this.page.getByRole('cell', { name: new RegExp(toolName, 'i') }).first())
       .toBeVisible({ timeout: 10_000 });
   }
 }

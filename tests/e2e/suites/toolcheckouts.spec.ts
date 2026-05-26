@@ -62,7 +62,7 @@ test.describe('RM checks out member on woodshop tool', () => {
     await auth.signIn(rmMember0.email, rmMember0.password);
     await checkouts.goto();
 
-    await checkouts.checkOutMember('Basic Member0', 'Basic Member0', WOODSHOP, BANDSAW);
+    await checkouts.checkOutMember('Basic Member0', WOODSHOP, BANDSAW);
     await checkouts.verifyCheckoutInTable('Basic Member0', BANDSAW);
   });
 });
@@ -82,28 +82,48 @@ test.describe('RM checks out member on metalshop CNC mill with prereq warning', 
     await page.getByRole('button', { name: 'Check Out Member' }).click();
     await page.waitForSelector('[role="dialog"]', { timeout: 10_000 });
 
-    // Search for Basic Member1
-    await page.locator('input[id^="react-select"]').last().fill('Basic Member1');
-    await page.waitForTimeout(1000);
+    // Search for Basic Member1 — type slowly to trigger debounce
+    await page.locator('div').filter({ hasText: /^Search by name or email$/ }).nth(1).click();
+    await page.locator('input[id^="react-select"]').last().type('Basic Member1', { delay: 50 });
+    await page.waitForTimeout(1500);
     await page.getByRole('option', { name: /Basic Member1/i }).first().click();
 
-    // Select metalshop and CNC mill
-    const dialog  = page.locator('[role="dialog"]');
-    const selects = dialog.locator('select');
-    await selects.nth(0).selectOption({ label: METALSHOP });
-    await page.waitForTimeout(300);
-    await selects.nth(1).selectOption({ label: CNC_MILL });
+    // Scope to dialog — page also has comboboxes behind the modal
+    const dialog = page.locator('[role="dialog"]');
+
+    const shopCombobox = dialog.getByRole('combobox').first();
+    await expect(shopCombobox.locator('option').filter({ hasText: METALSHOP }))
+      .toHaveCount(1, { timeout: 10_000 });
+    const shopValue = await shopCombobox.locator('option')
+      .filter({ hasText: METALSHOP })
+      .getAttribute('value');
+    if (!shopValue) throw new Error(`Shop option not found: ${METALSHOP}`);
+    await shopCombobox.selectOption(shopValue);
+    await page.waitForTimeout(500);
+
+    const toolCombobox = dialog.getByRole('combobox').nth(1);
+    await expect(toolCombobox.locator('option').filter({ hasText: CNC_MILL }))
+      .toHaveCount(1, { timeout: 10_000 });
+    const toolValue = await toolCombobox.locator('option')
+      .filter({ hasText: CNC_MILL })
+      .getAttribute('value');
+    if (!toolValue) throw new Error(`Tool option not found: ${CNC_MILL}`);
+    await toolCombobox.selectOption(toolValue);
     await page.waitForTimeout(300);
 
-    // Submit — prerequisite warning should appear in the response
+    // Prerequisite warning shows in modal before submitting
+    await expect(page.getByText(/Prerequisites for cnc mill/i)).toBeVisible({ timeout: 5_000 });
+
+    // Submit and wait
     await page.getByRole('button', { name: 'Check Out' }).click();
     await page.waitForTimeout(1000);
 
-    // Verify the checkout succeeded and warning was shown
+    // Verify the checkout succeeded
     await checkouts.verifyCheckoutInTable('Basic Member1', CNC_MILL);
 
-    // Verify prerequisite warning appeared (shown as unmet prereqs in the UI)
-    await expect(page.getByText(/prerequisite/i).first()).toBeVisible({ timeout: 10_000 });
+    // Prereq warning shows in the table row as unmet prerequisites text
+    const cncRow = page.getByRole('row', { name: /cnc mill/i });
+    await expect(cncRow).toBeVisible({ timeout: 10_000 });
   });
 });
 
@@ -120,9 +140,9 @@ test.describe('Members view their tool checkout status', () => {
     await member.dismissNotificationModal();
     await member.clickTab('Checkouts');
 
-    await expect(page.getByText(new RegExp(BANDSAW, 'i')).first())
+    await expect(page.getByRole('cell', { name: new RegExp(BANDSAW, 'i') }))
       .toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(new RegExp(WOODSHOP, 'i')).first())
+    await expect(page.getByRole('cell', { name: new RegExp(WOODSHOP, 'i') }))
       .toBeVisible({ timeout: 10_000 });
   });
 
@@ -135,9 +155,9 @@ test.describe('Members view their tool checkout status', () => {
     await member.dismissNotificationModal();
     await member.clickTab('Checkouts');
 
-    await expect(page.getByText(new RegExp(CNC_MILL, 'i')).first())
+    await expect(page.getByRole('cell', { name: new RegExp(CNC_MILL, 'i') }))
       .toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(new RegExp(METALSHOP, 'i')).first())
+    await expect(page.getByRole('cell', { name: new RegExp(METALSHOP, 'i') }))
       .toBeVisible({ timeout: 10_000 });
   });
 });

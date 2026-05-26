@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { AuthPage } from '../pages/AuthPage';
 import { MemberPage } from '../pages/MemberPage';
 import { PaymentPage } from '../pages/PaymentPage';
-import { buildTestMember, newVisa, adminMember } from '../fixtures/testData';
+import { buildTestMember, newVisa, newMastercard, adminMember } from '../fixtures/testData';
 import { createRejectCard } from '../fixtures/seed';
 
 // ── Test 1: Customer self-registers from home page ────────────────────────────
@@ -122,10 +122,74 @@ test.describe('Self-registration from home page', () => {
 // ── Test 2: Registration with discount code ───────────────────────────────────
 
 test.describe('Registration via URL with discount code', () => {
-  test.skip(true, 'Discount code registration — not yet implemented');
-  test('Discount URL pre-selects plan and shows discount', async ({ page }) => {});
-  test('Review step shows correct discounted total', async ({ page }) => {});
-  test('Member completes discounted registration', async ({ page }) => {});
+  const discountMember = buildTestMember('discount');
+
+  test('Member completes SSM discounted registration at $58.50', async ({ page }) => {
+    const payment = new PaymentPage(page);
+    const member  = new MemberPage(page);
+
+    await page.goto('/');
+    const row = page.getByRole('row', { name: /one month/i });
+    await row.waitFor({ timeout: 15_000 });
+    await row.getByRole('button', { name: 'Sign Up' }).click();
+
+    // ── Step 1: Basic Info ──
+    await page.getByRole('textbox', { name: 'First Name' }).fill(discountMember.firstname);
+    await page.getByRole('textbox', { name: 'Last Name' }).fill(discountMember.lastname);
+    await page.getByRole('textbox', { name: 'Phone Number' }).fill(discountMember.phone);
+    await page.getByRole('textbox', { name: 'Street Address' }).fill(discountMember.address.street);
+    await page.getByRole('textbox', { name: 'City' }).fill(discountMember.address.city);
+    await page.locator('#sign-up-form-state').selectOption(discountMember.address.state);
+    await page.getByRole('textbox', { name: 'Postal Code' }).fill(discountMember.address.postalCode);
+    await page.getByRole('textbox', { name: 'Email', exact: true }).fill(discountMember.email);
+    await page.getByRole('textbox', { name: 'Confirm Email' }).fill(discountMember.email);
+    await page.getByRole('textbox', { name: 'Password' }).fill(discountMember.password);
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // ── Step 2: Agreements ──
+    await page.getByRole('checkbox', { name: /Code of Conduct/i }).check();
+    await page.getByRole('checkbox', { name: /Member Contract/i }).check();
+    const canvas = page.locator('canvas').first();
+    await canvas.waitFor({ state: 'visible' });
+    const box = await canvas.boundingBox();
+    if (box) {
+      await canvas.dispatchEvent('mousedown', { clientX: box.x + 50,  clientY: box.y + 50 });
+      await canvas.dispatchEvent('mousemove', { clientX: box.x + 150, clientY: box.y + 50 });
+      await canvas.dispatchEvent('mousemove', { clientX: box.x + 200, clientY: box.y + 80 });
+      await canvas.dispatchEvent('mousemove', { clientX: box.x + 150, clientY: box.y + 100 });
+      await canvas.dispatchEvent('mouseup',   { clientX: box.x + 150, clientY: box.y + 100 });
+      await page.waitForTimeout(500);
+    }
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // ── Step 3: Membership — check SSM discount box ──
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('checkbox', { name: /Student, Military, Senior/i }).check();
+    // Checking SSM appends discountId to URL and updates total
+    await expect(page.locator('#total')).toContainText('$58.50', { timeout: 10_000 });
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // ── Step 4: Payment ──
+    await payment.waitForCreditCardForm();
+    await payment.fillCreditCard(newMastercard);
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // ── Step 5: Review / Submit ──
+    await page.getByRole('checkbox', { name: 'I agree' }).check();
+    await page.getByRole('button', { name: 'Submit Payment' }).click();
+
+    // Dismiss info modal if present
+    const closeBtn = page.getByRole('button', { name: 'Close' });
+    if (await closeBtn.isVisible({ timeout: 5_000 })) await closeBtn.click();
+
+    await member.waitForProfile();
+    await member.dismissNotificationModal();
+    await expect(page.locator('#member-detail-type')).toBeVisible({ timeout: 15_000 });
+
+    // Verify discounted amount on invoice table
+    await member.clickTab('Dues');
+    await expect(page.getByRole('cell', { name: /\$58\.50/i })).toBeVisible({ timeout: 15_000 });
+  });
 });
 
 // ── Test 3: Admin creates member with complimentary membership ────────────────

@@ -66,10 +66,17 @@ export class MemberRentalsPage {
   }
 
   async verifyNoPastDueInvoices(): Promise<void> {
-    await this.page.getByRole('tab', { name: /dues/i }).click();
-    await this.page.waitForTimeout(2000);
-    // No past due invoices — either no dues rows or status is not 'Past Due'
-    const pastDue = this.page.getByText('Past Due');
-    await expect(pastDue).not.toBeVisible({ timeout: 10_000 });
+    // Poll with reloads — Braintree sandbox can be slow to update invoice status
+    for (let i = 0; i < 5; i++) {
+      await this.page.getByRole('tab', { name: /dues/i }).click();
+      await this.page.waitForTimeout(2000);
+      const pastDue = this.page.getByText('Past Due');
+      if (!await pastDue.isVisible({ timeout: 2_000 })) return;
+      // Still past due — reload and retry
+      await this.page.reload();
+      await this.page.waitForLoadState('networkidle');
+    }
+    // Final assertion
+    await expect(this.page.getByText('Past Due')).not.toBeVisible({ timeout: 5_000 });
   }
 }
