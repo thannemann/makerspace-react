@@ -243,7 +243,9 @@ const MemberProfile: React.FC = () => {
               <span id="member-detail-expiration">{displayMemberExpiration(member)}</span>
             </KeyValueItem>
             <KeyValueItem label="Membership Status">
-              <MemberStatusLabel id="member-detail-status" member={member} />
+              <Link to={`/members/${memberId}/checkin-activity`} style={{ textDecoration: "none", color: "inherit" }}>
+                <MemberStatusLabel id="member-detail-status" member={member} />
+              </Link>
             </KeyValueItem>
             {billingEnabled && <KeyValueItem label="Membership Type">
               <span id="member-detail-type" style={{ marginRight: "1em" }}>{memberSubscription.type}</span>
