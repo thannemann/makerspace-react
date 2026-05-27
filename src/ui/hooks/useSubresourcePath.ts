@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 /**
  * Requires :resource when setting up the route

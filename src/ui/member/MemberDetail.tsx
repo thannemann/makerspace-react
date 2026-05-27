@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useNavigate, useParams } from 'react-router-dom';
 import { Link } from "react-router-dom";
 import { Member, getMember, listRentals } from "makerspace-ts-api-client";
 
@@ -83,7 +84,7 @@ const Reset2FAButton: React.FC<{ memberId: string; onReset: () => void }> = ({ m
 };
 
 const MemberProfile: React.FC = () => {
-  const { memberId, resource } = useParams<{ memberId: string; resource: string }>();
+  const { memberId, resource } = useParams();
   const navigate = useNavigate();
   const { currentUser: { id: currentUserId, isAdmin }, permissions } = useAuthState();
   const {

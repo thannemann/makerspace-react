@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import capitalize from "lodash-es/capitalize";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
@@ -36,7 +36,9 @@ const DetailView: React.FC<OwnProps> = ({
 }) => {
   const resourcesExist = Array.isArray(resources) && !!resources.length;
   const [activeResource, setActiveResource] = React.useState<Resource>(resourcesExist ? resources[0] : undefined);
-  const { match: { params: { resource }}, history, location: { pathname } } = useReactRouter();
+  const { resource } = useParams();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   React.useEffect(() => {
     resource && changeResource(resource);

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useParams } from 'react-router-dom';
 import Grid from "@mui/material/Grid";
 import Button from "@mui/material/Button";
 
@@ -39,7 +40,7 @@ const ReportsTable: React.FC<{ earnedMembershipId: string }> = ({ earnedMembersh
   const { isOpen, openModal, closeModal } = useModal();
   const { currentUser: { id: currentUserId } } = useAuthState();
   const { canManageEarnedMemberships } = useCapabilities();
-  const { match: { params: { memberId } } } =  useReactRouter<{ memberId: string }>();
+  const { memberId } = useParams<{ memberId: string }>();
   const isOwnMembership = currentUserId === memberId;
   const asAdmin = canManageEarnedMemberships && !isOwnMembership
 

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useParams } from 'react-router-dom';
 
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
@@ -28,7 +29,7 @@ export enum SubRoutes {
 const SettingsContainer: React.FC = () => {
   const { currentUser: { id: currentUserId }, permissions } = useAuthState();
   const billingEnabled = !!permissions[Whitelists.billing];
-  const { match: { params: { memberId: routeMemberId, resource }} } = useReactRouter<{ memberId: string, resource: string }>();
+  const { memberId: routeMemberId, resource } = useParams<{ memberId: string, resource: string }>();
   // Use the route memberId (supports admin viewing another member's settings)
   const targetMemberId = routeMemberId || currentUserId;
 

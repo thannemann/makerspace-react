@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useParams } from 'react-router-dom';
 import { Link } from "react-router-dom";
 import Button from "@mui/material/Button";
 
@@ -42,7 +43,7 @@ const forceCancelInvoice = ({ id }: { id: string }) =>
 
 
 const InvoicesTable: React.FC<{ stageInvoice(invoice: Invoice): void }> = ({ stageInvoice }) => {
-  const { match: { params: { memberId } } } =  useReactRouter<{ memberId: string }>();
+  const { memberId } = useParams<{ memberId: string }>();
   const { currentUser: { id: currentUserId } } = useAuthState();
   const { canManageInvoices: isAdmin } = useCapabilities();
   const viewingOwnInvoices = memberId === currentUserId;
