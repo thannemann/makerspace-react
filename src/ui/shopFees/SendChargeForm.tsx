@@ -417,7 +417,6 @@ const SendChargeForm: React.FC<Props> = ({ preselectedMember }) => {
                                 size="small"
                                 checked={line.updateCatalogPrice}
                                 onChange={e => updateLine(index, { updateCatalogPrice: e.target.checked })}
-                                color="default"
                               />
                             }
                             label={
@@ -441,7 +440,6 @@ const SendChargeForm: React.FC<Props> = ({ preselectedMember }) => {
                               size="small"
                               checked={line.saveToCatalog}
                               onChange={e => updateLine(index, { saveToCatalog: e.target.checked })}
-                              color="default"
                             />
                           }
                           label={
@@ -470,7 +468,7 @@ const SendChargeForm: React.FC<Props> = ({ preselectedMember }) => {
           {/* Total + send button */}
           <Grid item xs={12}>
             <Divider style={{ marginBottom: 16 }} />
-            <Grid container justifyContent="space-between" alignItems="center">
+            <Grid container justify="space-between" alignItems="center">
               <div>
                 {isMultiLine && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
@@ -535,7 +533,7 @@ const SendChargeForm: React.FC<Props> = ({ preselectedMember }) => {
               <Paper variant="outlined" style={{ padding: 12 }}>
                 <Typography variant="subtitle2" gutterBottom>{invoiceName}</Typography>
                 {lineItems.map((l, i) => (
-                  <Grid container justifyContent="space-between" key={i}>
+                  <Grid container justify="space-between" key={i}>
                     <Typography variant="body2">{l.name} ×{l.quantity}</Typography>
                     <Typography variant="body2">
                       {numberAsCurrency(l.unitPrice * l.quantity)}
@@ -543,7 +541,7 @@ const SendChargeForm: React.FC<Props> = ({ preselectedMember }) => {
                   </Grid>
                 ))}
                 <Divider style={{ margin: "8px 0" }} />
-                <Grid container justifyContent="space-between">
+                <Grid container justify="space-between">
                   <Typography variant="subtitle2">Total</Typography>
                   <Typography variant="subtitle2">{numberAsCurrency(total)}</Typography>
                 </Grid>

@@ -9,16 +9,18 @@ import LoginPage from 'ui/auth/LoginPage';
 import UnsubscribeEmails from 'ui/member/UnsubscribeEmails';
 import FirebaseCallback from 'ui/auth/FirebaseCallback';
 
-const PublicRouting: React.FC = () => (
-  <Routes>
-    <Route path={`${Routing.PasswordReset}/:token`} element={<PasswordReset />} />
-    <Route path={Routing.Login} element={<LoginPage />} />
-    <Route path={Routing.SignUp} element={<SignUpWorkflow />} />
-    <Route path={Routing.Root} element={<LandingPage />} />
-    <Route path={Routing.Unsubscribe} element={<UnsubscribeEmails />} />
-    <Route path="/auth/callback" element={<FirebaseCallback />} />
-    <Route path="*" element={<Navigate to="/" replace />} />
-  </Routes>
-);
+const PublicRouting: React.FC<{}> = () => {
+  return (
+    <Routes>
+      <Route path={`${Routing.PasswordReset}/:token`} element={<PasswordReset />} />
+      <Route path={Routing.Login} element={<LoginPage />} />
+      <Route path={Routing.SignUp} element={<SignUpWorkflow />} />
+      <Route path={Routing.Root} element={<LandingPage />} />
+      <Route path={Routing.Unsubscribe} element={<UnsubscribeEmails />} />
+      <Route path='/auth/callback' element={<FirebaseCallback />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
 
 export default PublicRouting;

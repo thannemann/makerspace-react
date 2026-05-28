@@ -249,7 +249,6 @@ export class InvoiceForm extends React.Component<Props, State> {
                     checked={applyDiscount}
                     onChange={this.toggleDiscount}
                     disabled={isRequesting}
-                    color="default"
                   />
                 }
                 label={fields.discount.label}

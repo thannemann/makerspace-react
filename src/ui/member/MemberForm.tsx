@@ -217,7 +217,6 @@ class MemberForm extends React.Component<OwnProps, State> {
               value={fields.silenceEmails.name}
               checked={!this.state.silenceEmails}
               onChange={this.toggleEmailNotifications}
-              color="default"
             />
           }
           label={fields.silenceEmails.label}
@@ -287,7 +286,6 @@ class MemberForm extends React.Component<OwnProps, State> {
                   value={fields.memberContractOnFile.name}
                   checked={this.state.memberContractOnFile}
                   onChange={this.toggleContract}
-                  color="default"
                 />
               }
               label={fields.memberContractOnFile.label}
@@ -303,7 +301,6 @@ class MemberForm extends React.Component<OwnProps, State> {
                     value={fields.subscription.name}
                     checked={this.state.subscription}
                     onChange={this.togglePaypal}
-                    color="default"
                   />
                 }
                 label={fields.subscription.label}

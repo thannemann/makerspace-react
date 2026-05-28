@@ -1,5 +1,6 @@
 import * as React from "react";
 import Dialog from "@mui/material/Dialog";
+import { styled } from '@mui/material/styles';
 
 import Form from "ui/common/Form";
 
@@ -19,11 +20,7 @@ interface FormModalProps {
   style?: { [key: string]: string };
 }
 
-const styles = {
-  root: {
-    overflow: 'visible'
-  }
-}
+
 
 export const formDialogClass = "form-modal-dialog";
 
@@ -33,8 +30,8 @@ const FormModal = (props: FormModalProps) => {
 
   return (
     <Dialog
-      sx={{ "& .MuiDialogContent-root": { overflow: "visible" }, "& .MuiPaper-root": { overflow: "visible" } }}
       className={formDialogClass}
+      sx={{ "& .MuiDialog-paperScrollPaper": { overflow: "visible" } }}
       fullWidth={true}
       fullScreen={fullScreen}
       open={isOpen}
