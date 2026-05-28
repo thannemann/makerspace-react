@@ -2,7 +2,6 @@ import * as React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 import { Routing, Whitelists } from 'app/constants';
-import NotFound from 'ui/common/NotFound';
 import MembersList from 'ui/member/MembersList';
 import RentalsList from 'ui/rentals/RentalsList';
 import EarnedMembershipsList from 'ui/earnedMemberships/EarnedMembershipsList';
@@ -32,11 +31,9 @@ interface Props {
 }
 
 /**
- * LogUnauthorizedRouteAccess
- * React component that logs when an authenticated user attempts to access
- * a route that is not defined in the routing configuration or that they don't have permission to access.
+ * Logs unauthorized route access and redirects authenticated user to their profile.
  */
-const LogUnauthorizedRouteAccess: React.FC = () => {
+const RedirectHome: React.FC<{ currentUserId: string }> = ({ currentUserId }) => {
   const { pathname } = useLocation();
   const { currentUser: { id: userId } } = useAuthState();
 
@@ -46,7 +43,7 @@ const LogUnauthorizedRouteAccess: React.FC = () => {
     );
   }, [pathname, userId]);
 
-  return null;
+  return <Navigate to={`${Routing.Members}/${currentUserId}`} replace />;
 };
 
 const PrivateRouting: React.FC<Props> = ({ currentUserId, permissions }) => {
@@ -55,7 +52,6 @@ const PrivateRouting: React.FC<Props> = ({ currentUserId, permissions }) => {
   const billingEnabled = permissions[Whitelists.billing] || false;
   const earnedMembershipEnabled = caps.canManageEarnedMemberships && permissions[Whitelists.earnedMembership];
 
-  // Hard gate — member must enroll in TOTP before accessing anything else
   if (totpEnrollmentRequired) {
     return (
       <Routes>
@@ -88,8 +84,7 @@ const PrivateRouting: React.FC<Props> = ({ currentUserId, permissions }) => {
       <Route path={Routing.SendRegistration} element={<SendRegistrationComponent />} />
       {earnedMembershipEnabled && <Route path={Routing.EarnedMemberships} element={<EarnedMembershipsList />} />}
       <Route path={Routing.Unsubscribe} element={<UnsubscribeEmails />} />
-      <Route path="*" element={<><LogUnauthorizedRouteAccess /><NotFound /></>} />
-      <Route index element={<Navigate to={`${Routing.Members}/${currentUserId}`} replace />} />
+      <Route path="*" element={<RedirectHome currentUserId={currentUserId} />} />
     </Routes>
   );
 };
