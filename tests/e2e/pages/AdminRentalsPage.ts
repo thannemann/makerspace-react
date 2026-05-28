@@ -7,7 +7,8 @@ export class AdminRentalsPage {
     await this.page.getByRole('button', { name: 'Menu' }).click();
     await this.page.getByRole('link', { name: 'Rentals' }).click();
     await this.page.waitForURL(/\/admin\/rentals/, { timeout: 15_000 });
-    await this.page.getByRole('button', { name: 'Add Type' }).waitFor({ state: 'visible', timeout: 15_000 });
+    // Page lands on "Current Rentals" tab by default — wait for tablist only
+    await this.page.getByRole('tablist').waitFor({ state: 'visible', timeout: 15_000 });
   }
 
   async goToTab(name: string): Promise<void> {

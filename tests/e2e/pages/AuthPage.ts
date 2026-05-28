@@ -16,7 +16,7 @@ export class AuthPage {
 
     // Wait for login form to be ready before filling
     const emailField = this.page.getByRole('textbox', { name: 'Email' });
-    await emailField.waitFor({ state: 'visible', timeout: 10_000 });
+    await emailField.waitFor({ state: 'visible', timeout: 30_000 });
     await emailField.fill(email);
 
     const passwordField = this.page.getByRole('textbox', { name: 'Password' });

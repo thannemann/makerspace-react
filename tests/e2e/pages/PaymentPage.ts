@@ -21,18 +21,25 @@ export class PaymentPage {
   }
 
   async waitForCreditCardForm(): Promise<void> {
+    // The 'get-payment-methods' overlay appears in the checkout flow while existing
+    // payment methods load. Wait for it to clear before checking iframe visibility.
+    await this.page.waitForSelector('#get-payment-methods', { state: 'hidden', timeout: 30_000 })
+      .catch(() => {}); // not present in all flows (e.g. signup)
+    // Braintree hosted field iframes initialize asynchronously — 90s for sandbox
     await this.page.waitForSelector(
       `iframe[name="${FRAMES.number}"]`,
-      { state: 'visible', timeout: 60_000 }
+      { state: 'visible', timeout: 90_000 }
     );
   }
 
-  // ── Change payment method flow ────────────────────────────────────────────
-  // Used in changePaymentMethod: clicks "Add New Payment Method" inside the modal
+  async openCreditCardAccordion(): Promise<void> {
+    await this.page.getByRole('button', { name: 'Debit or Credit Card' }).click();
+    await this.page.waitForTimeout(3000);
+  }
 
   async openAddNewPaymentMethod(): Promise<void> {
     await this.page.getByRole('button', { name: 'Add New Payment Method' }).click();
-    await this.page.waitForTimeout(1500);
+    await this.page.waitForTimeout(3000);
   }
 
   async saveCard(): Promise<void> {
