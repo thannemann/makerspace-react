@@ -13,33 +13,36 @@ export class PaymentPage {
   constructor(private page: Page) {}
 
   // ── Subscription creation flow ────────────────────────────────────────────
-  // Used in createSubscription helper: clicks "Debit or Credit Card" accordion
 
   async openCreditCardAccordion(): Promise<void> {
-    await this.page.getByRole('button', { name: 'Debit or Credit Card' }).click();
-    await this.page.waitForTimeout(1500);
-  }
-
-  async waitForCreditCardForm(): Promise<void> {
-    // The 'get-payment-methods' overlay appears in the checkout flow while existing
-    // payment methods load. Wait for it to clear before checking iframe visibility.
+    // Wait for saved payment methods to finish loading before clicking CC.
+    // #payment-method-form is the overlay in the signup/subscription flow;
+    // #get-payment-methods is the overlay in the checkout flow.
+    // Both resolve immediately if the overlay isn't present.
+    await this.page.waitForSelector('#payment-method-form', { state: 'hidden', timeout: 30_000 })
+      .catch(() => {});
     await this.page.waitForSelector('#get-payment-methods', { state: 'hidden', timeout: 30_000 })
-      .catch(() => {}); // not present in all flows (e.g. signup)
-    // Braintree hosted field iframes initialize asynchronously — 90s for sandbox
-    await this.page.waitForSelector(
-      `iframe[name="${FRAMES.number}"]`,
-      { state: 'visible', timeout: 90_000 }
-    );
-  }
-
-  async openCreditCardAccordion(): Promise<void> {
+      .catch(() => {});
     await this.page.getByRole('button', { name: 'Debit or Credit Card' }).click();
     await this.page.waitForTimeout(3000);
   }
 
   async openAddNewPaymentMethod(): Promise<void> {
+    await this.page.waitForSelector('#get-payment-methods', { state: 'hidden', timeout: 30_000 })
+      .catch(() => {});
     await this.page.getByRole('button', { name: 'Add New Payment Method' }).click();
     await this.page.waitForTimeout(3000);
+  }
+
+  async waitForCreditCardForm(): Promise<void> {
+    // Wait for the 'get-payment-methods' overlay to clear (checkout flow only).
+    await this.page.waitForSelector('#get-payment-methods', { state: 'hidden', timeout: 30_000 })
+      .catch(() => {}); // not present in all flows (e.g. signup)
+    // Braintree hosted field iframes initialize asynchronously — 90s for sandbox.
+    await this.page.waitForSelector(
+      `iframe[name="${FRAMES.number}"]`,
+      { state: 'visible', timeout: 90_000 }
+    );
   }
 
   async saveCard(): Promise<void> {
