@@ -15,15 +15,16 @@ export class PaymentPage {
   // ── Subscription creation flow ────────────────────────────────────────────
 
   async openCreditCardAccordion(): Promise<void> {
-    // Wait for saved payment methods to finish loading before clicking CC.
-    // #payment-method-form is the overlay in the signup/subscription flow;
-    // #get-payment-methods is the overlay in the checkout flow.
-    // Both resolve immediately if the overlay isn't present.
+    // Wait for the payment methods list to finish loading before interacting.
     await this.page.waitForSelector('#payment-method-form', { state: 'hidden', timeout: 30_000 })
       .catch(() => {});
     await this.page.waitForSelector('#get-payment-methods', { state: 'hidden', timeout: 30_000 })
       .catch(() => {});
-    await this.page.getByRole('button', { name: 'Debit or Credit Card' }).click();
+    // Click the radio directly — clicking the accordion button triggers MUI's
+    // accordion toggle but doesn't reliably fire the RadioGroup onChange.
+    // Clicking the radio fires RadioGroup onChange → paymentType = CreditCard
+    // → accordion expands → Braintree hosted fields initialize.
+    await this.page.getByRole('radio', { name: 'Debit or Credit Card' }).click();
     await this.page.waitForTimeout(3000);
   }
 
