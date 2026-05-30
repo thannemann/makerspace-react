@@ -10,6 +10,7 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import ListItemButton from "@mui/material/ListItemButton";
 import Divider from "@mui/material/Divider";
 import Chip from "@mui/material/Chip";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -102,7 +103,7 @@ class Header extends React.Component<Props, State> {
     const match = this.props.location && this.props.location.pathname === path;
     return (
       <Link key={id} id={id} to={path} style={{ outline: "none", textDecoration: "none", color: "unset" }} onClick={this.detachMenu}>
-        <MenuItem selected={match}>{label}</MenuItem>
+        <ListItemButton selected={match} sx={{ py: 0.75, px: 2 }}>{label}</ListItemButton>
       </Link>
     );
   }
@@ -110,9 +111,9 @@ class Header extends React.Component<Props, State> {
   private renderLoginLink = () => {
     return (
       <Link to={Routing.Login} style={{ outline: "none", textDecoration: "none", color: "unset" }}>
-        <MenuItem component={Typography as any}>
+        <ListItemButton sx={{ py: 0.75, px: 2 }}>
           Already a member? Login
-        </MenuItem>
+        </ListItemButton>
       </Link>
     );
   }
