@@ -70,34 +70,5 @@
     "build": "webpack --config prod.config.js",
     "test": "jest --no-cache",
     "test-watch": "yarn test --watch"
-  },
-  "jest": {
-    "collectCoverage": false,
-    "collectCoverageFrom": [
-      "src/**/*.{ts,tsx}"
-    ],
-    "coverageReporters": [
-      "text",
-      "html"
-    ],
-    "transform": {
-      "^.+\\.(j|t)sx?$": "ts-jest"
-    },
-    "testRegex": "/tests/unit/.*\\.spec\\.(j|t)sx?$",
-    "moduleNameMapper": {
-      "^(api|app|ui|documents)[/](.*)$": "<rootDir>/src/$1/$2"
-    },
-    "moduleFileExtensions": [
-      "js",
-      "ts",
-      "tsx"
-    ],
-    "testEnvironment": "jsdom",
-    "testEnvironmentOptions": {},
-    "globals": {
-      "ts-jest": {
-        "tsconfig": "tsconfig.test.json"
-      }
-    }
   }
 }
