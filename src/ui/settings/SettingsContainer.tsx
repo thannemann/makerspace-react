@@ -5,7 +5,7 @@ import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import List from "@mui/material/List";
-import ListItem from "@mui/material/ListItem";
+import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 
 import PaymentMethodsContainer from "ui/checkout/PaymentMethodsContainer";
@@ -30,7 +30,6 @@ const SettingsContainer: React.FC = () => {
   const { currentUser: { id: currentUserId }, permissions } = useAuthState();
   const billingEnabled = !!permissions[Whitelists.billing];
   const { memberId: routeMemberId, resource } = useParams<{ memberId: string, resource: string }>();
-  // Use the route memberId (supports admin viewing another member's settings)
   const targetMemberId = routeMemberId || currentUserId;
 
   const [selectedIndex, setIndex] = React.useState(0);
@@ -64,22 +63,22 @@ const SettingsContainer: React.FC = () => {
     <Grid container spacing={2}>
       <Grid item md={4} sm={5} xs={12}>
         <List component="nav">
-          <ListItem button selected={selectedIndex === 0} onClick={onSelectItem(0, "profile")}>
+          <ListItemButton selected={selectedIndex === 0} onClick={onSelectItem(0, "profile")}>
             <ListItemText id="settings-profile" primary="Personal Information" />
-          </ListItem>
+          </ListItemButton>
           {billingEnabled && (
             <>
-              <ListItem button selected={selectedIndex === 1} onClick={onSelectItem(1, "subscriptions")}>
+              <ListItemButton selected={selectedIndex === 1} onClick={onSelectItem(1, "subscriptions")}>
                 <ListItemText id="settings-membership" primary="Subscriptions" />
-              </ListItem>
-              <ListItem button selected={selectedIndex === 2} onClick={onSelectItem(2, "payment-methods")}>
+              </ListItemButton>
+              <ListItemButton selected={selectedIndex === 2} onClick={onSelectItem(2, "payment-methods")}>
                 <ListItemText id="settings-payment-methods" primary="Payment Methods" />
-              </ListItem>
+              </ListItemButton>
             </>
           )}
-          <ListItem button selected={selectedIndex === 3} onClick={onSelectItem(3, "security")}>
+          <ListItemButton selected={selectedIndex === 3} onClick={onSelectItem(3, "security")}>
             <ListItemText id="settings-security" primary="Security" />
-          </ListItem>
+          </ListItemButton>
         </List>
       </Grid>
       <Grid item md={8} sm={7} xs={12}>
