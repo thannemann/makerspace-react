@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base",
+  "include": [
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "module": "commonjs",
+    "skipLibCheck": true,
+    "types": ["jest", "node"]
+  }
+}
