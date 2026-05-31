@@ -22,7 +22,7 @@ import { timeToDate } from "ui/utils/timeToDate";
 
 interface CheckInRecord {
   _id?: string;
-  time?: number;
+  timeOf?: number;
   dateOf?: Date;
   validity?: string;
   where?: string;
@@ -135,7 +135,7 @@ const MemberCheckInActivity: React.FC = () => {
           allRecords = allRecords.map((record) => {
             const filtered: CheckInRecord = {};
             if (record._id) filtered._id = record._id;
-            if (record.time) filtered.time = record.time;
+            if (record.timeOf) filtered.timeOf = record.timeOf;
             if (record.dateOf) filtered.dateOf = record.dateOf;
             if (record.validity) filtered.validity = record.validity;
             if (record.where) filtered.where = record.where;
@@ -182,8 +182,8 @@ const MemberCheckInActivity: React.FC = () => {
     if (record.dateOf) {
       return timeToDate(new Date(record.dateOf).getTime());
     }
-    if (record.time) {
-      return timeToDate(record.time);
+    if (record.timeOf) {
+      return timeToDate(record.timeOf);
     }
     return "-";
   };
@@ -258,7 +258,7 @@ const MemberCheckInActivity: React.FC = () => {
                 {records.map((record, idx) => {
                   const visibleFields = Object.entries(record)
                     .filter(([key, value]) => {
-                      if (key === "_id" || key === "time" || key === "dateOf" || key === "validity" || key === "where") {
+                      if (key === "_id" || key === "timeOf" || key === "dateOf" || key === "validity" || key === "where") {
                         return false;
                       }
                       return shouldDisplay(value);
