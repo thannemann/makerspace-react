@@ -10,6 +10,8 @@ import Typography from '@mui/material/Typography';
 import { useQueryContext } from 'ui/common/Filters/QueryContext';
 import { withFilterButton } from 'ui/common/FilterButton';
 import { toDatePicker, dateToMidnight } from 'ui/utils/timeToDate';
+import MemberSearchInput from 'ui/common/MemberSearchInput';
+import { SelectOption } from 'ui/common/AsyncSelect';
 
 export const LOG_TYPE_OPTIONS: Record<string, string> = {
   '':       'All',
@@ -42,6 +44,18 @@ const AuditLogFilters: React.FC<{ close: () => void; onChange: () => void }> = (
   const onDateChange = React.useCallback((param: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = event.currentTarget;
     setParam(param, value ? dateToMidnight(value) : undefined);
+    onChange();
+    close();
+  }, [setParam, onChange, close]);
+
+  const onActorChange = React.useCallback((selection: SelectOption) => {
+    setParam('actorId', selection ? selection.value : undefined);
+    onChange();
+    close();
+  }, [setParam, onChange, close]);
+
+  const onSubjectChange = React.useCallback((selection: SelectOption) => {
+    setParam('subjectId', selection ? selection.value : undefined);
     onChange();
     close();
   }, [setParam, onChange, close]);
@@ -84,40 +98,22 @@ const AuditLogFilters: React.FC<{ close: () => void; onChange: () => void }> = (
 
       <Grid size={{ xs: 12 }} style={{ marginBottom: '1em' }}>
         <FormControl fullWidth>
-          <FormLabel>Changed By (Member ID)</FormLabel>
-          <TextField
-            id='audit-actor-input'
-            type='text'
-            placeholder='Paste member ID...'
-            defaultValue={params.actorId || ''}
-            onKeyPress={(event: React.KeyboardEvent<HTMLInputElement>) => {
-              if (event.key === 'Enter') {
-                const value = (event.target as HTMLInputElement).value;
-                setParam('actorId', value || undefined);
-                onChange();
-                close();
-              }
-            }}
+          <FormLabel>Changed By</FormLabel>
+          <MemberSearchInput
+            name='actorId'
+            placeholder='Search by name...'
+            onChange={onActorChange}
           />
         </FormControl>
       </Grid>
 
       <Grid size={{ xs: 12 }} style={{ marginBottom: '1em' }}>
         <FormControl fullWidth>
-          <FormLabel>Member Affected (Member ID)</FormLabel>
-          <TextField
-            id='audit-subject-input'
-            type='text'
-            placeholder='Paste member ID...'
-            defaultValue={params.subjectId || ''}
-            onKeyPress={(event: React.KeyboardEvent<HTMLInputElement>) => {
-              if (event.key === 'Enter') {
-                const value = (event.target as HTMLInputElement).value;
-                setParam('subjectId', value || undefined);
-                onChange();
-                close();
-              }
-            }}
+          <FormLabel>Member Affected</FormLabel>
+          <MemberSearchInput
+            name='subjectId'
+            placeholder='Search by name...'
+            onChange={onSubjectChange}
           />
         </FormControl>
       </Grid>
