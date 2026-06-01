@@ -11,7 +11,7 @@ export interface AuditLog {
   subjectName:     string | null;
   resourceType:    string;
   resourceId:      string;
-  changes:         Record<string, [unknown, unknown]> | null;
+  fieldChanges:         Record<string, [unknown, unknown]> | null;
   beforeSnapshot:  Record<string, unknown> | null;
   afterSnapshot:   Record<string, unknown> | null;
   slackChannel:    string | null;

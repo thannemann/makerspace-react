@@ -95,8 +95,8 @@ const AuditLogDetail: React.FC<Props> = ({ log }) => {
 
       <Divider style={{ marginBottom: '1em' }} />
 
-      {log.changes && Object.keys(log.changes).length > 0 && (
-        <ChangesSection changes={log.changes} />
+      {log.fieldChanges && Object.keys(log.fieldChanges).length > 0 && (
+        <ChangesSection changes={log.fieldChanges} />
       )}
 
       <Box style={{ display: 'flex', gap: '2em', flexWrap: 'wrap' }}>
@@ -112,7 +112,7 @@ const AuditLogDetail: React.FC<Props> = ({ log }) => {
         )}
       </Box>
 
-      {!log.changes && !log.beforeSnapshot && !log.afterSnapshot && (
+      {!log.fieldChanges && !log.beforeSnapshot && !log.afterSnapshot && (
         <Typography variant='body2' color='textSecondary'>
           No field-level change data recorded for this event.
         </Typography>
