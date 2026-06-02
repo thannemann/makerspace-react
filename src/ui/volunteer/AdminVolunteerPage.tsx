@@ -384,7 +384,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ isOpen, onClose, onSa
         </Grid>
         <Grid size={{ xs: 12 }}>
           <TextField label='Credit Value' value={creditValue} onChange={e => setCreditValue(e.target.value)}
-            type='number' inputProps={{ min: 0.5, max: 2, step: 0.5 }} fullWidth required helperText='Max 2 credits' />
+            type='number' slotProps={{ htmlInput: { min: 0.5, max: 2, step: 0.5 } }} fullWidth required helperText='Max 2 credits' />
         </Grid>
       </Grid>
     </FormModal>
@@ -620,11 +620,11 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ isOpen, onClose, on
         </Grid>
         <Grid size={{ xs: 6 }}>
           <TextField label='Credit Value' value={creditValue} onChange={e => setCreditValue(e.target.value)}
-            type='number' inputProps={{ min: 0.5, step: 0.5 }} fullWidth required />
+            type='number' slotProps={{ htmlInput: { min: 0.5, step: 0.5 } }} fullWidth required />
         </Grid>
         <Grid size={{ xs: 6 }}>
           <TextField label='Event Date' value={eventDate} onChange={e => setEventDate(e.target.value)}
-            type='date' fullWidth InputLabelProps={{ shrink: true }} />
+            type='date' fullWidth slotProps={{ inputLabel: { shrink: true } }} />
         </Grid>
       </Grid>
     </FormModal>

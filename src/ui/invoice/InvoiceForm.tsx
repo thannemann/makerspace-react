@@ -232,8 +232,8 @@ export class InvoiceForm extends React.Component<Props, State> {
                   name={fields.dueDate.name}
                   placeholder={fields.dueDate.placeholder}
                   type="date"
-                  InputLabelProps={{
-                    shrink: true
+                  slotProps={{
+                    inputLabel: { shrink: true },
                   }}
                 />
               </Grid>

@@ -154,12 +154,14 @@ class PasswordReset extends React.Component<Props, State> {
                       type={passwordMask ? "password" : "text"}
                       value={password}
                       onChange={this.handlePasswordChange}
-                      InputProps={{
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <RemoveRedEye style={{ cursor: "pointer" }} onClick={this.togglePasswordMask} />
-                          </InputAdornment>
-                        )
+                      slotProps={{
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <RemoveRedEye style={{ cursor: "pointer" }} onClick={this.togglePasswordMask} />
+                            </InputAdornment>
+                          )
+                        }
                       }}
                     />
                     {password && (

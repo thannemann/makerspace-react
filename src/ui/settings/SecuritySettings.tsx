@@ -177,7 +177,9 @@ const TotpSection: React.FC<{ memberId: string; initialEnabled: boolean; onEnrol
                 label='Authentication Code'
                 value={code}
                 onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                inputProps={{ inputMode: 'numeric', maxLength: 6, style: { textAlign: 'center', fontSize: '1.2rem', letterSpacing: '0.3em' } }}
+                slotProps={{
+                  htmlInput: { inputMode: 'numeric', maxLength: 6, style: { textAlign: 'center', fontSize: '1.2rem', letterSpacing: '0.3em' } }
+                }}
                 style={{ width: 180 }}
                 autoComplete='one-time-code'
               />

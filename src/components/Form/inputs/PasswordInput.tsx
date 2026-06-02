@@ -62,15 +62,17 @@ export const PasswordInput = ({
             id={fieldName}
             placeholder={placeholder}
             type={mask ? 'password' : 'text'}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  {mask ? 
-                    <Visibility style={{cursor: 'pointer'}} onClick={toggleMask} /> :
-                    <VisibilityOff style={{cursor: 'pointer'}} onClick={toggleMask} />
-                  }
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {mask ? 
+                      <Visibility style={{cursor: 'pointer'}} onClick={toggleMask} /> :
+                      <VisibilityOff style={{cursor: 'pointer'}} onClick={toggleMask} />
+                    }
+                  </InputAdornment>
+                ),
+              },
             }}
           />
           {value && (

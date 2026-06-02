@@ -234,8 +234,8 @@ class MemberForm extends React.Component<OwnProps, State> {
                 name={fields.expirationTime.name}
                 placeholder={fields.expirationTime.placeholder}
                 type="date"
-                InputLabelProps={{
-                  shrink: true,
+                slotProps={{
+                  inputLabel: { shrink: true },
                 }}
               />
             </Grid>

@@ -316,8 +316,8 @@ export class BillingFormComponent extends React.Component<OwnProps, State>{
               name={fields.promotionEndDate.name}
               placeholder={fields.promotionEndDate.placeholder}
               type="date"
-              InputLabelProps={{
-                shrink: true,
+              slotProps={{
+                inputLabel: { shrink: true },
               }}
             />
           </Grid>

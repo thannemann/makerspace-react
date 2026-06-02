@@ -168,15 +168,17 @@ const ChangePasswordForm: React.FC<Props> = ({ memberId, memberEmail }) => {
               value={password}
               autoComplete="new-password"
               onChange={(e) => { setPassword(e.target.value); setError(""); setSuccess(""); }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <RemoveRedEye
-                      style={{ cursor: "pointer" }}
-                      onClick={() => setShowPassword(v => !v)}
-                    />
-                  </InputAdornment>
-                )
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <RemoveRedEye
+                        style={{ cursor: "pointer" }}
+                        onClick={() => setShowPassword(v => !v)}
+                      />
+                    </InputAdornment>
+                  )
+                }
               }}
             />
           </Grid>

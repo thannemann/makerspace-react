@@ -192,15 +192,17 @@ const AdminChangePasswordModal: React.FC<Props> = ({ member = {} as Member }) =>
                     value={password}
                     autoComplete="new-password"
                     onChange={(e) => { setPassword(e.target.value); setError(""); }}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <RemoveRedEye
-                            style={{ cursor: "pointer" }}
-                            onClick={() => setShowPassword(v => !v)}
-                          />
-                        </InputAdornment>
-                      )
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <RemoveRedEye
+                              style={{ cursor: "pointer" }}
+                              onClick={() => setShowPassword(v => !v)}
+                            />
+                          </InputAdornment>
+                        )
+                      }
                     }}
                   />
                 </Grid>
