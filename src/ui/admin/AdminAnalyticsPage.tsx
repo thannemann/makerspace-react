@@ -91,7 +91,7 @@ const MemberGrowthTab: React.FC = () => {
           <Grid size={{ xs: 12, sm: 3 }}>
             <FormControl fullWidth size='small'>
               <InputLabel>Year</InputLabel>
-              <Select value={year} label='Year' onChange={e => setYear(e.target.value as number | '')}>
+              <Select value={year} label='Year' onChange={e => setYear(e.target.value === '' ? '' : Number(e.target.value))}>
                 <MenuItem value=''>All time</MenuItem>
                 {YEAR_OPTIONS.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
               </Select>
@@ -111,7 +111,15 @@ const MemberGrowthTab: React.FC = () => {
       <Grid size={{ xs: 12 }}>
         <Typography variant='h6' gutterBottom>New Members per Month</Typography>
         {loaded && growth.length === 0 && (
-          <EmptyChart message='No member records found with a start date in this range. Ensure members have a startDate set.' />
+          <ResponsiveContainer width='100%' height={300}>
+            <BarChart data={[{ month: 'No data', count: 0 }]} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray='3 3' />
+              <XAxis dataKey='month' />
+              <YAxis allowDecimals={false} domain={[0, 1]} />
+              <Tooltip />
+              <Bar dataKey='count' name='New Members' fill='#e85d04' radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         )}
         {growth.length > 0 && (
           <ResponsiveContainer width='100%' height={300}>
@@ -186,7 +194,7 @@ const VolunteerAnalyticsTab: React.FC = () => {
       <Grid size={{ xs: 12, sm: 3 }}>
         <FormControl fullWidth size='small'>
           <InputLabel>Year</InputLabel>
-          <Select value={year} label='Year' onChange={e => setYear(e.target.value as number | '')}>
+          <Select value={year} label='Year' onChange={e => setYear(e.target.value === '' ? '' : Number(e.target.value))}>
             <MenuItem value=''>All time</MenuItem>
             {YEAR_OPTIONS.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
           </Select>
