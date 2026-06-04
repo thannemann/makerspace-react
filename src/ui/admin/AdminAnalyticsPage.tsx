@@ -97,12 +97,6 @@ const MemberGrowthTab: React.FC = () => {
               </Select>
             </FormControl>
           </Grid>
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <ToggleButtonGroup value={gran} exclusive size='small' onChange={(_, v) => v && setGran(v)}>
-              <ToggleButton value='month'>Monthly</ToggleButton>
-              <ToggleButton value='day'>Daily</ToggleButton>
-            </ToggleButtonGroup>
-          </Grid>
           {loading && <Grid><CircularProgress size={20} /></Grid>}
         </Grid>
       </Grid>
@@ -136,7 +130,17 @@ const MemberGrowthTab: React.FC = () => {
 
       {/* Active member count over time */}
       <Grid size={{ xs: 12 }}>
-        <Typography variant='h6' gutterBottom>Active Member Count Over Time</Typography>
+        <Grid container spacing={2} alignItems='center' style={{ marginBottom: 8 }}>
+          <Grid>
+            <Typography variant='h6'>Active Member Count Over Time</Typography>
+          </Grid>
+          <Grid>
+            <ToggleButtonGroup value={gran} exclusive size='small' onChange={(_, v) => v && setGran(v)}>
+              <ToggleButton value='month'>Monthly</ToggleButton>
+              <ToggleButton value='day'>Daily</ToggleButton>
+            </ToggleButtonGroup>
+          </Grid>
+        </Grid>
         {loaded && active.length === 0 && (
           <EmptyChart message='No snapshot data available for this range. The daily snapshot job must have run to populate this chart.' />
         )}
