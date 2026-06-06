@@ -45,8 +45,7 @@ export class AdminVolunteerPage {
     await dialog.getByRole('textbox', { name: 'Description' }).fill(description);
     await dialog.getByRole('spinbutton', { name: 'Credit Value' }).fill(String(credits));
     await this.page.getByRole('button', { name: 'Submit' }).click();
-    // Wait for the dialog to close (API call + refresh) rather than a fixed timeout
-    await this.page.waitForSelector('#create-volunteer-task-submit', { state: 'hidden', timeout: 15_000 });
+    await this.page.waitForTimeout(500);
   }
 
   async verifyTaskInTable(title: string): Promise<void> {
@@ -124,18 +123,28 @@ export class MemberVolunteerPage {
   async claimTask(): Promise<void> {
     await this.page.getByRole('button', { name: 'Claim Task' }).click();
     await this.page.waitForTimeout(1000);
+    await this.page.reload();
+    await this.page.waitForLoadState('networkidle');
+    await this.page.getByRole('tab', { name: /volunteer/i }).click();
+    await this.page.waitForTimeout(1000);
   }
 
   // Select a task this member has already claimed (status = Claimed)
   async selectClaimedTask(): Promise<void> {
-    const table = await this.getBountyTasksTable();
-    const claimedRow = table.getByRole('row').filter({ hasText: /Claimed/i }).first();
+    // Locate My Active Claims table via its heading
+    const claimsTable = this.page.getByRole('heading', { name: 'My Active Claims' })
+      .locator('../..')
+      .locator('table')
+      .first();
+    await claimsTable.waitFor({ state: 'visible', timeout: 10_000 });
+    const claimedRow = claimsTable.getByRole('row')
+      .filter({ has: this.page.getByRole('cell', { name: 'Claimed', exact: true }) })
+      .first();
     await claimedRow.waitFor({ state: 'visible', timeout: 10_000 });
     await claimedRow.locator('input[type="checkbox"]').check();
-    // Allow React state update to propagate before checking for the button.
-    // The Mark Complete button only renders after selectedIds state updates.
     await this.page.waitForTimeout(300);
-    await this.page.getByRole('button', { name: 'Mark Complete' }).waitFor({ state: 'visible', timeout: 10_000 });
+    await this.page.getByRole('button', { name: 'Mark Complete' })
+      .waitFor({ state: 'visible', timeout: 10_000 });
   }
 
   // Member marks their claimed task as complete

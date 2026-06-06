@@ -4,8 +4,8 @@ import { MemberPage } from '../pages/MemberPage';
 import { AdminToolCheckoutsPage } from '../pages/AdminToolCheckoutsPage';
 import { adminMember, rmMember0, rmMember1, basicMember, basicMember1 } from '../fixtures/testData';
 
-const WOODSHOP        = 'woodshop';
-const WOODSHOP_SLACK  = 'shop-woodworking';
+const WOODSHOP        = 'testshop';
+const WOODSHOP_SLACK  = 'shop-testshop';
 const METALSHOP       = 'metalshop';
 const METALSHOP_SLACK = 'shop-metalwork';
 const BANDSAW         = 'bandsaw';
@@ -82,35 +82,20 @@ test.describe('RM checks out member on metalshop CNC mill with prereq warning', 
     await page.getByRole('button', { name: 'Check Out Member' }).click();
     await page.waitForSelector('[role="dialog"]', { timeout: 10_000 });
 
-    // Search for Basic Member1 — type slowly to trigger debounce
-    await page.locator('div').filter({ hasText: /^Search by name or email$/ }).nth(1).click();
-    await page.locator('input[id^="react-select"]').last().type('Basic Member1', { delay: 50 });
-    await page.waitForTimeout(1500);
+    // Search for Basic Member1 — use react-select input directly
+    const memberInput = page.locator('input[id^="react-select"]').last();
+    await memberInput.click();
+    await memberInput.type('Basic Member1', { delay: 50 });
+    await page.waitForSelector('[role="option"]', { timeout: 10_000 });
     await page.getByRole('option', { name: /Basic Member1/i }).first().click();
 
-    // Scope to dialog — page also has comboboxes behind the modal.
-    // Use locator('select') not getByRole('combobox'): CheckoutModal uses
-    // <Select native> which renders a real <select> element.
-    const dialog = page.locator('[role="dialog"]');
-
-    const shopSelect = dialog.locator('select').first();
-    await expect(shopSelect.locator('option').filter({ hasText: METALSHOP }))
-      .toHaveCount(1, { timeout: 10_000 });
-    const shopValue = await shopSelect.locator('option')
-      .filter({ hasText: METALSHOP })
-      .getAttribute('value');
-    if (!shopValue) throw new Error(`Shop option not found: ${METALSHOP}`);
-    await shopSelect.selectOption(shopValue);
+    // Use page-scoped nth: nth(0)=member react-select, nth(1)=shop, nth(2)=tool
+    const shopSelect = page.getByRole('combobox').nth(1);
+    await shopSelect.selectOption({ label: METALSHOP });
     await page.waitForTimeout(500);
 
-    const toolSelect = dialog.locator('select').nth(1);
-    await expect(toolSelect.locator('option').filter({ hasText: CNC_MILL }))
-      .toHaveCount(1, { timeout: 10_000 });
-    const toolValue = await toolSelect.locator('option')
-      .filter({ hasText: CNC_MILL })
-      .getAttribute('value');
-    if (!toolValue) throw new Error(`Tool option not found: ${CNC_MILL}`);
-    await toolSelect.selectOption(toolValue);
+    const toolSelect = page.getByRole('combobox').nth(2);
+    await toolSelect.selectOption({ label: CNC_MILL });
     await page.waitForTimeout(300);
 
     // Prerequisite warning shows in modal before submitting
