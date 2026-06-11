@@ -645,7 +645,7 @@ const TasksTabInner: React.FC = () => {
   const { isRequesting, data: tasks = [], response, refresh, error: loadError } =
     useReadTransaction(
       adminListVolunteerTasks,
-      { status: statusFilter || undefined, parentsOnly: statusFilter === 'pending' ? false : true },
+      { status: statusFilter || undefined, parentsOnly: statusFilter !== '' && statusFilter !== 'pending' },
       undefined,
       `volunteer-tasks-${statusFilter}`
     );
