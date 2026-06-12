@@ -94,7 +94,7 @@ test.describe('Admin directly awards a volunteer credit', () => {
     // Credit should appear in the credits table, landed as Pending
     const creditRow = page.getByRole('row').filter({ hasText: new RegExp(desc, 'i') }).first();
     await expect(creditRow).toBeVisible({ timeout: 10_000 });
-    await expect(creditRow.getByText('Pending')).toBeVisible();
+    await expect(creditRow.getByText('Pending', { exact: true })).toBeVisible();
   });
 
   test('Awarded credit appears in member volunteer summary', async ({ page }) => {
@@ -130,7 +130,7 @@ test.describe('RM-awarded credit goes through pending → approved flow', () => 
     // Credit should appear in the table with Pending status
     const creditRow = page.getByRole('row').filter({ hasText: new RegExp(PENDING_CREDIT_DESC, 'i') }).first();
     await expect(creditRow).toBeVisible({ timeout: 10_000 });
-    await expect(creditRow.getByText('Pending')).toBeVisible();
+    await expect(creditRow.getByText('Pending', { exact: true })).toBeVisible();
   });
 
   test('Admin approves a pending credit from volunteer credits list', async ({ page }) => {
