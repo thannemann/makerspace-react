@@ -54,8 +54,8 @@ const AdminRentalSpots: React.FC = () => {
   const [linkCopied,   setLinkCopied]   = React.useState(false);
   const { params, changePage } = useQueryContext();
 
-  const copyDeepLink = React.useCallback((spotId: string) => {
-    const path = Routing.RentalSpotDeepLink.replace(Routing.PathPlaceholder.SpotId, spotId);
+  const copyDeepLink = React.useCallback((spotNumber: string) => {
+    const path = Routing.RentalSpotDeepLink.replace(Routing.PathPlaceholder.SpotId, spotNumber);
     const url = `${window.location.origin}${path}`;
     navigator.clipboard?.writeText(url);
     setLinkCopied(true);
@@ -149,7 +149,7 @@ const AdminRentalSpots: React.FC = () => {
             {selectedSpot && (
               <>
                 <Button variant="outlined" color="primary" startIcon={<ContentCopyIcon />}
-                  onClick={() => copyDeepLink(selectedSpot.id)}>
+                  onClick={() => copyDeepLink(selectedSpot.number)}>
                   {linkCopied ? "Copied!" : "Copy Link"}
                 </Button>
                 <Button variant="outlined" color="primary" startIcon={<EditIcon />}
