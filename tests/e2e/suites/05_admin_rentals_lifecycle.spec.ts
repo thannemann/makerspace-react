@@ -111,6 +111,27 @@ test.describe('Admin approves a rental request', () => {
     await expect(page.getByRole('row').filter({ hasText: /Basic Member6/i }).first())
       .toBeVisible({ timeout: 15_000 });
   });
+
+  test('Admin vacates GT2 so it is available for deny test', async ({ page }) => {
+    // Teardown — cancel member6 rental so GT2 is available for the deny test
+    const auth    = new AuthPage(page);
+    const rentals = new AdminRentalsPage(page);
+
+    await auth.signIn(adminMember.email, adminMember.password);
+    await rentals.goto();
+    await rentals.goToTab('Current Rentals');
+    await page.waitForTimeout(1000);
+
+    const row = page.getByRole('row').filter({ hasText: /Basic Member6/i }).first();
+    if (await row.isVisible({ timeout: 5_000 })) {
+      await row.locator('input[type="checkbox"]').check({ force: true });
+      await page.getByRole('button', { name: /cancel rental|vacate/i }).click();
+      await page.waitForSelector('[role="dialog"]', { timeout: 10_000 });
+      await page.getByRole('button', { name: /confirm|submit|yes/i }).first().click();
+      await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 15_000 });
+      await page.waitForTimeout(1000);
+    }
+  });
 });
 
 // ── Test: Member requests approval rental, admin denies ──────────────────────
@@ -160,6 +181,29 @@ test.describe('Admin denies a rental request', () => {
 // ── Test: Member cancels their own rental ─────────────────────────────────────
 
 test.describe('Member cancels their rental', () => {
+
+  test.beforeAll(async ({ browser }) => {
+    // GT1 may be occupied from 04_rentals suite — free it via admin before this test
+    const page    = await browser.newPage();
+    const auth    = new AuthPage(page);
+    const rentals = new AdminRentalsPage(page);
+
+    await auth.signIn(adminMember.email, adminMember.password);
+    await rentals.goto();
+    await rentals.goToTab('Current Rentals');
+    await page.waitForTimeout(1000);
+
+    const row = page.getByRole('row').filter({ hasText: /GT1/i }).first();
+    if (await row.isVisible({ timeout: 5_000 })) {
+      await row.locator('input[type="checkbox"]').check({ force: true });
+      await page.getByRole('button', { name: /cancel rental|vacate/i }).click();
+      await page.waitForSelector('[role="dialog"]', { timeout: 10_000 });
+      await page.getByRole('button', { name: /confirm|submit|yes/i }).first().click();
+      await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 15_000 });
+      await page.waitForTimeout(1000);
+    }
+    await page.close();
+  });
 
   test('Member self-assigns GT1 spot then cancels it', async ({ page }) => {
     const auth    = new AuthPage(page);

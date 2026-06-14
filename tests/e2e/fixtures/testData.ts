@@ -18,7 +18,7 @@ export const buildTestMember = (testName: string): TestMember => ({
   firstname: 'Test',
   lastname:  testName,
   email:     `e2e_${testName}_${RUN_ID}@test.com`,
-  password:  'password',
+  password:  'TestPass1!',
   phone:     '5551212',
   address: {
     street:     '12 Main St.',

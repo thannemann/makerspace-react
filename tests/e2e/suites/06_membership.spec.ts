@@ -167,8 +167,14 @@ test.describe('Admin cancels a member subscription', () => {
     // (#subscriptions-table id is on child elements, not the <table> itself)
     await page.locator('#subscription-option-cancel').waitFor({ state: 'visible', timeout: 15_000 });
 
-    // Select the first (only) subscription row checkbox
-    await page.getByRole('row').nth(1).getByRole('checkbox').check();
+    // Select the first data row checkbox — use input selector with force to ensure React state updates
+    const firstDataRow = page.getByRole('row').nth(1);
+    await firstDataRow.waitFor({ state: 'visible', timeout: 10_000 });
+    await firstDataRow.locator('input[type="checkbox"]').check({ force: true });
+    await page.waitForTimeout(500);
+
+    // Wait for Cancel button to become enabled after row selection
+    await expect(page.locator('#subscription-option-cancel')).toBeEnabled({ timeout: 10_000 });
 
     // Cancel button id="subscription-option-cancel", confirm modal submit id="cancel-subscription-submit"
     await page.locator('#subscription-option-cancel').click();
