@@ -79,7 +79,7 @@ export class AdminRentalsPage {
     // Wait for listbox to close before continuing
     await this.page.waitForSelector('[role="listbox"]', { state: 'hidden', timeout: 5_000 });
 
-    await dialog.getByRole('textbox').nth(2).fill(spot.description);
+    await dialog.getByLabel('Description').fill(spot.description);
   }
 
   async submitRentalSpotForm(): Promise<void> {

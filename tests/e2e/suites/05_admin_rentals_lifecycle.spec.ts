@@ -44,7 +44,7 @@ test.describe('Admin creates approval-required rental infrastructure', () => {
     await page.waitForSelector('[role="listbox"]', { timeout: 10_000 });
     await page.getByRole('option', { name: APPROVAL_TYPE, exact: true }).click();
     await page.waitForSelector('[role="listbox"]', { state: 'hidden', timeout: 5_000 });
-    await dialog.getByRole('textbox').nth(2).fill('Approval tote for testing');
+    await dialog.getByLabel('Description').fill('Approval tote for testing');
     // Check "Requires Approval"
     await dialog.getByRole('checkbox', { name: /requires admin approval/i }).check();
     await rentals.submitRentalSpotForm();
