@@ -27,7 +27,7 @@ export class AdminToolCheckoutsPage {
   }
 
   async verifyShopInTable(name: string): Promise<void> {
-    await expect(this.page.getByRole('cell', { name })).toBeVisible({ timeout: 10_000 });
+    await expect(this.page.getByRole('cell', { name, exact: true })).toBeVisible({ timeout: 10_000 });
   }
 
   // ── Tools ──────────────────────────────────────────────────────────────────
@@ -70,8 +70,8 @@ export class AdminToolCheckoutsPage {
     await this.page.waitForSelector('[role="option"]', { timeout: 10_000 });
     await this.page.getByRole('option').first().click();
 
-    // Select shop chip
-    await this.page.getByRole('button', { name: shopName }).click();
+    // Select shop chip — exact: true prevents matching seeded shops with similar names
+    await this.page.getByRole('button', { name: shopName, exact: true }).click();
 
     await this.page.getByRole('button', { name: 'Add Approver' }).click();
     await this.page.waitForTimeout(500);
@@ -92,29 +92,15 @@ export class AdminToolCheckoutsPage {
     await this.page.waitForSelector('[role="option"]', { timeout: 10_000 });
     await this.page.getByRole('option', { name: new RegExp(memberName, 'i') }).first().click();
 
-    // Scope to dialog — page also has comboboxes behind the modal
-    const dialog = this.page.locator('[role="dialog"]');
-
-    // Select shop by value — options are in DOM, shop value by text match
-    const shopCombobox = dialog.getByRole('combobox').first();
-    await expect(shopCombobox.locator('option').filter({ hasText: shopName }))
-      .toHaveCount(1, { timeout: 10_000 });
-    const shopValue = await shopCombobox.locator('option')
-      .filter({ hasText: shopName })
-      .getAttribute('value');
-    if (!shopValue) throw new Error(`Shop option not found: ${shopName}`);
-    await shopCombobox.selectOption(shopValue);
+    // Scope to dialog — page also has comboboxes behind the modal.
+    // Use page-scoped nth: nth(0)=member react-select, nth(1)=shop, nth(2)=tool.
+    // selectOption({ label }) does an exact label match on the native <select>.
+    const shopSelect = this.page.getByRole('combobox').nth(1);
+    await shopSelect.selectOption({ label: shopName });
     await this.page.waitForTimeout(500);
 
-    // Wait for tool options to populate after shop selection
-    const toolCombobox = dialog.getByRole('combobox').nth(1);
-    await expect(toolCombobox.locator('option').filter({ hasText: toolName }))
-      .toHaveCount(1, { timeout: 10_000 });
-    const toolValue = await toolCombobox.locator('option')
-      .filter({ hasText: toolName })
-      .getAttribute('value');
-    if (!toolValue) throw new Error(`Tool option not found: ${toolName}`);
-    await toolCombobox.selectOption(toolValue);
+    const toolSelect = this.page.getByRole('combobox').nth(2);
+    await toolSelect.selectOption({ label: toolName });
     await this.page.waitForTimeout(300);
 
     await this.page.getByRole('button', { name: 'Check Out' }).click();

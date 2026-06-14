@@ -130,7 +130,7 @@ const CreateRentalAdmin: React.FC<Props> = ({ member, onCreate }) => {
             <TextField
               select fullWidth required
               label="Select a Rental Spot"
-              inputProps={{ id: "admin-create-rental-spot-select" }}
+              slotProps={{ htmlInput: { id: "admin-create-rental-spot-select" } }}
               value={selectedSpotId}
               onChange={e => setSelectedSpotId(e.target.value)}
               variant="outlined"

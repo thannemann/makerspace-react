@@ -56,8 +56,10 @@ test.describe('Bounty task lifecycle', () => {
     await member.dismissNotificationModal();
     await volunteer.goToVolunteerTab();
 
-    // Claim first available task
-    await volunteer.selectFirstAvailableTask();
+    // Claim the task created in the previous test by title — avoids accidentally
+    // picking a seeded historical task which may block claiming due to reuse rules
+    await volunteer.selectTaskByTitle(TASK_1);
+    await page.getByRole('button', { name: 'Claim Task' }).waitFor({ state: 'visible', timeout: 5_000 });
     await volunteer.claimTask();
 
     // Mark complete

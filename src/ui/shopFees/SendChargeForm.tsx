@@ -370,7 +370,7 @@ const SendChargeForm: React.FC<Props> = ({ preselectedMember }) => {
                         size="small"
                         label="Unit Price ($)"
                         type="number"
-                        inputProps={{ min: "0.01", step: "0.01" }}
+                        slotProps={{ htmlInput: { min: "0.01", step: "0.01" } }}
                         value={line.unitPrice || ""}
                         onChange={e => onPriceChange(index, e.target.value)}
                       />
@@ -384,7 +384,7 @@ const SendChargeForm: React.FC<Props> = ({ preselectedMember }) => {
                         size="small"
                         label="Qty"
                         type="number"
-                        inputProps={{ min: 1, step: 1 }}
+                        slotProps={{ htmlInput: { min: 1, step: 1 } }}
                         value={line.quantity}
                         onChange={e => updateLine(index, {
                           quantity: Math.max(1, parseInt(e.target.value) || 1)

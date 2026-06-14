@@ -3,7 +3,6 @@ import TextField from "@mui/material/TextField";
 import Grid from "@mui/material/Grid";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
-import LinearProgress from "@mui/material/LinearProgress";
 import InputAdornment from "@mui/material/InputAdornment";
 import RemoveRedEye from "@mui/icons-material/RemoveRedEye";
 import Radio from "@mui/material/Radio";
@@ -15,32 +14,23 @@ import FormLabel from "@mui/material/FormLabel";
 import ErrorMessage from "ui/common/ErrorMessage";
 import { useAuthState } from "ui/reducer/hooks";
 import { useCapabilities } from "app/permissions";
+import { PasswordStrength, PasswordStrengthProfile, validatePasswordStrength } from "components/Form/inputs/PasswordStrength";
+import { apiErrorMessage } from "ui/common/apiErrors";
 
 interface Props {
   // The member whose password is being changed.
   // For self-service this is the logged-in member; for admin this is the selected member.
   memberId: string;
   memberEmail?: string;
+  memberFirstname?: string;
+  memberLastname?: string;
+  memberCity?: string;
+  memberAddress?: string;
 }
 
 type AdminMode = "set" | "reset";
 
-// Simple strength scorer: 0-4 based on length and character variety
-const scorePassword = (pw: string): number => {
-  if (!pw) return 0;
-  let score = 0;
-  if (pw.length >= 8) score++;
-  if (pw.length >= 12) score++;
-  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
-  if (/[0-9]/.test(pw)) score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
-  return Math.min(score, 4);
-};
-
-const strengthLabel = ["Too short", "Weak", "Fair", "Good", "Strong"];
-const strengthColor = ["#f44336", "#ff9800", "#ffeb3b", "#8bc34a", "#4caf50"];
-
-const ChangePasswordForm: React.FC<Props> = ({ memberId, memberEmail }) => {
+const ChangePasswordForm: React.FC<Props> = ({ memberId, memberEmail, memberFirstname, memberLastname, memberCity, memberAddress }) => {
   const { currentUser: { id: currentUserId } } = useAuthState();
   const { canChangeOtherPasswords: isAdmin } = useCapabilities();
   const isOwnPassword = currentUserId === memberId;
@@ -53,12 +43,18 @@ const ChangePasswordForm: React.FC<Props> = ({ memberId, memberEmail }) => {
   const [error, setError] = React.useState<string>("");
   const [success, setSuccess] = React.useState<string>("");
 
-  const strength = scorePassword(password);
+  const passwordProfile = React.useMemo<PasswordStrengthProfile>(() => ({
+    firstname: memberFirstname,
+    lastname: memberLastname,
+    city: memberCity,
+    address: memberAddress,
+    email: memberEmail,
+  }), [memberFirstname, memberLastname, memberCity, memberAddress, memberEmail]);
 
   const validate = (): string | null => {
     if (!password) return "Password cannot be blank.";
-    if (password.length < 8) return "Password must be at least 8 characters.";
-    if (strength < 2) return "Password is too weak. Try mixing uppercase, numbers, or symbols.";
+    const strengthError = validatePasswordStrength(password, passwordProfile);
+    if (strengthError) return strengthError;
     if (password !== confirm) return "Passwords do not match.";
     return null;
   };
@@ -77,7 +73,7 @@ const ChangePasswordForm: React.FC<Props> = ({ memberId, memberEmail }) => {
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          setError(body?.error?.message || "Failed to send reset email.");
+          setError(apiErrorMessage(body, "Failed to send reset email."));
         } else {
           setSuccess(`Password reset email sent to ${memberEmail || "the member"}.`);
         }
@@ -108,7 +104,7 @@ const ChangePasswordForm: React.FC<Props> = ({ memberId, memberEmail }) => {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body?.error?.message || "Failed to update password.");
+        setError(apiErrorMessage(body, "Failed to update password."));
       } else {
         setSuccess("Password updated successfully.");
         setPassword("");
@@ -168,15 +164,17 @@ const ChangePasswordForm: React.FC<Props> = ({ memberId, memberEmail }) => {
               value={password}
               autoComplete="new-password"
               onChange={(e) => { setPassword(e.target.value); setError(""); setSuccess(""); }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <RemoveRedEye
-                      style={{ cursor: "pointer" }}
-                      onClick={() => setShowPassword(v => !v)}
-                    />
-                  </InputAdornment>
-                )
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <RemoveRedEye
+                        style={{ cursor: "pointer" }}
+                        onClick={() => setShowPassword(v => !v)}
+                      />
+                    </InputAdornment>
+                  )
+                }
               }}
             />
           </Grid>
@@ -194,22 +192,14 @@ const ChangePasswordForm: React.FC<Props> = ({ memberId, memberEmail }) => {
           </Grid>
 
           {/* Strength meter */}
-          {password.length > 0 && (
-            <Grid size={{ xs: 12 }}>
-              <LinearProgress
-                variant="determinate"
-                value={(strength / 4) * 100}
-                style={{ height: 8, borderRadius: 4, backgroundColor: "#e0e0e0" }}
-                // MUI v4 doesn't support color prop directly on LinearProgress; use style override
-              />
-              <Typography
-                variant="caption"
-                style={{ color: strengthColor[strength], marginTop: 4, display: "block" }}
-              >
-                {strengthLabel[strength]}
-              </Typography>
-            </Grid>
-          )}
+          <Grid size={{ xs: 12 }}>
+            <PasswordStrength
+              password={password}
+              profile={passwordProfile}
+              progressStyle={{ height: 8, borderRadius: 4 }}
+              useTypography
+            />
+          </Grid>
         </>
       )}
 

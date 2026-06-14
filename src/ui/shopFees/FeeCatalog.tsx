@@ -69,7 +69,7 @@ const AddFeeItemModal: React.FC<AddFeeItemModalProps> = ({ onClose, onSave, load
         </Grid>
         <Grid size={{ xs: 12 }}>
           <TextField fullWidth required label="Unit Price ($)" placeholder="0.00"
-            type="number" inputProps={{ min: "0.01", step: "0.01" }}
+            type="number" slotProps={{ htmlInput: { min: "0.01", step: "0.01" } }}
             value={amount} onChange={e => setAmount(e.target.value)} />
         </Grid>
       </Grid>
@@ -120,7 +120,7 @@ const EditFeeItemRow: React.FC<EditFeeItemRowProps> = ({ item, onSave, onCancel,
       <TextField size="small" value={description} onChange={e => setDescription(e.target.value)}
         placeholder="Description" style={{ flex: 2 }} />
       <TextField size="small" value={amount} onChange={e => setAmount(e.target.value)}
-        placeholder="0.00" type="number" inputProps={{ min: "0.01", step: "0.01" }} style={{ flex: 1 }} />
+        placeholder="0.00" type="number" slotProps={{ htmlInput: { min: "0.01", step: "0.01" } }} style={{ flex: 1 }} />
       <Tooltip title="Save changes"><span>
         <IconButton size="small" color="primary" disabled={saving || !name || !amount}
           onClick={() => onSave(item.id, { name, description, amount })}>

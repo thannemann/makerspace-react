@@ -180,7 +180,11 @@ test.describe('Admin cancels a member subscription', () => {
     await member.clickMemberLink(TARGET_MEMBER);
     await member.waitForProfile();
 
-    // After cancellation membership type shows Month-to-month (no active subscription)
-    await expect(page.getByText('Month-to-month')).toBeVisible({ timeout: 15_000 });
+    // After cancellation membership type shows Month-to-month (no active subscription).
+    // Braintree sandbox webhook may take a few seconds to process — reload once to pick up
+    // updated state before asserting.
+    await page.reload();
+    await member.waitForProfile();
+    await expect(page.getByText('Month-to-month')).toBeVisible({ timeout: 30_000 });
   });
 });

@@ -68,6 +68,7 @@ test.describe('Self-registration from home page', () => {
     await page.getByRole('button', { name: 'Next' }).click();
 
     // ── Step 4: Payment ──
+    await payment.openCreditCardAccordion();
     await payment.waitForCreditCardForm();
     await payment.fillCreditCard(newVisa);
     await page.getByRole('button', { name: 'Next' }).click();
@@ -168,6 +169,7 @@ test.describe('Registration via URL with discount code', () => {
     await page.getByRole('button', { name: 'Next' }).click();
 
     // ── Step 4: Payment ──
+    await payment.openCreditCardAccordion();
     await payment.waitForCreditCardForm();
     await payment.fillCreditCard(newMastercard);
     await page.getByRole('button', { name: 'Next' }).click();

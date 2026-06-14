@@ -117,17 +117,19 @@ const SettingRow: React.FC<SettingRowProps> = ({ label, description, settingKey,
             variant='outlined'
             fullWidth
             disabled={saving}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position='end'>
-                  <IconButton size='small' onClick={handleSave} disabled={saving}>
-                    {saving ? <CircularProgress size={16} /> : <SaveIcon fontSize='small' />}
-                  </IconButton>
-                  <IconButton size='small' onClick={handleCancel} disabled={saving}>
-                    <CancelIcon fontSize='small' />
-                  </IconButton>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position='end'>
+                    <IconButton size='small' onClick={handleSave} disabled={saving}>
+                      {saving ? <CircularProgress size={16} /> : <SaveIcon fontSize='small' />}
+                    </IconButton>
+                    <IconButton size='small' onClick={handleCancel} disabled={saving}>
+                      <CancelIcon fontSize='small' />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
             }}
           />
         ) : (

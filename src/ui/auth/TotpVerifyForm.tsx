@@ -47,11 +47,13 @@ const TotpVerifyForm: React.FC<Props> = ({ onSubmit, onCancel, isRequesting, err
             label='Authentication Code'
             value={code}
             onChange={handleChange}
-            inputProps={{
-              inputMode: 'numeric',
-              pattern: '[0-9]*',
-              maxLength: 6,
-              style: { textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.4em' }
+            slotProps={{
+              htmlInput: {
+                inputMode: 'numeric',
+                pattern: '[0-9]*',
+                maxLength: 6,
+                style: { textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.4em' }
+              }
             }}
             style={{ width: 200 }}
             autoFocus

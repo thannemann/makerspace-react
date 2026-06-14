@@ -10,6 +10,7 @@ import useWriteTransaction from "../hooks/useWriteTransaction";
 import { ActionButton } from "../common/ButtonRow";
 import useModal from "../hooks/useModal";
 import { SubscriptionDetailsInner } from "./SubscriptionDetails";
+import { timeToDate } from "../utils/timeToDate";
 
 interface Props {
   subscription: Subscription;
@@ -31,8 +32,26 @@ const CancelSubscriptionModal: React.FC<Props> = ({ subscription, onSuccess }) =
     call({ id: subscription.id });
   }, [call, subscription.id]);
 
+  const isRental = subscription.resourceClass === "Rental";
   const disableButton = isCanceled(subscription);
   const whosSubscription = asAdmin ? (subscription.memberName ? `${subscription.memberName}'s` : "this") : "your";
+
+  const warningText = isRental ? (
+    <>
+      <Typography gutterBottom>
+        Cancelling {whosSubscription} subscription will also cancel the associated active rental.
+        {subscription.nextBillingDate && (
+          <> Access will continue until <strong>{timeToDate(subscription.nextBillingDate)}</strong>, after which the rental will be marked as vacating.</>
+        )}
+        {" "}This action cannot be undone.
+      </Typography>
+    </>
+  ) : (
+    <Typography gutterBottom>
+      Are you sure you want to cancel {whosSubscription} subscription? This action cannot be undone.
+    </Typography>
+  );
+
   return (
     <>
      <ActionButton
@@ -49,15 +68,13 @@ const CancelSubscriptionModal: React.FC<Props> = ({ subscription, onSuccess }) =
           loading={isRequesting}
           isOpen={isOpen}
           closeHandler={closeModal}
-          title="Cancel Subscription"
+          title={isRental ? "Cancel Rental Subscription" : "Cancel Subscription"}
           onSubmit={onSubmit}
           submitText="Submit"
           cancelText="Close"
           error={error}
         >
-          <Typography gutterBottom>
-            Are you sure you want to cancel {whosSubscription} subscription?  This action cannot be undone.
-          </Typography>
+          {warningText}
           <SubscriptionDetailsInner subscription={subscription} />
         </FormModal>
       )}

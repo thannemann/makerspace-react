@@ -32,6 +32,7 @@ import ChargeButton from "ui/shopFees/ChargeButton";
 import MemberCheckoutsTab from "ui/toolCheckouts/MemberCheckoutsTab";
 import MemberVolunteerTab from "ui/volunteer/MemberVolunteerTab";
 import MemberCheckInActivity from "ui/member/MemberCheckInActivity";
+import MemberEmailLogTab from "ui/member/MemberEmailLogTab";
 import { EmailStatusIcon, SlackStatusIcon } from "ui/common/ContactStatusIcons";
 import GoogleDriveInviteButton from 'ui/member/GoogleDriveInviteButton';
 import SlackInviteButton from 'ui/member/SlackInviteButton';
@@ -332,6 +333,11 @@ const MemberProfile: React.FC = () => {
             name: "checkin-activity",
             displayName: "Check-In Activity",
             content: <MemberCheckInActivity />
+          }] : [],
+          ...canEditMembers ? [{
+            name: "email-log",
+            displayName: "Email Log",
+            content: <MemberEmailLogTab memberId={memberId} />
           }] : [],
         ]}
       />

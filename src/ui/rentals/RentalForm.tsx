@@ -92,8 +92,8 @@ class RentalForm extends React.Component<OwnProps, { contractOnFile: boolean }> 
                 name={rentalFields.expiration.name}
                 placeholder={rentalFields.expiration.placeholder}
                 type="date"
-                InputLabelProps={{
-                  shrink: true,
+                slotProps={{
+                  inputLabel: { shrink: true },
                 }}
               />
             </Grid>

@@ -1,0 +1,34 @@
+// ─── PATCH INSTRUCTIONS FOR MemberDetail.tsx ───────────────────────────────
+//
+// 1. Add import at the top of the file alongside other tab imports:
+//
+//    import MemberEmailLogTab from './MemberEmailLogTab';
+//
+// 2. In the tabs array, after the checkin-activity block, add the Email Log tab.
+//    Find this exact block:
+//
+//          ...canManageCheckoutApprovers ? [{
+//            name: 'checkin-activity',
+//            displayName: 'Check-In Activity',
+//            content: <MemberCheckInActivity />
+//          }] : [],
+//        ]}
+//
+//    Replace with:
+//
+//          ...canManageCheckoutApprovers ? [{
+//            name: 'checkin-activity',
+//            displayName: 'Check-In Activity',
+//            content: <MemberCheckInActivity />
+//          }] : [],
+//          ...canEditMembers ? [{
+//            name: 'email-log',
+//            displayName: 'Email Log',
+//            content: <MemberEmailLogTab memberId={member.id} />
+//          }] : [],
+//        ]}
+//
+// That's the only change. canEditMembers is already destructured from
+// useCapabilities() in this component — no additional imports needed beyond
+// the MemberEmailLogTab import above.
+// ────────────────────────────────────────────────────────────────────────────

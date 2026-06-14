@@ -5,7 +5,10 @@
     "baseUrl": "src",
     "outDir": "dist",
     "paths": {
-      "*": ["*", "src/*"]
+      "*": [
+        "*",
+        "src/*"
+      ]
     },
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
@@ -17,7 +20,13 @@
     "removeComments": false,
     "preserveConstEnums": true,
     "skipLibCheck": true,
-    "lib": ["es2017", "dom", "es2018", "es2019", "es2020"],
+    "lib": [
+      "es2017",
+      "dom",
+      "es2018",
+      "es2019",
+      "es2020"
+    ],
     "module": "commonjs",
     "moduleResolution": "node",
     "sourceMap": true,
@@ -27,7 +36,11 @@
       "node_modules/@types",
       "src/app/typings"
     ],
-    "types": ["jest", "node"]
+    "types": [
+      "jest",
+      "node"
+    ],
+    "resolveJsonModule": true
   },
   "include": [
     "src",

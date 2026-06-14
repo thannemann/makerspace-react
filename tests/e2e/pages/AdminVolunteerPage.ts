@@ -49,6 +49,22 @@ export class AdminVolunteerPage {
   }
 
   async verifyTaskInTable(title: string): Promise<void> {
+    // Filter to 'available' so the 70+ completed historical tasks don't push new
+    // tasks off page 1. The Select is a MUI component — click it then pick the option.
+    const statusSelect = this.page.locator('[id="volunteer-tasks-status-filter"], select').first();
+    if (await statusSelect.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      // Native select path
+      await statusSelect.selectOption('available');
+    } else {
+      // MUI Select path — find by current displayed value near the Tasks heading
+      const tasksSection = this.page.locator('text=Bounty Tasks').locator('../..');
+      const muiSelect = tasksSection.locator('[role="combobox"]').first();
+      if (await muiSelect.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        await muiSelect.click();
+        await this.page.getByRole('option', { name: 'Available', exact: true }).click();
+        await this.page.waitForTimeout(500);
+      }
+    }
     await expect(this.page.getByText(new RegExp(title, 'i')).first())
       .toBeVisible({ timeout: 15_000 });
   }
@@ -123,15 +139,28 @@ export class MemberVolunteerPage {
   async claimTask(): Promise<void> {
     await this.page.getByRole('button', { name: 'Claim Task' }).click();
     await this.page.waitForTimeout(1000);
+    await this.page.reload();
+    await this.page.getByRole('button', { name: 'Menu' }).waitFor({ state: 'visible', timeout: 15_000 });
+    await this.page.getByRole('tab', { name: /volunteer/i }).click();
+    await this.page.waitForTimeout(1000);
   }
 
   // Select a task this member has already claimed (status = Claimed)
   async selectClaimedTask(): Promise<void> {
-    const table = await this.getBountyTasksTable();
-    const claimedRow = table.getByRole('row').filter({ hasText: /Claimed/i }).first();
+    // Locate My Active Claims table via its heading
+    const claimsTable = this.page.getByRole('heading', { name: 'My Active Claims' })
+      .locator('../..')
+      .locator('table')
+      .first();
+    await claimsTable.waitFor({ state: 'visible', timeout: 10_000 });
+    const claimedRow = claimsTable.getByRole('row')
+      .filter({ has: this.page.getByRole('cell', { name: 'Claimed', exact: true }) })
+      .first();
     await claimedRow.waitFor({ state: 'visible', timeout: 10_000 });
     await claimedRow.locator('input[type="checkbox"]').check();
-    await this.page.getByRole('button', { name: 'Mark Complete' }).waitFor({ state: 'visible', timeout: 5_000 });
+    await this.page.waitForTimeout(300);
+    await this.page.getByRole('button', { name: 'Mark Complete' })
+      .waitFor({ state: 'visible', timeout: 10_000 });
   }
 
   // Member marks their claimed task as complete
