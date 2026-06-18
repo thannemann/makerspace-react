@@ -126,9 +126,13 @@ test.describe('Admin approves a rental request', () => {
     if (await row.isVisible({ timeout: 5_000 })) {
       await row.locator('input[type="checkbox"]').check({ force: true });
       await page.getByRole('button', { name: /cancel rental|vacate/i }).click();
-      await page.waitForSelector('[role="dialog"]', { timeout: 10_000 });
-      await page.getByRole('button', { name: /confirm|submit|yes/i }).first().click();
-      await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 15_000 });
+      const dialog = page.getByRole('dialog');
+      await dialog.waitFor({ state: 'visible', timeout: 10_000 });
+      // FormModal's submit button reuses the same label as the trigger
+      // ("Cancel Rental"), not a generic confirm/submit/yes — scope to the
+      // dialog so we don't re-match the page's other rental action buttons.
+      await dialog.getByRole('button', { name: 'Cancel Rental' }).click();
+      await dialog.waitFor({ state: 'hidden', timeout: 15_000 });
       await page.waitForTimeout(1000);
     }
   });
@@ -197,9 +201,13 @@ test.describe('Member cancels their rental', () => {
     if (await row.isVisible({ timeout: 5_000 })) {
       await row.locator('input[type="checkbox"]').check({ force: true });
       await page.getByRole('button', { name: /cancel rental|vacate/i }).click();
-      await page.waitForSelector('[role="dialog"]', { timeout: 10_000 });
-      await page.getByRole('button', { name: /confirm|submit|yes/i }).first().click();
-      await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 15_000 });
+      const dialog = page.getByRole('dialog');
+      await dialog.waitFor({ state: 'visible', timeout: 10_000 });
+      // FormModal's submit button reuses the same label as the trigger
+      // ("Cancel Rental"), not a generic confirm/submit/yes — scope to the
+      // dialog so we don't re-match the page's other rental action buttons.
+      await dialog.getByRole('button', { name: 'Cancel Rental' }).click();
+      await dialog.waitFor({ state: 'hidden', timeout: 15_000 });
       await page.waitForTimeout(1000);
     }
     await page.close();
@@ -237,17 +245,26 @@ test.describe('Member cancels their rental', () => {
     await member.clickTab('Rentals');
     await rentals.verifyRentalInTable('GT1');
 
-    // Cancel rental
+    // Cancel rental — select via the row's checkbox; the actual "Cancel
+    // Rental" action button lives outside the row, in the page's button
+    // bar, and only appears once a row is selected.
     const rentalRow = page.getByRole('row').filter({ hasText: /GT1/ }).first();
     await rentalRow.waitFor({ state: 'visible', timeout: 10_000 });
-    await rentalRow.getByRole('button', { name: /cancel/i }).click();
-    await page.waitForTimeout(500);
+    await rentalRow.locator('input[type="checkbox"]').check({ force: true });
+    await page.getByRole('button', { name: 'Cancel Rental' }).click();
 
-    // Confirm if dialog appears
-    const confirmBtn = page.getByRole('button', { name: /confirm|yes|cancel rental/i });
-    if (await confirmBtn.isVisible({ timeout: 3_000 })) {
-      await confirmBtn.click();
-    }
+    // Step 1 — "Cancel Rental" confirmation dialog
+    const confirmDialog = page.getByRole('dialog').filter({ hasText: 'Cancel Rental' });
+    await confirmDialog.waitFor({ state: 'visible', timeout: 10_000 });
+    await confirmDialog.getByRole('button', { name: 'Yes, Cancel' }).click();
+
+    // Step 2 — "Have You Vacated Your Rental?" dialog; treat as vacated
+    // so the rental ends immediately rather than remaining active until
+    // expiration.
+    const vacatedDialog = page.getByRole('dialog').filter({ hasText: 'Have You Vacated' });
+    await vacatedDialog.waitFor({ state: 'visible', timeout: 10_000 });
+    await vacatedDialog.getByRole('button', { name: 'Yes, I Have Vacated' }).click();
+    await vacatedDialog.waitFor({ state: 'hidden', timeout: 15_000 });
 
     await page.waitForTimeout(2000);
     await member.reloadProfile();
