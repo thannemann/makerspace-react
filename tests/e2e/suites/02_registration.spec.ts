@@ -163,6 +163,11 @@ test.describe('Registration via URL with discount code', () => {
 
     // ── Step 3: Membership — check SSM discount box ──
     await page.waitForLoadState('networkidle');
+    // The discount section is collapsed by default for plain self-registration
+    // (only auto-expanded when a discount param is present in the URL on load,
+    // which this flow does not use) — must expand it before the checkbox
+    // inside is interactable.
+    await page.getByRole('button', { name: 'Qualify for a discount?' }).click();
     await page.getByRole('checkbox', { name: /Student, Military, Senior/i }).check();
     // Checking SSM appends discountId to URL and updates total
     await expect(page.locator('#total')).toContainText('$58.50', { timeout: 10_000 });
