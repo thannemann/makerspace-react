@@ -5,18 +5,28 @@ import { ActionButton } from "../common/ButtonRow";
 import useModal from "../hooks/useModal";
 import Form from "../common/Form";
 import { useCapabilities } from "app/permissions";
+import { useAuthState } from "../reducer/hooks";
 import MemberForm from "./MemberForm";
+import EmailChangeNoticeModal from "./EmailChangeNoticeModal";
 
 
 const EditMember: React.FC<{ member: Member, onEdit?: () => void; formOnly?: boolean }> = ({ member = {} as Member, formOnly, onEdit }) => {
   const { isOpen, openModal, closeModal } = useModal();
+  const { isOpen: emailNoticeOpen, openModal: openEmailNotice, closeModal: closeEmailNotice } = useModal();
   const { canEditMembers } = useCapabilities();
+  const { currentUser: { id: currentUserId } } = useAuthState();
+  const isOwnProfile = currentUserId === member.id;
   const formRef = React.useRef<MemberForm>();
+  const pendingEmailChange = React.useRef(false);
 
   const onSuccess = React.useCallback(() => {
     closeModal();
     onEdit && onEdit();
-  }, [onEdit, closeModal]);
+    if (pendingEmailChange.current) {
+      pendingEmailChange.current = false;
+      openEmailNotice();
+    }
+  }, [onEdit, closeModal, openEmailNotice]);
   const {
     isRequesting: memberUpdating,
     error: updateError,
@@ -30,6 +40,15 @@ const EditMember: React.FC<{ member: Member, onEdit?: () => void; formOnly?: boo
 
     const { street, unit, city, state, postalCode, ...rest } = validUpdate;
 
+    // Self-service email changes no longer trigger an automatic Slack/Drive
+    // invite (see #75) — flag it here so onSuccess can show the manual
+    // follow-up notice. Only applies when members edit their own profile;
+    // an admin editing another member's profile already knows to handle
+    // invites themselves.
+    pendingEmailChange.current = isOwnProfile
+      && !!rest.email
+      && rest.email !== member.email;
+
     update({ id: member.id, body: {
       ...rest,
       address: {
@@ -40,7 +59,7 @@ const EditMember: React.FC<{ member: Member, onEdit?: () => void; formOnly?: boo
         postalCode
       }
     } });
-  }, [formRef, update]);
+  }, [formRef, update, isOwnProfile, member.email, member.id]);
 
   return (
     <>
@@ -67,6 +86,7 @@ const EditMember: React.FC<{ member: Member, onEdit?: () => void; formOnly?: boo
           noDialog={formOnly}
         />
       )}
+      <EmailChangeNoticeModal open={emailNoticeOpen} onClose={closeEmailNotice} />
     </>
   );
 }

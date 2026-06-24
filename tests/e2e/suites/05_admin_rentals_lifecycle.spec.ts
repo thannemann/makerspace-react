@@ -46,7 +46,7 @@ test.describe('Admin creates approval-required rental infrastructure', () => {
     await page.waitForSelector('[role="listbox"]', { state: 'hidden', timeout: 5_000 });
     await dialog.getByLabel('Description').fill('Approval tote for testing');
     // Check "Requires Approval"
-    await dialog.getByRole('checkbox', { name: /requires admin approval/i }).check();
+    await dialog.getByRole('switch', { name: /requires admin approval/i }).click();
     await rentals.submitRentalSpotForm();
 
     await rentals.searchForSpot(APPROVAL_SPOT);
@@ -71,7 +71,7 @@ test.describe('Admin approves a rental request', () => {
     await member.clickTab('Rentals');
     await rentals.waitForRentalsTab();
     await rentals.selectSpot(APPROVAL_SPOT);
-    await rentals.confirmRental();
+    await rentals.requestRental();
     await page.waitForTimeout(1000);
 
     // Log out
@@ -111,6 +111,31 @@ test.describe('Admin approves a rental request', () => {
     await expect(page.getByRole('row').filter({ hasText: /Basic Member6/i }).first())
       .toBeVisible({ timeout: 15_000 });
   });
+
+  test('Admin vacates GT2 so it is available for deny test', async ({ page }) => {
+    // Teardown — cancel member6 rental so GT2 is available for the deny test
+    const auth    = new AuthPage(page);
+    const rentals = new AdminRentalsPage(page);
+
+    await auth.signIn(adminMember.email, adminMember.password);
+    await rentals.goto();
+    await rentals.goToTab('Current Rentals');
+    await page.waitForTimeout(1000);
+
+    const row = page.getByRole('row').filter({ hasText: /Basic Member6/i }).first();
+    if (await row.isVisible({ timeout: 5_000 })) {
+      await row.locator('input[type="checkbox"]').check({ force: true });
+      await page.getByRole('button', { name: /cancel rental|vacate/i }).click();
+      const dialog = page.getByRole('dialog');
+      await dialog.waitFor({ state: 'visible', timeout: 10_000 });
+      // FormModal's submit button reuses the same label as the trigger
+      // ("Cancel Rental"), not a generic confirm/submit/yes — scope to the
+      // dialog so we don't re-match the page's other rental action buttons.
+      await dialog.getByRole('button', { name: 'Cancel Rental' }).click();
+      await dialog.waitFor({ state: 'hidden', timeout: 15_000 });
+      await page.waitForTimeout(1000);
+    }
+  });
 });
 
 // ── Test: Member requests approval rental, admin denies ──────────────────────
@@ -130,7 +155,7 @@ test.describe('Admin denies a rental request', () => {
     await member.clickTab('Rentals');
     await rentals.waitForRentalsTab();
     await rentals.selectSpot(APPROVAL_SPOT);
-    await rentals.confirmRental();
+    await rentals.requestRental();
     await page.waitForTimeout(1000);
 
     // Log out
@@ -160,6 +185,33 @@ test.describe('Admin denies a rental request', () => {
 // ── Test: Member cancels their own rental ─────────────────────────────────────
 
 test.describe('Member cancels their rental', () => {
+
+  test.beforeAll(async ({ browser }) => {
+    // GT1 may be occupied from 04_rentals suite — free it via admin before this test
+    const page    = await browser.newPage();
+    const auth    = new AuthPage(page);
+    const rentals = new AdminRentalsPage(page);
+
+    await auth.signIn(adminMember.email, adminMember.password);
+    await rentals.goto();
+    await rentals.goToTab('Current Rentals');
+    await page.waitForTimeout(1000);
+
+    const row = page.getByRole('row').filter({ hasText: /GT1/i }).first();
+    if (await row.isVisible({ timeout: 5_000 })) {
+      await row.locator('input[type="checkbox"]').check({ force: true });
+      await page.getByRole('button', { name: /cancel rental|vacate/i }).click();
+      const dialog = page.getByRole('dialog');
+      await dialog.waitFor({ state: 'visible', timeout: 10_000 });
+      // FormModal's submit button reuses the same label as the trigger
+      // ("Cancel Rental"), not a generic confirm/submit/yes — scope to the
+      // dialog so we don't re-match the page's other rental action buttons.
+      await dialog.getByRole('button', { name: 'Cancel Rental' }).click();
+      await dialog.waitFor({ state: 'hidden', timeout: 15_000 });
+      await page.waitForTimeout(1000);
+    }
+    await page.close();
+  });
 
   test('Member self-assigns GT1 spot then cancels it', async ({ page }) => {
     const auth    = new AuthPage(page);
@@ -193,17 +245,26 @@ test.describe('Member cancels their rental', () => {
     await member.clickTab('Rentals');
     await rentals.verifyRentalInTable('GT1');
 
-    // Cancel rental
+    // Cancel rental — select via the row's checkbox; the actual "Cancel
+    // Rental" action button lives outside the row, in the page's button
+    // bar, and only appears once a row is selected.
     const rentalRow = page.getByRole('row').filter({ hasText: /GT1/ }).first();
     await rentalRow.waitFor({ state: 'visible', timeout: 10_000 });
-    await rentalRow.getByRole('button', { name: /cancel/i }).click();
-    await page.waitForTimeout(500);
+    await rentalRow.locator('input[type="checkbox"]').check({ force: true });
+    await page.getByRole('button', { name: 'Cancel Rental' }).click();
 
-    // Confirm if dialog appears
-    const confirmBtn = page.getByRole('button', { name: /confirm|yes|cancel rental/i });
-    if (await confirmBtn.isVisible({ timeout: 3_000 })) {
-      await confirmBtn.click();
-    }
+    // Step 1 — "Cancel Rental" confirmation dialog
+    const confirmDialog = page.getByRole('dialog').filter({ hasText: 'Cancel Rental' });
+    await confirmDialog.waitFor({ state: 'visible', timeout: 10_000 });
+    await confirmDialog.getByRole('button', { name: 'Yes, Cancel' }).click();
+
+    // Step 2 — "Have You Vacated Your Rental?" dialog; treat as vacated
+    // so the rental ends immediately rather than remaining active until
+    // expiration.
+    const vacatedDialog = page.getByRole('dialog').filter({ hasText: 'Have You Vacated' });
+    await vacatedDialog.waitFor({ state: 'visible', timeout: 10_000 });
+    await vacatedDialog.getByRole('button', { name: 'Yes, I Have Vacated' }).click();
+    await vacatedDialog.waitFor({ state: 'hidden', timeout: 15_000 });
 
     await page.waitForTimeout(2000);
     await member.reloadProfile();

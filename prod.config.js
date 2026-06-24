@@ -45,6 +45,21 @@ module.exports = env => ({
             }
           }
         ]
+      },
+      {
+        // MUI's internal Collapse/Transition wrapper (an .mjs file) imports
+        // 'react-transition-group/TransitionGroupContext' without an
+        // extension. Webpack 5's strict ESM resolution requires fully
+        // specified import paths from .mjs files, and react-transition-group
+        // ships only .js (CJS), so the import can't resolve. The relaxation
+        // must target the IMPORTING module (@mui/material), not the
+        // imported one — fullySpecified is a property of the resolving
+        // file's module type, not the target's.
+        test: /\.m?js$/,
+        include: /node_modules[\\/]@mui/,
+        resolve: {
+          fullySpecified: false
+        }
       }
     ]
   },
