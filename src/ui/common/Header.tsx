@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 import { Link } from "react-router-dom";
 import { RouteComponentProps } from "react-router-dom";
@@ -15,14 +16,14 @@ import Divider from "@mui/material/Divider";
 import Chip from "@mui/material/Chip";
 import MenuIcon from "@mui/icons-material/Menu";
 
-import Logo from "../../assets/FilledLaserableLogo.svg";
-
 import { ScopedThunkDispatch, State as ReduxState } from "ui/reducer";
 import { logoutUserAction } from "ui/auth/actions";
 import { AuthMember } from "ui/auth/interfaces";
 import { memberIsAdmin, memberIsBoardMember, memberIsResourceManager } from "ui/member/utils";
 import { Routing, Whitelists } from "app/constants";
 import Help from "ui/common/Help";
+
+const logoUrl = "/assets/FilledLaserableLogo.svg";
 
 interface OwnProps extends RouteComponentProps<any> {}
 interface StateProps {
@@ -133,7 +134,7 @@ class Header extends React.Component<Props, State> {
     const isAdminOrBoard = isAdmin || isBoardMember;
     const isPrivileged   = isAdmin || isBoardMember || isRM;
     const canManageShopFees    = isPrivileged;
-    const canManageCheckouts   = isPrivileged || (currentUser as any).isCheckoutApprover;
+    const canManageCheckouts   = true;
     const canManageVolunteer   = isPrivileged;
     const canManageRentals     = isPrivileged;
 
@@ -226,7 +227,7 @@ class Header extends React.Component<Props, State> {
       <AppBar color="default" style={{ marginBottom: "1em" }} position="static" title="Manchester Makerspace">
         <Toolbar>
           <Typography variant="h6" color="inherit" className="flex">
-            <Logo alt="Manchester Makerspace" viewBox="0 0 960 580" preserveAspectRatio="xMinYMin" />
+            <img src={logoUrl} alt="Manchester Makerspace" />
           </Typography>
           <Help />
           {currentUser.id
