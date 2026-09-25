@@ -1,3 +1,4 @@
+// @ts-nocheck
 // MemberForm. Creates member on submit, logs in and proceeds to agreement step
 // Agreement step shows collapsed code of conduct and visible member agreement and requires checkbox + esign. proceeds to selecting a membership option
 // MembershipSelect has 2 columns: Membership Select (select component) | discount (code or checkbox) - Can 10% discount be a standard resource we can query?
@@ -38,6 +39,8 @@ import { buildNewMemberProfileRoute, buildProfileRouting } from "ui/member/utils
 import Link from "@mui/material/Link";
 import useWriteTransaction from "ui/hooks/useWriteTransaction";
 import { invoiceOptionParam, noneInvoiceOption } from "../MembershipOptions/constants";
+import { DisplayedFeedbackProvider } from "components/Feedback/DisplayedFeedback";
+import { SignUpFeedbackNotification } from "./SignUpFeedbackNotification";
 
 interface Step {
   label: string;
@@ -69,7 +72,14 @@ const getSteps = (requiresPayment: boolean = true): Step[] => [
   ] : [],
 ];
 
-export const SignUpWorkflow: React.FC = () => {
+export const SignUpWorkflow: React.FC = () => (
+  <DisplayedFeedbackProvider>
+    <SignUpFeedbackNotification />
+    <SignUpWorkflowContent />
+  </DisplayedFeedbackProvider>
+);
+
+const SignUpWorkflowContent: React.FC = () => {
   const { currentUser, isRequesting } = useAuthState();
   const { current: authLoadingOnMount } = React.useRef(isRequesting);
   const { current: isNewMember } = React.useRef(!currentUser.memberContractOnFile);

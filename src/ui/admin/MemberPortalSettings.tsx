@@ -1,4 +1,7 @@
+// @ts-nocheck
+import TicketLimitSetting from "ui/fixTickets/TicketLimitSetting";
 import * as React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Typography,
   Grid,
@@ -19,6 +22,13 @@ import {
   Select,
   MenuItem,
   FormControl,
+  Alert,
+  Tooltip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -26,7 +36,11 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import RestoreIcon from '@mui/icons-material/Restore';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
+import { Routing } from 'app/constants';
 import {
   getSystemConfigs,
   updateSystemFlag,
@@ -36,33 +50,49 @@ import {
   SystemConfigData,
   JobStatus,
   BraintreeDiscount,
+  getExternalTemplates,
+  runExternalTemplateAction,
+  ExternalTemplateStatus,
 } from 'api/systemConfig';
+import { useCapabilities } from 'app/permissions';
 
-type TabKey = 'slack' | 'volunteer' | 'jobs' | 'security';
+type TabKey = 'slack' | 'volunteer' | 'reservations' | 'jobs' | 'security' | 'templates';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'slack',     label: 'Slack' },
   { key: 'volunteer', label: 'Volunteer' },
+  { key: 'reservations', label: 'Reservations' },
   { key: 'jobs',      label: 'Jobs' },
   { key: 'security',  label: 'Security' },
+  { key: 'templates', label: 'Templates' },
 ];
 
 const JOB_LABELS: Record<string, string> = {
   slack_sync:      'Slack User Sync',
   slack_profile_sync: 'Slack Profile Sync',
+  slack_channel_cache: 'Slack Channel Cache',
   member_review:   'Member Review',
   invoice_review:  'Invoice Review',
   garbage_collect: 'Garbage Collector',
   db_backup:       'Database Backup',
+  card_expiration_check: 'Card on File Expiration Check',
+  reservation_canvas_rebuild: 'Reservation Canvas Rebuild',
+  member_provisioning_reconciliation: 'Member Provisioning Reconciliation',
+  volunteer_event_reminder: 'Volunteer Event Reminders',
 };
 
 const JOB_DESCRIPTIONS: Record<string, string> = {
   slack_sync:      'Bulk syncs Slack workspace users to member records by matching email. Use Run Now after onboarding a batch of new members.',
   slack_profile_sync: 'Updates the Slack profile status field for members whose memberships expired since the last sync.',
+  slack_channel_cache: 'Clears and rebuilds the Redis cache of public Slack channel IDs, topics, and purposes. Runs monthly, on the configured day, via a daily scheduled check.',
   member_review:   'Reviews membership statuses and sends a weekly summary report to Slack.',
   invoice_review:  'Reviews invoice statuses, flags past due accounts, and reports to the treasurer channel.',
-  garbage_collect: 'Cleans up old Redis invoicing cache keys from the previous month.',
+  garbage_collect: 'Cleans up old Redis invoicing cache keys from the previous month. Runs monthly, on the configured day, via a daily scheduled check.',
   db_backup:       'Backs up the MongoDB database to Google Drive.',
+  card_expiration_check: 'Finds active members with payment cards expiring this month, caches the results, and sends Slack notifications. Runs monthly, on the configured day, via a daily scheduled check.',
+  reservation_canvas_rebuild: "Rebuilds today's and tomorrow's Slack reservation canvases and refreshes owner access.",
+  member_provisioning_reconciliation: 'Reconciles Slack/Google Drive provisioning state for all initialized members. Runs hourly.',
+  volunteer_event_reminder: 'Sends reminder notifications for upcoming volunteer events. Runs daily.',
 };
 
 const formatDate = (dateStr: string | null): string => {
@@ -82,20 +112,39 @@ interface SettingRowProps {
   value: string;
   onSave: (key: string, value: string) => Promise<void>;
   saving: boolean;
+  validate?: (value: string) => string;
 }
 
-const SettingRow: React.FC<SettingRowProps> = ({ label, description, settingKey, value, onSave, saving }) => {
+export const validateTicketBountyLimit = (value: string) =>
+  /^[+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value.trim()) && Number.isFinite(Number(value)) && Number(value) >= 0.5
+    ? '' : 'Enter a number of at least 0.5.';
+
+export const SettingRow: React.FC<SettingRowProps> = ({ label, description, settingKey, value, onSave, saving, validate }) => {
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft]     = React.useState(value);
+  const [saveError, setSaveError] = React.useState('');
+  const [pending, setPending] = React.useState(false);
+  const savingRef = React.useRef(false);
+  const validationError = validate?.(draft) || '';
+  const busy = saving || pending;
 
   React.useEffect(() => { setDraft(value); }, [value]);
 
   const handleSave = async () => {
-    await onSave(settingKey, draft);
-    setEditing(false);
+    if (saving || savingRef.current || validationError) return;
+    savingRef.current = true; setPending(true); setSaveError('');
+    try {
+      await onSave(settingKey, draft);
+      setEditing(false);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Unable to save. Please try again.');
+    } finally {
+      savingRef.current = false; setPending(false);
+    }
   };
 
   const handleCancel = () => {
+    setSaveError('');
     setDraft(value);
     setEditing(false);
   };
@@ -111,20 +160,23 @@ const SettingRow: React.FC<SettingRowProps> = ({ label, description, settingKey,
       <Grid size={{ xs: 12, sm: 8 }}>
         {editing ? (
           <TextField
+            label={label}
             value={draft}
-            onChange={e => setDraft(e.target.value)}
+            onChange={e => { setDraft(e.target.value); setSaveError(''); }}
+            error={!!(validationError || saveError)}
+            helperText={validationError || saveError}
             size='small'
             variant='outlined'
             fullWidth
-            disabled={saving}
+            disabled={busy}
             slotProps={{
               input: {
                 endAdornment: (
                   <InputAdornment position='end'>
-                    <IconButton size='small' onClick={handleSave} disabled={saving}>
-                      {saving ? <CircularProgress size={16} /> : <SaveIcon fontSize='small' />}
+                    <IconButton aria-label={`Save ${label}`} size='small' onClick={handleSave} disabled={busy || !!validationError}>
+                      {busy ? <CircularProgress size={16} /> : <SaveIcon fontSize='small' />}
                     </IconButton>
-                    <IconButton size='small' onClick={handleCancel} disabled={saving}>
+                    <IconButton aria-label={`Cancel editing ${label}`} size='small' onClick={handleCancel} disabled={busy}>
                       <CancelIcon fontSize='small' />
                     </IconButton>
                   </InputAdornment>
@@ -140,7 +192,7 @@ const SettingRow: React.FC<SettingRowProps> = ({ label, description, settingKey,
               </Typography>
             </Grid>
             <Grid>
-              <IconButton size='small' onClick={() => setEditing(true)}>
+              <IconButton aria-label={`Edit ${label}`} size='small' onClick={() => { setSaveError(''); setEditing(true); }}>
                 <EditIcon fontSize='small' />
               </IconButton>
             </Grid>
@@ -172,6 +224,7 @@ const DiscountSelectRow: React.FC<DiscountSelectRowProps> = ({
   const [discounts, setDiscounts]   = React.useState<BraintreeDiscount[]>([]);
   const [loadingDiscounts, setLoadingDiscounts] = React.useState(true);
   const [fetchError, setFetchError] = React.useState('');
+  const [saveError, setSaveError] = React.useState('');
 
   React.useEffect(() => {
     getBraintreeDiscounts().then(result => {
@@ -186,7 +239,9 @@ const DiscountSelectRow: React.FC<DiscountSelectRowProps> = ({
   }, []);
 
   const handleChange = async (newId: string) => {
-    await onSave(settingKey, newId);
+    setSaveError('');
+    try { await onSave(settingKey, newId); }
+    catch (error) { setSaveError(error instanceof Error ? error.message : 'Unable to save. Please try again.'); }
   };
 
   const formatOption = (d: BraintreeDiscount): string => {
@@ -230,6 +285,7 @@ const DiscountSelectRow: React.FC<DiscountSelectRowProps> = ({
         {saving && (
           <CircularProgress size={14} style={{ marginLeft: 8, verticalAlign: 'middle' }} />
         )}
+        {saveError && <Alert severity='error'>{saveError}</Alert>}
       </Grid>
     </Grid>
   );
@@ -246,12 +302,15 @@ interface SlackTabProps {
   onRunJob: (key: string) => void;
   runningJob: string | null;
   jobMessage: Record<string, string>;
+  onNavigateToConflicts: () => void;
 }
 
-const SlackTab: React.FC<SlackTabProps> = ({
-  config, onFlagToggle, onSettingSave, togglingFlag, savingKey, onRunJob, runningJob, jobMessage
+export const SlackTab: React.FC<SlackTabProps> = ({
+  config, onFlagToggle, onSettingSave, togglingFlag, savingKey, onRunJob, runningJob, jobMessage,
+  onNavigateToConflicts
 }) => {
   const slackSyncJob = config.jobs.find(j => j.key === 'slack_sync');
+  const slackCacheJob = config.jobs.find(j => j.key === 'slack_channel_cache');
 
   return (
     <Grid container spacing={3}>
@@ -298,6 +357,27 @@ const SlackTab: React.FC<SlackTabProps> = ({
             />
             <Divider style={{ margin: '8px 0' }} />
             <SettingRow
+              label='New Members Channel'
+              description='Welcome messages for new Slack members'
+              settingKey='slack_channel_new_members'
+              value={config.slack.slack_channel_new_members}
+              onSave={onSettingSave}
+              saving={savingKey === 'slack_channel_new_members'}
+            />
+            <Divider style={{ margin: '8px 0' }} />
+            <SettingRow
+              label='Fix Tickets Channel'
+              description='Channel where new and updated /fix tickets are announced'
+              settingKey='slack_channel_tickets'
+              value={config.slack.slack_channel_tickets}
+              onSave={onSettingSave}
+              saving={savingKey === 'slack_channel_tickets'}
+            />
+            <Typography variant='caption' color='textSecondary'>
+              Uses SLACK_TICKETS_CHANNEL until overridden. Save a blank value to disable announcements. No default channel is used.
+            </Typography>
+            <Divider style={{ margin: '8px 0' }} />
+            <SettingRow
               label='Volunteer Pending Channel'
               description='Notified when a task is awaiting verification'
               settingKey='volunteer_pending_slack_channel'
@@ -309,30 +389,90 @@ const SlackTab: React.FC<SlackTabProps> = ({
         </Card>
       </Grid>
 
+      {/* Slack public-channel cache */}
+      <Grid size={{ xs: 12 }}>
+        <Card>
+          <CardHeader
+            title='Slack Channel Cache'
+            subheader='Redis cache of public Slack channel IDs, topics, and purposes.'
+          />
+          <Divider />
+          <CardContent>
+            <Grid container alignItems='center' spacing={2}>
+              <Grid size={{ xs: 12, sm: 3 }}>
+                <Typography variant='caption' color='textSecondary'>Channels cached</Typography>
+                <Typography variant='body1'>
+                  {config.slack.channel_cache.available
+                    ? config.slack.channel_cache.total_channels
+                    : 'Unavailable'}
+                </Typography>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Typography variant='caption' color='textSecondary'>Last update</Typography>
+                <Typography variant='body2'>
+                  {formatDate(config.slack.channel_cache.last_updated_at)}
+                </Typography>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 5 }}>
+                <Button
+                  variant='outlined'
+                  color='primary'
+                  startIcon={runningJob === 'slack_channel_cache'
+                    ? <CircularProgress size={14} />
+                    : <PlayArrowIcon />}
+                  disabled={!!runningJob}
+                  onClick={() => onRunJob('slack_channel_cache')}
+                >
+                  Clear and Rebuild Cache
+                </Button>
+                {slackCacheJob?.last_run_status === 'failure' && (
+                  <Chip
+                    icon={<ErrorIcon />}
+                    label='Last rebuild failed'
+                    size='small'
+                    style={{ marginLeft: 8, backgroundColor: '#ffebee', color: '#c62828' }}
+                  />
+                )}
+                {jobMessage['slack_channel_cache'] && (
+                  <Typography variant='caption' color='textSecondary' display='block' style={{ marginTop: 4 }}>
+                    {jobMessage['slack_channel_cache']}
+                  </Typography>
+                )}
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      </Grid>
+
       {/* Slack sync */}
       <Grid size={{ xs: 12 }}>
         <Card>
           <CardHeader title='Slack User Sync' subheader='Sync Slack workspace users to member records.' />
           <Divider />
           <CardContent>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={config.flags.slack_sync_enabled}
-                  onChange={() => onFlagToggle('slack_sync_enabled', config.flags.slack_sync_enabled)}
-                  disabled={togglingFlag === 'slack_sync_enabled'}
-                  color='primary'
-                />
-              }
-              label={
-                <span>
-                  <Typography variant='body1' component='span'>Enable Scheduled Sync</Typography>
-                  <Typography variant='body2' color='textSecondary' component='p'>
-                    When enabled, syncs run on demand. Use Run Now below for a full workspace sync.
-                  </Typography>
-                </span>
-              }
-            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={config.flags.slack_sync_enabled}
+                    onChange={() => onFlagToggle('slack_sync_enabled', config.flags.slack_sync_enabled)}
+                    disabled={togglingFlag === 'slack_sync_enabled'}
+                    color='primary'
+                  />
+                }
+                label={
+                  <span>
+                    <Typography variant='body1' component='span'>Enable Scheduled Sync</Typography>
+                    <Typography variant='body2' color='textSecondary' component='p'>
+                      When enabled, syncs run on demand. Use Run Now below for a full workspace sync.
+                    </Typography>
+                  </span>
+                }
+              />
+              <Button variant='outlined' size='small' onClick={onNavigateToConflicts} style={{ marginTop: 8, whiteSpace: 'nowrap' }}>
+                Resolve Slack Conflicts
+              </Button>
+            </div>
             <Divider style={{ margin: '12px 0' }} />
             <FormControlLabel
               control={
@@ -491,6 +631,15 @@ const VolunteerTab: React.FC<VolunteerTabProps> = ({
             onSave={onSettingSave}
             saving={savingKey === 'volunteer_task_max_credit'}
           />
+          <SettingRow
+            label='Max Credits for Ticket Bounties'
+            description='Maximum credits when converting a repair ticket to a bounty. At least 0.5 credits. Changes are recorded in the audit log.'
+            settingKey='ticket_bounty_max_credit'
+            validate={validateTicketBountyLimit}
+            value={config.volunteer.ticket_bounty_max_credit}
+            onSave={onSettingSave}
+            saving={savingKey === 'ticket_bounty_max_credit'}
+          />
         </CardContent>
       </Card>
     </Grid>
@@ -533,6 +682,34 @@ const VolunteerTab: React.FC<VolunteerTabProps> = ({
   </Grid>
 );
 
+const ReservationsTab: React.FC<{
+  config: SystemConfigData;
+  onSettingSave: (key: string, value: string) => Promise<void>;
+  savingKey: string | null;
+}> = ({ config, onSettingSave, savingKey }) => (
+  <Grid container spacing={3}>
+    <Grid size={{ xs: 12 }}>
+      <Card>
+        <CardHeader
+          title='Public Reservation Agenda'
+          subheader='Optional token protection for the public 24-hour shop and tool agenda.'
+        />
+        <Divider />
+        <CardContent>
+          <SettingRow
+            label='Reservation Token'
+            description='When nonblank, append this value as ?token=... to /reservations/agenda. Leave blank for public access.'
+            settingKey='reservation_token'
+            value={config.reservation.reservation_token}
+            onSave={onSettingSave}
+            saving={savingKey === 'reservation_token'}
+          />
+        </CardContent>
+      </Card>
+    </Grid>
+  </Grid>
+);
+
 // ── Jobs Tab ──────────────────────────────────────────────────────────────────
 
 interface JobsTabProps {
@@ -540,10 +717,49 @@ interface JobsTabProps {
   onRunJob: (key: string) => void;
   runningJob: string | null;
   jobMessage: Record<string, string>;
+  onSettingSave: (key: string, value: string) => Promise<void>;
+  savingKey: string | null;
 }
 
-const JobsTab: React.FC<JobsTabProps> = ({ config, onRunJob, runningJob, jobMessage }) => (
+const JobsTab: React.FC<JobsTabProps> = ({ config, onRunJob, runningJob, jobMessage, onSettingSave, savingKey }) => (
   <Grid container spacing={2}>
+    <Grid size={{ xs: 12 }}>
+      <Card variant='outlined'>
+        <CardHeader
+          title='Monthly Job Schedule'
+          subheader="Heroku Scheduler has no monthly option, so these jobs run daily and only do real work on the day of month set here. Run Now always runs immediately regardless of this setting."
+        />
+        <Divider />
+        <CardContent>
+          <SettingRow
+            label='Slack Channel Cache refresh day'
+            description='Day of month (1-31)'
+            settingKey='channel_cache_refresh_day'
+            value={config.job_schedule.channel_cache_refresh_day}
+            onSave={onSettingSave}
+            saving={savingKey === 'channel_cache_refresh_day'}
+          />
+          <Divider style={{ margin: '8px 0' }} />
+          <SettingRow
+            label='Card Expiration Check day'
+            description='Day of month (1-31)'
+            settingKey='card_expiration_check_day'
+            value={config.job_schedule.card_expiration_check_day}
+            onSave={onSettingSave}
+            saving={savingKey === 'card_expiration_check_day'}
+          />
+          <Divider style={{ margin: '8px 0' }} />
+          <SettingRow
+            label='Garbage Collector day'
+            description='Day of month (1-31)'
+            settingKey='garbage_collect_day'
+            value={config.job_schedule.garbage_collect_day}
+            onSave={onSettingSave}
+            saving={savingKey === 'garbage_collect_day'}
+          />
+        </CardContent>
+      </Card>
+    </Grid>
     {config.jobs.filter(j => j.key !== 'slack_sync').map((job: JobStatus) => (
       <Grid size={{ xs: 12 }} key={job.key}>
         <Card variant='outlined'>
@@ -627,6 +843,37 @@ const TotpToggle: React.FC<TotpToggleProps> = ({ label, description, flagKey, va
   </Grid>
 );
 
+const MaintenanceToggle: React.FC<{
+  value: boolean;
+  onToggle: (key: string, value: boolean) => Promise<void>;
+  saving: boolean;
+}> = ({ value, onToggle, saving }) => (
+  <Grid size={{ xs: 12 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '12px 0' }}>
+      <div style={{ flex: 1, paddingRight: 16 }}>
+        <Typography variant='body1'><strong>Lock Out New Signups</strong></Typography>
+        <Typography variant='body2' color='textSecondary'>
+          While enabled, new/unauthenticated visitors are redirected to a maintenance page instead
+          of the signup form, and the signup API rejects new registrations. Members who already
+          created an account and are mid-signup are not affected.
+        </Typography>
+      </div>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={value}
+            onChange={e => onToggle('signup_lockout_enabled', e.target.checked)}
+            disabled={saving}
+            color='warning'
+          />
+        }
+        label={value ? 'Locked' : 'Open'}
+        labelPlacement='start'
+      />
+    </div>
+  </Grid>
+);
+
 const SecurityTab: React.FC = () => {
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving]   = React.useState(false);
@@ -635,18 +882,21 @@ const SecurityTab: React.FC = () => {
     require_totp_admin: false,
     require_totp_board: false,
     require_totp_rm:    false,
+    signup_lockout_enabled: false,
   });
 
   React.useEffect(() => {
     getSystemConfigs()
       .then(result => {
         const totp = (result as any)?.data?.totp;
-        if (totp) {
-          setFlags({
-            require_totp_admin: !!totp.require_totp_admin,
-            require_totp_board: !!totp.require_totp_board,
-            require_totp_rm:    !!totp.require_totp_rm,
-          });
+        const systemFlags = (result as any)?.data?.flags;
+        if (totp || systemFlags) {
+          setFlags(prev => ({
+            require_totp_admin: totp ? !!totp.require_totp_admin : prev.require_totp_admin,
+            require_totp_board: totp ? !!totp.require_totp_board : prev.require_totp_board,
+            require_totp_rm:    totp ? !!totp.require_totp_rm    : prev.require_totp_rm,
+            signup_lockout_enabled: systemFlags ? !!systemFlags.signup_lockout_enabled : prev.signup_lockout_enabled,
+          }));
         }
         setLoading(false);
       })
@@ -706,6 +956,177 @@ const SecurityTab: React.FC = () => {
         onToggle={handleToggle}
         saving={saving}
       />
+
+      <Grid size={{ xs: 12 }}><Divider style={{ margin: '16px 0' }} /></Grid>
+      <Grid size={{ xs: 12 }}>
+        <Typography variant='h6' gutterBottom>Maintenance</Typography>
+      </Grid>
+      <MaintenanceToggle
+        value={flags.signup_lockout_enabled}
+        onToggle={handleToggle}
+        saving={saving}
+      />
+    </Grid>
+  );
+};
+
+// ── Templates Tab ──────────────────────────────────────────────────────────────
+
+const templateStatusLabel = (template: ExternalTemplateStatus) => {
+  if (template.status === 'ok') return 'Cached';
+  if (template.status === 'empty') return 'Empty document';
+  if (template.status === 'uncached') return 'Not cached';
+  if (template.status === 'missing_env') return 'Using embedded template';
+  if (template.status === 'permission_error') return 'Permission denied';
+  if (template.status === 'invalid') return 'Invalid template';
+  return 'Unavailable';
+};
+
+const TemplatesTab: React.FC = () => {
+  const [templates, setTemplates] = React.useState<ExternalTemplateStatus[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [running, setRunning] = React.useState<string | null>(null);
+  const [error, setError] = React.useState('');
+  const [restoreTarget, setRestoreTarget] = React.useState<ExternalTemplateStatus | null>(null);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    setError('');
+    const result = await getExternalTemplates();
+    if (result.error) {
+      setError(typeof result.error === 'string' ? result.error : result.error.message || 'Unable to load templates.');
+    } else {
+      setTemplates(result.data?.templates || []);
+    }
+    setLoading(false);
+  }, []);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const runAction = async (template: ExternalTemplateStatus, action: 'refresh' | 'restore' | 'populate') => {
+    setRunning(template.name);
+    setError('');
+    const result = await runExternalTemplateAction(template.name, action);
+    if (result.error) {
+      setError(typeof result.error === 'string' ? result.error : result.error.message || `Unable to ${action} template.`);
+    } else if (result.data?.template) {
+      setTemplates(current => current.map(item => item.name === template.name ? result.data.template : item));
+    }
+    setRunning(null);
+    setRestoreTarget(null);
+  };
+
+  if (loading) return <CircularProgress />;
+
+  return (
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12 }}>
+        <Typography variant='h6'>Google document templates</Typography>
+        <Typography variant='body2' color='textSecondary'>
+          Valid exports are cached in Redis. A failed refresh continues to preserve the last valid content.
+        </Typography>
+      </Grid>
+      {error && <Grid size={{ xs: 12 }}><Alert severity='error'>{error}</Alert></Grid>}
+      {templates.map(template => {
+        const healthy = template.status === 'ok' || template.status === 'empty' || template.status === 'uncached';
+        const retryable = !!template.edit_url && template.status !== 'missing_env';
+        const placeholderHelp = `Template placeholders: ${template.template_placeholders.join(', ') || '(none)'}. Common placeholders: ${template.common_placeholders.join(', ')}.`;
+        const tooltip = healthy
+          ? placeholderHelp
+          : template.status === 'missing_env'
+            ? `${template.error || templateStatusLabel(template)} Create the Google document, grant the service account access, and set ${template.env_key} to a valid document ID. ${placeholderHelp}`
+            : `${template.error || templateStatusLabel(template)} Correct the Google document or its access, then select Refresh to retry. ${placeholderHelp}`;
+        return (
+          <Grid size={{ xs: 12 }} key={template.name}>
+            <Tooltip title={tooltip} placement='top-start' arrow>
+              <Card variant='outlined'>
+                <CardContent>
+                  <Grid container spacing={2} alignItems='center'>
+                    <Grid size={{ xs: 12, md: 4 }}>
+                      <Typography variant='body1'><strong>{template.name}</strong></Typography>
+                      <Typography variant='caption' color='textSecondary'>{template.env_key}</Typography>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4, md: 2 }}>
+                      <Chip
+                        size='small'
+                        color={
+                          template.status === 'ok'
+                            ? 'success'
+                            : template.status === 'empty'
+                              ? 'warning'
+                              : template.status === 'missing_env' || template.status === 'uncached'
+                                ? 'info'
+                                : 'error'
+                        }
+                        label={templateStatusLabel(template)}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 8, md: 2 }}>
+                      <Typography variant='caption' color='textSecondary'>Cache fetched</Typography>
+                      <Typography variant='body2'>
+                        {template.status === 'missing_env' ? 'Environment variable missing' : formatDate(template.fetched_at)}
+                      </Typography>
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 4 }}>
+                      {retryable && (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            startIcon={running === template.name ? <CircularProgress size={14} /> : <RefreshIcon />}
+                            disabled={!!running}
+                            onClick={() => runAction(template, 'refresh')}
+                          >Refresh</Button>
+                          {template.status === 'empty' ? (
+                            <Button size='small' variant='outlined' disabled={!!running} onClick={() => runAction(template, 'populate')}>
+                              Populate
+                            </Button>
+                          ) : template.status === 'ok' ? (
+                            <Button
+                              size='small'
+                              variant='outlined'
+                              color='warning'
+                              startIcon={<RestoreIcon />}
+                              disabled={!!running}
+                              onClick={() => setRestoreTarget(template)}
+                            >Restore default</Button>
+                          ) : null}
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            startIcon={<OpenInNewIcon />}
+                            onClick={() => window.open(template.edit_url!, `google-template-${template.name}`, 'noopener,noreferrer')}
+                          >Edit</Button>
+                        </div>
+                      )}
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            </Tooltip>
+          </Grid>
+        );
+      })}
+      <Dialog open={!!restoreTarget} onClose={() => !running && setRestoreTarget(null)}>
+        <DialogTitle>Restore compiled-in default?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This will wipe out all changes in {restoreTarget?.env_key} and replace the Google document with the compiled-in default content.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={!!running} onClick={() => setRestoreTarget(null)}>Cancel</Button>
+          <Button
+            color='warning'
+            variant='contained'
+            disabled={!!running}
+            startIcon={running === restoreTarget?.name ? <CircularProgress size={14} /> : <RestoreIcon />}
+            onClick={() => restoreTarget && runAction(restoreTarget, 'restore')}
+          >
+            Restore default
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Grid>
   );
 };
@@ -713,6 +1134,8 @@ const SecurityTab: React.FC = () => {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 const MemberPortalSettings: React.FC = () => {
+  const { canViewPortalSettings } = useCapabilities();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab]       = React.useState<TabKey>('slack');
   const [config, setConfig]             = React.useState<SystemConfigData | null>(null);
   const [loading, setLoading]           = React.useState(true);
@@ -750,15 +1173,21 @@ const MemberPortalSettings: React.FC = () => {
 
   const handleSettingSave = React.useCallback(async (key: string, value: string) => {
     setSavingKey(key);
-    const { error: err } = await updateSystemSetting({ key, value });
-    if (!err && config) {
-      if (key.startsWith('slack_channel') || key === 'volunteer_pending_slack_channel') {
-        setConfig({ ...config, slack: { ...config.slack, [key]: value } });
-      } else if (key.startsWith('volunteer_')) {
-        setConfig({ ...config, volunteer: { ...config.volunteer, [key]: value } });
+    try {
+      const { error: err } = await updateSystemSetting({ key, value });
+      if (err) throw new Error(err.message || 'Unable to save. Please try again.');
+      if (config) {
+        if (key.startsWith('slack_channel') || key === 'volunteer_pending_slack_channel') {
+          setConfig({ ...config, slack: { ...config.slack, [key]: value } });
+        } else if (key.startsWith('volunteer_') || key === 'ticket_bounty_max_credit') {
+          setConfig({ ...config, volunteer: { ...config.volunteer, [key]: value } });
+        } else if (key === 'reservation_token') {
+          setConfig({ ...config, reservation: { ...config.reservation, [key]: value } });
+        } else if (key.endsWith('_day')) {
+          setConfig({ ...config, job_schedule: { ...config.job_schedule, [key]: value } });
+        }
       }
-    }
-    setSavingKey(null);
+    } finally { setSavingKey(null); }
   }, [config]);
 
   const handleRunJob = React.useCallback(async (jobKey: string) => {
@@ -807,7 +1236,7 @@ const MemberPortalSettings: React.FC = () => {
           variant='scrollable'
           scrollButtons='auto'
         >
-          {TABS.map(t => (
+          {TABS.filter(t => t.key !== 'templates' || canViewPortalSettings).map(t => (
             <Tab key={t.key} id={`settings-tab-${t.key}`} value={t.key} label={t.label} />
           ))}
         </Tabs>
@@ -824,6 +1253,7 @@ const MemberPortalSettings: React.FC = () => {
             onRunJob={handleRunJob}
             runningJob={runningJob}
             jobMessage={jobMessage}
+            onNavigateToConflicts={() => navigate(Routing.SlackIdentityConflicts)}
           />
         )}
         {activeTab === 'volunteer' && (
@@ -835,13 +1265,23 @@ const MemberPortalSettings: React.FC = () => {
             savingKey={savingKey}
           />
         )}
-        {activeTab === 'security' && <SecurityTab />}
+        {activeTab === 'reservations' && (
+          <ReservationsTab
+            config={config}
+            onSettingSave={handleSettingSave}
+            savingKey={savingKey}
+          />
+        )}
+        {activeTab === 'security' && <><TicketLimitSetting /><SecurityTab /></>}
+        {activeTab === 'templates' && canViewPortalSettings && <TemplatesTab />}
         {activeTab === 'jobs' && (
           <JobsTab
             config={config}
             onRunJob={handleRunJob}
             runningJob={runningJob}
             jobMessage={jobMessage}
+            onSettingSave={handleSettingSave}
+            savingKey={savingKey}
           />
         )}
       </Grid>

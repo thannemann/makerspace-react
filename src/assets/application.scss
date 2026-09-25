@@ -1,6 +1,7 @@
 @import "../components/AppLoading/AppLoading.scss";
 @import "../pages/registration/MembershipOptions/MembershipOptions.scss";
 @import "../pages/registration/PaymentMethods/CreditCardForm.scss";
+@import "../pages/registration/SignUpWorkflow/SignUpFeedbackNotification.scss";
 
 @mixin flex {
   -webkit-flex-grow: 1;
@@ -12,9 +13,12 @@ body {
   margin: 0;
 }
 
-h6 > svg {
+h6 > svg,
+h6 > img {
   height: 60px;
   width: 100%;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .error-message {
@@ -59,7 +63,7 @@ h6 > svg {
 }
 
 #landing-page-graphic {
-  background: url("./FilledLaserableLogo.svg") no-repeat center;
+  background: url("/assets/FilledLaserableLogo.svg") no-repeat center;
   background-size: contain;
   height: 100%;
 }

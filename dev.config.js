@@ -11,14 +11,21 @@ module.exports = env => ({
   entry: ["./src/app/main.tsx"],
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: "makerspace-react.js",
+    clean: true,
+    filename: pathData => pathData.chunk && pathData.chunk.name === "main" ? "makerspace-react.js" : "makerspace-react.[name].js",
+    chunkFilename: "makerspace-react.[name].js",
+    sourceMapFilename: "[file].map",
     publicPath: "/"
   },
   module: {
     rules: [
       {
-        test: /\.(png|jpg)$/,
-        type: "asset/inline"
+        test: /\.(png|jpe?g|svg)$/,
+        exclude: /FilledLaserableLogo\.svg$/,
+        type: "asset/resource",
+        generator: {
+          filename: "assets/[name][ext]"
+        }
       },
       {
         test: /\.(html)$/,
@@ -67,7 +74,8 @@ module.exports = env => ({
   resolve: {
     plugins: [new TsconfigPathsPlugin()],
     alias: {
-      "moment-timezone$": "moment-timezone/moment-timezone"
+      "moment-timezone$": "moment-timezone/moment-timezone",
+      "/assets": path.resolve(__dirname, "src/assets")
     },
     extensions: [
       ".ts", ".tsx", ".js", ".jsx",
@@ -86,6 +94,14 @@ module.exports = env => ({
   devtool: "source-map",
   context: __dirname,
   target: "web",
+  optimization: {
+    splitChunks: {
+      // Rails currently includes only the main makerspace-react.js asset.
+      // Keep initial dependencies in that file so the Rails-mounted app can
+      // boot, while still splitting lazy route dependencies into async chunks.
+      chunks: "async"
+    }
+  },
   devServer: {
     hot: true,
     allowedHosts: "all",
@@ -94,13 +110,13 @@ module.exports = env => ({
       context: ["/api"],
       target: "http://localhost:3002"
     }],
-    https: false,
     port: 3035,
     headers: { "Access-Control-Allow-Origin": "*" }
   },
   plugins: [
     new MiniCssExtractPlugin({
-      filename: `makerspace-react.css`
+      filename: `makerspace-react.css`,
+      chunkFilename: `makerspace-react.[name].css`
     }),
     new HtmlWebPackPlugin({
       template: "./src/assets/index.html",
@@ -112,6 +128,8 @@ module.exports = env => ({
     new webpack.EnvironmentPlugin({
       BILLING_ENABLED: true,
       BASE_URL: (env && env.BASE_URL) || "",
+      // Build-time public contact address; defaults to the Makerspace inbox.
+      SMTP_FROM: "contact@manchestermakerspace.org",
       FIREBASE_API_KEY: "",
       FIREBASE_AUTH_DOMAIN: "",
       FIREBASE_PROJECT_ID: "",

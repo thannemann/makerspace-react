@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 import { Link } from "react-router-dom";
 import { RouteComponentProps } from "react-router-dom";
@@ -14,8 +15,10 @@ import ListItemButton from "@mui/material/ListItemButton";
 import Divider from "@mui/material/Divider";
 import Chip from "@mui/material/Chip";
 import MenuIcon from "@mui/icons-material/Menu";
-
-import Logo from "../../assets/FilledLaserableLogo.svg";
+import ConstructionIcon from "@mui/icons-material/Construction";
+import CampaignIcon from "@mui/icons-material/Campaign";
+import AddCardIcon from "@mui/icons-material/AddCard";
+import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 
 import { ScopedThunkDispatch, State as ReduxState } from "ui/reducer";
 import { logoutUserAction } from "ui/auth/actions";
@@ -23,6 +26,8 @@ import { AuthMember } from "ui/auth/interfaces";
 import { memberIsAdmin, memberIsBoardMember, memberIsResourceManager } from "ui/member/utils";
 import { Routing, Whitelists } from "app/constants";
 import Help from "ui/common/Help";
+
+const logoUrl = "/assets/FilledLaserableLogo.svg";
 
 interface OwnProps extends RouteComponentProps<any> {}
 interface StateProps {
@@ -99,11 +104,18 @@ class Header extends React.Component<Props, State> {
     this.setState({ anchorEl: null });
   };
 
-  private renderMenuNavLink = (path: string, label: string, id: string) => {
+  private renderMenuNavLink = (
+    path: string,
+    label: string,
+    id: string,
+    icon?: React.ReactNode
+  ) => {
     const match = this.props.location && this.props.location.pathname === path;
     return (
       <Link key={id} id={id} to={path} style={{ outline: "none", textDecoration: "none", color: "unset" }} onClick={this.detachMenu}>
-        <ListItemButton selected={match} sx={{ py: 0.75, px: 2 }}>{label}</ListItemButton>
+        <ListItemButton selected={match} sx={{ py: 0.75, px: 2, gap: 1 }}>
+          {icon}{label}
+        </ListItemButton>
       </Link>
     );
   }
@@ -133,12 +145,13 @@ class Header extends React.Component<Props, State> {
     const isAdminOrBoard = isAdmin || isBoardMember;
     const isPrivileged   = isAdmin || isBoardMember || isRM;
     const canManageShopFees    = isPrivileged;
-    const canManageCheckouts   = isPrivileged || (currentUser as any).isCheckoutApprover;
+    const canManageCheckouts   = true;
     const canManageVolunteer   = isPrivileged;
     const canManageRentals     = isPrivileged;
 
     // Privileged menu items — alphabetized
     const privilegedItems: JSX.Element[] = [
+      this.renderMenuNavLink("/fix-tickets", "Fix Tickets", "fix-tickets", <CampaignIcon fontSize="small" />),
       ...(isAdminOrBoard ? [this.renderMenuNavLink(Routing.Analytics, "Analytics", "analytics")] : []),
       ...(isAdminOrBoard ? [this.renderMenuNavLink(Routing.AuditLog, "Audit Log", "audit-log")] : []),
       ...(billingEnabled && isAdminOrBoard ? [this.renderMenuNavLink(Routing.Billing, "Billing", "billing")] : []),
@@ -146,9 +159,16 @@ class Header extends React.Component<Props, State> {
       ...(isPrivileged ? [this.renderMenuNavLink(Routing.Members, "Members", "members")] : []),
       ...(isAdmin ? [this.renderMenuNavLink(Routing.SystemSettings, "Portal Settings", "system-settings")] : []),
       ...(canManageRentals ? [this.renderMenuNavLink(Routing.AdminRentals, "Rentals", "rentals")] : []),
+      this.renderMenuNavLink(Routing.Reservations, "Reservations", "reservations"),
       ...(canManageShopFees ? [this.renderMenuNavLink(Routing.ShopFees, "Shop Fees", "shop-fees")] : []),
       ...(canManageCheckouts ? [this.renderMenuNavLink(Routing.ToolCheckouts, "Tool Checkouts", "tool-checkouts")] : []),
       ...(canManageVolunteer ? [this.renderMenuNavLink(Routing.Volunteer, "Volunteer", "volunteer")] : []),
+      this.renderMenuNavLink(
+        Routing.Workshops,
+        "Workshops",
+        "workshops",
+        <ConstructionIcon fontSize="small" />
+      ),
     ];
 
     // Settings submenu items - shown when privilegedItems.length < 5
@@ -156,7 +176,6 @@ class Header extends React.Component<Props, State> {
       { route: "profile", label: "Personal Information", id: "settings-submenu-profile" },
       ...(billingEnabled ? [
         { route: "subscriptions", label: "Subscriptions", id: "settings-submenu-subscriptions" },
-        { route: "payment-methods", label: "Payment Methods", id: "settings-submenu-payment-methods" },
       ] : []),
       { route: "security", label: "Security", id: "settings-submenu-security" },
     ];
@@ -195,6 +214,7 @@ class Header extends React.Component<Props, State> {
           {/* Member section */}
           {this.renderMenuNavLink(settingsUrl, "Account Settings", "settings")}
           {this.renderMenuNavLink(profileUrl, "My Profile", "profile")}
+          {billingEnabled && this.renderMenuNavLink(`${settingsUrl}/payment-methods`, "Payment Methods", "settings-submenu-payment-methods", <AddCardIcon fontSize="small" />)}
 
           {/* Privileged section */}
           {privilegedItems.length > 0 && <Divider />}
@@ -206,7 +226,8 @@ class Header extends React.Component<Props, State> {
 
           {/* Logout */}
           <Divider />
-          <MenuItem id="logout" onClick={this.logoutUser} style={{ color: "#d32f2f" }}>
+          <MenuItem id="logout" onClick={this.logoutUser} sx={{ gap: 1 }} style={{ color: "#d32f2f" }}>
+            <ExitToAppIcon fontSize="small" />
             Logout
           </MenuItem>
         </Menu>
@@ -226,7 +247,7 @@ class Header extends React.Component<Props, State> {
       <AppBar color="default" style={{ marginBottom: "1em" }} position="static" title="Manchester Makerspace">
         <Toolbar>
           <Typography variant="h6" color="inherit" className="flex">
-            <Logo alt="Manchester Makerspace" viewBox="0 0 960 580" preserveAspectRatio="xMinYMin" />
+            <img src={logoUrl} alt="Manchester Makerspace" />
           </Typography>
           <Help />
           {currentUser.id

@@ -35,6 +35,7 @@ export interface UserCapabilities {
   // Shop operations
   canManageShopFees:           boolean; // admin, board, rm
   canManageCheckouts:          boolean; // admin, board, rm, checkoutApprover
+  canViewShopQrCodes:         boolean; // admin, board, rm
   canManageCheckoutApprovers:  boolean; // admin, board
   canManageVolunteer:          boolean; // admin, board, rm
   canDeleteVolunteerRecords:   boolean; // admin, board
@@ -54,6 +55,7 @@ export const computeCapabilities = (user: AuthMember): UserCapabilities => {
   const board    = !!user?.isBoardMember;
   const rm       = !!user?.isResourceManager;
   const approver = !!(user as any)?.isCheckoutApprover;
+  const managesShops = rm && ((user as any)?.resourceManagerShopIds || []).length > 0;
 
   const privileged = admin || board;
 
@@ -75,7 +77,8 @@ export const computeCapabilities = (user: AuthMember): UserCapabilities => {
     canDeleteRentals:            privileged,
 
     canManageShopFees:           privileged || rm,
-    canManageCheckouts:          privileged || rm || approver,
+    canManageCheckouts:          privileged || managesShops || approver,
+    canViewShopQrCodes:         privileged || rm,
     canManageCheckoutApprovers:  privileged,
     canManageVolunteer:          privileged || rm,
     canDeleteVolunteerRecords:   privileged,

@@ -24,9 +24,13 @@ export namespace Routing {
   export const RentalSpotDeepLink = `${Rentals}/spots/${PathPlaceholder.SpotId}`;
   export const ShopFees = '/shop-fees';
   export const ToolCheckouts = '/tool-checkouts';
+  export const Workshops = '/workshops';
+  export const ToolCheckoutRequests = `${ToolCheckouts}?mode=self-service`;
+  export const Reservations = '/reservations';
   export const Analytics = '/admin/analytics';
   export const Volunteer = '/volunteer';
   export const SystemSettings = '/admin/system-settings';
+  export const SlackIdentityConflicts = '/admin/slack-identity-conflicts';
   export const AuditLog = '/admin/audit-log';
   export const Checkout = '/checkout';
   export const Receipt = `${Checkout}/receipt/${PathPlaceholder.InvoiceId}`;

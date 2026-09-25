@@ -1,0 +1,743 @@
+import ToolAvailability from "ui/common/ToolAvailability";
+import * as React from "react";
+import Grid from "@mui/material/Grid";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Select from "@mui/material/Select";
+import FormLabel from "@mui/material/FormLabel";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import Paper from "@mui/material/Paper";
+import Alert from "@mui/material/Alert";
+import CircularProgress from "@mui/material/CircularProgress";
+import Slider from "@mui/material/Slider";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+import {
+  approveReservation, cancelManagedReservation, cancelReservation, createManagedReservation,
+  createReservation, denyReservation,
+  getReservationAvailability, getReservationBlackouts, getReservationCatalog,
+  listManagedReservations, listReservations,
+  previewManagedReservation, previewManagedReservationCreation, previewReservation,
+  previewReservationUpdate,
+  updateManagedReservation, updateReservation
+} from "api/reservations";
+import {
+  Reservation, ReservationBlackoutOccurrence, ReservationCatalog,
+  ReservationInput, ReservationPreview
+} from "app/entities/reservation";
+import { Shop, Tool } from "app/entities/toolCheckout";
+import moment from "ui/utils/moment";
+import { useAuthState } from "ui/reducer/hooks";
+import MemberSearchInput from "ui/common/MemberSearchInput";
+import {
+  reservationCatalogDefaults, reservationShopOptions
+} from "./reservationForm";
+import ApprovalDetails from "./ApprovalDetails";
+import ReservationBlackouts from "./ReservationBlackouts";
+import DayAgenda from "./DayAgenda";
+import { isReservationCreationEligible } from "./eligibility";
+import ShopManager from "ui/toolCheckouts/ShopManager";
+import ToolManager from "ui/toolCheckouts/ToolManager";
+import { useCapabilities } from "app/permissions";
+import { memberIsResourceManager } from "ui/member/utils";
+import {
+  buildReservationPageTabs, groupMemberReservations, ReservationPageTabKey
+} from "./reservationPageTabs";
+
+const ZONE = "America/New_York";
+const nextWholeHour = () => moment.tz(ZONE).add(1, "hour").startOf("hour");
+const parseStart = (date: string, time: string) => moment.tz(
+  `${date} ${time.trim()}`,
+  ["YYYY-MM-DD HH:mm", "YYYY-MM-DD H:mm", "YYYY-MM-DD h:mm A", "YYYY-MM-DD h A"],
+  true,
+  ZONE
+);
+const statusColor = (status: string): "default" | "primary" | "warning" | "success" | "error" =>
+  (status === "pending" || status === "unpaid") ? "warning" : status === "approved" ? "success" : status === "denied" ? "error" : "default";
+
+const ReservationTitle: React.FC<{ reservation: Reservation }> = ({ reservation }) => (
+  <>{reservation.calendarHtmlLink
+    ? <a href={reservation.calendarHtmlLink} target="_blank" rel="noopener noreferrer">
+        {reservation.title}
+      </a>
+    : <>{reservation.title}</>} <ToolAvailability outOfService={!!reservation.outOfServiceToolNames?.length} /></>
+);
+
+const ReservationsPage: React.FC = () => {
+  const { currentUser } = useAuthState();
+  const capabilities = useCapabilities();
+  const initialStart = React.useMemo(nextWholeHour, []);
+  const [catalog, setCatalog] = React.useState<ReservationCatalog>({ shops: [], tools: [] });
+  const [shopId, setShopId] = React.useState("");
+  const [scope, setScope] = React.useState<"shop" | "tools">("tools");
+  const [toolIds, setToolIds] = React.useState<string[]>([]);
+  const [title, setTitle] = React.useState("");
+  const [date, setDate] = React.useState(initialStart.format("YYYY-MM-DD"));
+  const [startTime, setStartTime] = React.useState(initialStart.format("HH:mm"));
+  const [fullDayChoice, setFullDayChoice] = React.useState(false);
+  const [endDate, setEndDate] = React.useState(initialStart.clone().add(1, "day").format("YYYY-MM-DD"));
+  const [feeAccepted, setFeeAccepted] = React.useState("");
+  const [previewRevision, setPreviewRevision] = React.useState(0);
+  const [durationHours, setDurationHours] = React.useState(1);
+  const [preview, setPreview] = React.useState<ReservationPreview | null>(null);
+  const [reservations, setReservations] = React.useState<Reservation[]>([]);
+  const [blackoutOccurrences, setBlackoutOccurrences] =
+    React.useState<ReservationBlackoutOccurrence[]>([]);
+  const [mine, setMine] = React.useState<Reservation[]>([]);
+  const [managed, setManaged] = React.useState<Reservation[]>([]);
+  const [editing, setEditing] = React.useState<Reservation | null>(null);
+  const [editingManaged, setEditingManaged] = React.useState(false);
+  const [creatingForMember, setCreatingForMember] = React.useState(false);
+  const [targetMemberId, setTargetMemberId] = React.useState("");
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [success, setSuccess] = React.useState("");
+  const [activeTab, setActiveTab] = React.useState<ReservationPageTabKey>("new");
+  const previewRequestGeneration = React.useRef(0);
+  const handledEditId = React.useRef("");
+
+  const canCreateReservation = isReservationCreationEligible(currentUser);
+  const isManager = !!(currentUser.isAdmin || currentUser.isBoardMember ||
+    (currentUser.isResourceManager && (currentUser.resourceManagerShopIds || []).length));
+  const managesCheckoutShops = memberIsResourceManager(currentUser) &&
+    (currentUser.resourceManagerShopIds || []).length > 0;
+  const canManageShopTools = managesCheckoutShops || capabilities.canManageCheckoutApprovers;
+  const pageTabs = buildReservationPageTabs({
+    canManageReservations: isManager,
+    canManageBlackouts: isManager,
+    canManageShops: canManageShopTools,
+    canManageTools: canManageShopTools,
+  });
+  const pageTabSignature = pageTabs.map(tab => tab.key).join(",");
+
+  React.useEffect(() => {
+    if (!pageTabs.some(tab => tab.key === activeTab)) setActiveTab("new");
+  }, [activeTab, pageTabSignature]);
+
+  const canUseCreateUi = canCreateReservation;
+  const managedShopIds = currentUser.resourceManagerShopIds || [];
+  const availableShops = reservationShopOptions({
+    shops: catalog.shops,
+    managedShopIds,
+    creatingForMember,
+    editingManaged,
+    isResourceManager: !!currentUser.isResourceManager,
+    isAdmin: !!currentUser.isAdmin,
+    isBoardMember: !!currentUser.isBoardMember,
+  });
+  const selectedShop = availableShops.find(shop => shop.id === shopId);
+  const shopTools = catalog.tools.filter(tool => tool.shopId === shopId);
+  const selectedTools = shopTools.filter(tool => toolIds.includes(tool.id));
+  const resourceConfiguredMaximum = scope === "shop"
+    ? Number(selectedShop?.maxReservationDurationHours || 8)
+    : selectedTools.length
+      ? Math.min(...selectedTools.map(tool => Number(tool.maxReservationDurationHours || 8)))
+      : 8;
+  const originalDuration = editing
+    ? moment(editing.endAt).diff(moment(editing.startAt), "minutes") / 60
+    : 0;
+  const configuredMaximum = editing
+    ? Math.max(resourceConfiguredMaximum, originalDuration)
+    : resourceConfiguredMaximum;
+  const previewMaximum = preview?.maximumDurationHours;
+  const effectiveMaximum = previewMaximum === undefined ? configuredMaximum : previewMaximum;
+  const sliderMaximum = Math.max(0.5, effectiveMaximum);
+  const selectedResources = scope === "shop" ? (selectedShop ? [selectedShop] : []) : selectedTools;
+  const bypassBookingNotice = currentUser.isAdmin || currentUser.isBoardMember ||
+    (currentUser.isResourceManager && managedShopIds.includes(shopId));
+  const noticeHours = bypassBookingNotice ? 0 : Math.max(0, ...selectedResources.map(resource => resource.minimumAdvanceNoticeHours ?? 2));
+  const prohibitSameDay = !bypassBookingNotice && selectedResources.some(resource => resource.prohibitSameDayReservations);
+  const noticeCutoff = moment.tz(ZONE).add(noticeHours, "hours");
+  noticeCutoff.minutes(Math.floor(noticeCutoff.minutes() / 30) * 30).seconds(0).milliseconds(0);
+  const requiresFullDay = scope === "shop" ? !!selectedShop?.reservationFullDay : selectedTools.some(tool => tool.reservationFullDay);
+  const fullDay = requiresFullDay || ((resourceConfiguredMaximum >= 24 || !!editing?.fullDay) && fullDayChoice);
+  React.useEffect(() => {
+    if (!fullDay || editing) return;
+    const tomorrow = moment().tz(ZONE).add(1, "day").format("YYYY-MM-DD");
+    const nextDate = date < tomorrow ? tomorrow : date;
+    if (date !== nextDate) setDate(nextDate);
+    if (endDate <= nextDate) setEndDate(moment.tz(nextDate, ZONE).add(1, "day").format("YYYY-MM-DD"));
+  }, [fullDay, date, endDate, editing?.id]);
+  const startMoment = parseStart(date, fullDay ? "00:00" : startTime);
+  const validStart = startMoment.isValid();
+  const endMoment = validStart ? (fullDay ? parseStart(endDate, "00:00") : startMoment.clone().add(durationHours, "hours")) : null;
+  const usesMeridiem = /\b(am|pm)\b/i.test(startTime);
+  const input: ReservationInput = {
+    title, shopId, reservationScope: scope, toolIds, fullDay,
+    feeConfirmation: feeAccepted || undefined,
+    startAt: validStart ? startMoment.toISOString() : "",
+    endAt: endMoment ? endMoment.toISOString() : ""
+  };
+
+  const loadReservations = React.useCallback(async () => {
+    const [availabilityResult, mineResult, blackoutResult] = await Promise.all([
+      canUseCreateUi
+        ? getReservationAvailability({ date, shopId: shopId || undefined })
+        : Promise.resolve({ data: [] as Reservation[] }),
+      listReservations({ mine: true }),
+      canUseCreateUi && shopId
+        ? getReservationBlackouts({ date, shopId })
+        : Promise.resolve({ data: [] as ReservationBlackoutOccurrence[] })
+    ]);
+    if (availabilityResult.data) setReservations(availabilityResult.data);
+    if (blackoutResult.data) setBlackoutOccurrences(blackoutResult.data);
+    if (mineResult.data) setMine(mineResult.data);
+    if (isManager) {
+      const [futureResult, cancelledResult] = await Promise.all([
+        listManagedReservations({ future: true }),
+        listManagedReservations({ status: "cancelled" })
+      ]);
+      const combined = [...(futureResult.data || []), ...(cancelledResult.data || [])];
+      setManaged(Array.from(new Map(combined.map(item => [item.id, item])).values()));
+    }
+  }, [date, shopId, isManager, canUseCreateUi]);
+
+  React.useEffect(() => {
+    if (!canUseCreateUi) {
+      setLoading(false);
+      return;
+    }
+    getReservationCatalog().then(result => {
+      if (result.data) {
+        setCatalog(result.data);
+        const defaults = reservationCatalogDefaults(
+          result.data,
+          window.location.search
+        );
+        if (defaults) {
+          setShopId(defaults.shopId);
+          setScope(defaults.scope);
+          setToolIds(defaults.toolIds);
+        }
+      } else {
+        setError(result.error?.message || "Unable to load reservable resources.");
+      }
+      setLoading(false);
+    });
+  }, [canUseCreateUi]);
+
+  React.useEffect(() => {
+    if (!(creatingForMember || editingManaged) ||
+        availableShops.some(shop => shop.id === shopId)) return;
+    const first = availableShops[0];
+    setShopId(first?.id || "");
+    setToolIds([]);
+    setScope(first?.reservable ? "shop" : "tools");
+  }, [creatingForMember, editingManaged, shopId,
+      availableShops.map(shop => shop.id).join(",")]);
+
+  React.useEffect(() => { loadReservations(); }, [loadReservations]);
+
+  React.useEffect(() => {
+    const requestGeneration = ++previewRequestGeneration.current;
+    if (!canUseCreateUi || !validStart || !title.trim() || !shopId ||
+        (creatingForMember && !targetMemberId) ||
+        (scope === "tools" && toolIds.length === 0)) {
+      setPreview(null);
+      return;
+    }
+    setPreview(null);
+    const timer = window.setTimeout(async () => {
+      const result = editingManaged && editing
+        ? await previewManagedReservation({ id: editing.id, body: input })
+        : editing
+          ? await previewReservationUpdate({ id: editing.id, body: input })
+        : creatingForMember
+          ? await previewManagedReservationCreation({ memberId: targetMemberId, body: input })
+        : await previewReservation({ body: input });
+      if (previewRequestGeneration.current === requestGeneration) {
+        setPreview(result.data || null);
+        if (result.error) setError(result.error.message);
+      }
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      if (previewRequestGeneration.current === requestGeneration) {
+        previewRequestGeneration.current += 1;
+      }
+    };
+  }, [canUseCreateUi, creatingForMember, targetMemberId, validStart, title, shopId, scope,
+      toolIds.join(","), date, startTime, durationHours, fullDay, endDate, editingManaged, editing?.id, previewRevision]);
+
+  React.useEffect(() => { setFeeAccepted(""); }, [title, shopId, scope, toolIds.join(","), date, startTime, durationHours, fullDay, endDate, targetMemberId, editing?.id]);
+
+  React.useEffect(() => {
+    if (fullDay) return;
+    if (effectiveMaximum < 0.5 && durationHours !== 0.5) {
+      setDurationHours(0.5);
+    } else if (effectiveMaximum >= 0.5 && durationHours > effectiveMaximum) {
+      setDurationHours(Math.floor(effectiveMaximum * 2) / 2);
+    }
+  }, [effectiveMaximum, durationHours, fullDay]);
+
+  const toggleTool = (id: string) =>
+    setToolIds(value => value.includes(id) ? value.filter(item => item !== id) : [...value, id]);
+
+  const resetForm = (preservedShopId?: string) => {
+    const nextStart = nextWholeHour();
+    const resetShop = catalog.shops.find(shop => shop.id === preservedShopId) ||
+      catalog.shops[0];
+    setEditing(null);
+    setEditingManaged(false);
+    setCreatingForMember(false);
+    setTargetMemberId("");
+    setTitle("");
+    setShopId(resetShop?.id || "");
+    setScope(resetShop?.reservable ? "shop" : "tools");
+    setToolIds([]);
+    setFullDayChoice(false);
+    setFeeAccepted("");
+    setEndDate(nextStart.clone().add(1, "day").format("YYYY-MM-DD"));
+    setDate(nextStart.format("YYYY-MM-DD"));
+    setStartTime(nextStart.format("HH:mm"));
+    setDurationHours(1);
+    setPreview(null);
+    setError("");
+    setSuccess("");
+  };
+
+  const submit = async () => {
+    if ((preview?.feeTotal || 0) > 0 && feeAccepted !== preview?.feeConfirmation) {
+      setFeeAccepted(preview?.feeConfirmation || "");
+      return;
+    }
+    const creating = !editing;
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    const result = editing
+      ? editingManaged
+        ? await updateManagedReservation({ id: editing.id, body: input })
+        : await updateReservation({ id: editing.id, body: input })
+      : creatingForMember
+        ? await createManagedReservation({ memberId: targetMemberId, body: input })
+        : await createReservation({ body: input });
+    setSaving(false);
+    if (result.error) {
+      setFeeAccepted("");
+      setPreviewRevision(value => value + 1);
+      setError(
+        result.error.message ||
+        result.response?.data?.message ||
+        "The reservation could not be saved."
+      );
+      return;
+    }
+
+    const savedReservation = result.data;
+    resetForm(shopId);
+    setSuccess(
+      creating
+        ? `Reservation "${savedReservation?.title || input.title}" was created successfully` +
+          `${savedReservation?.status ? ` with status ${savedReservation.status}` : ""}.` +
+          `${savedReservation?.approvalDetails?.length
+            ? ` ${savedReservation.approvalDetails.map(detail => detail.message).join(" ")}`
+            : ""}`
+        : `Reservation "${savedReservation?.title || input.title}" was updated successfully.` +
+          `${savedReservation?.approvalDetails?.length
+            ? ` ${savedReservation.approvalDetails.map(detail => detail.message).join(" ")}`
+            : ""}`
+    );
+    await loadReservations();
+  };
+
+  const edit = (reservation: Reservation, managedEdit = false) => {
+    setError("");
+    setSuccess("");
+    setPreview(null);
+    setCreatingForMember(false);
+    setTargetMemberId("");
+    setEditing(reservation);
+    setEditingManaged(managedEdit);
+    setFullDayChoice(!!reservation.fullDay);
+    setEndDate(moment(reservation.endAt).tz(ZONE).format("YYYY-MM-DD"));
+    setTitle(reservation.title);
+    setShopId(reservation.shopId);
+    setScope(reservation.reservationScope);
+    setToolIds(reservation.toolIds || []);
+    setDate(moment(reservation.startAt).tz(ZONE).format("YYYY-MM-DD"));
+    setStartTime(moment(reservation.startAt).tz(ZONE).format("HH:mm"));
+    setDurationHours(moment(reservation.endAt).diff(moment(reservation.startAt), "minutes") / 60);
+    setActiveTab("new");
+  };
+
+  React.useEffect(() => {
+    const requestedEditId =
+      new URLSearchParams(window.location.search).get("edit") || "";
+    if (!requestedEditId || handledEditId.current === requestedEditId) return;
+
+    const ownReservation = mine.find(item => item.id === requestedEditId);
+    const managedReservation = isManager ? managed.find(item => item.id === requestedEditId) : undefined;
+    const reservation = ownReservation || managedReservation;
+    if (!reservation) return;
+
+    handledEditId.current = requestedEditId;
+    edit(reservation, !ownReservation && !!managedReservation);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [mine, managed, isManager]);
+
+  const cancel = async (id: string) => {
+    setError("");
+    setSuccess("");
+    const result = await cancelReservation({ id });
+    if (result.error) setError(result.error.message);
+    else await loadReservations();
+  };
+
+  const decide = async (id: string, approve: boolean) => {
+    setError("");
+    setSuccess("");
+    const result = approve ? await approveReservation({ id }) : await denyReservation({ id });
+    if (result.error) setError(result.error.message);
+    else await loadReservations();
+  };
+
+  const managerCancel = async (id: string) => {
+    setError("");
+    setSuccess("");
+    const result = await cancelManagedReservation({ id });
+    if (result.error) setError(result.error.message);
+    else await loadReservations();
+  };
+
+  const memberReservations = groupMemberReservations(mine);
+  const pendingManaged = managed.filter(item => item.status === "pending" || (item.status === "unpaid" && item.approvalReasons.length > 0));
+  const upcomingManaged = managed.filter(item =>
+    (item.status === "approved" || (item.status === "unpaid" && item.approvalReasons.length === 0)) &&
+    moment(item.endAt).isAfter(moment()));
+  const cancelledManaged = managed.filter(item => item.status === "cancelled").reverse();
+  const failedManaged = managed.filter(item => item.calendarSyncStatus === "failed");
+  if (loading) return <Grid container justifyContent="center"><CircularProgress /></Grid>;
+
+  return (
+    <Grid container spacing={3} justifyContent="center">
+      <Grid size={{ xs: 12, lg: 10 }}>
+        <Typography variant="h5">Reservations</Typography>
+        <Typography color="textSecondary">Reserve a shop or checked-out tools in 30-minute increments.</Typography>
+      </Grid>
+      <Grid size={{ xs: 12, lg: 10 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, value) => setActiveTab(value as ReservationPageTabKey)}
+          variant="scrollable"
+          scrollButtons="auto"
+          aria-label="Reservation sections"
+        >
+          {pageTabs.map(tab => (
+            <Tab key={tab.key} id={`reservations-tab-${tab.key}`}
+              value={tab.key} label={tab.label} />
+          ))}
+        </Tabs>
+      </Grid>
+      {error && <Grid size={{ xs: 12, lg: 10 }}><Alert severity="error" onClose={() => setError("")}>{error}</Alert></Grid>}
+      {success && <Grid size={{ xs: 12, lg: 10 }}>
+        <Alert severity="success" onClose={() => setSuccess("")}>{success}</Alert>
+      </Grid>}
+      {activeTab === "new" && !canCreateReservation && <Grid size={{ xs: 12, lg: 10 }}>
+        <Alert severity="info">
+          Your membership is inactive or expired. You may cancel your existing reservations,
+          but cannot create or edit reservations.
+        </Alert>
+      </Grid>}
+
+      {activeTab === "new" && canUseCreateUi && <><Grid size={{ xs: 12, md: 5, lg: 4 }}>
+        <Paper style={{ padding: 20 }}>
+          <Typography variant="h6">{editing ? "Edit Reservation" : "New Reservation"}</Typography>
+          <Grid container spacing={2} style={{ marginTop: 4 }}>
+            {isManager && !editing && <Grid size={{ xs: 12 }}>
+              <FormControlLabel
+                control={<Checkbox checked={creatingForMember}
+                  disabled={!canCreateReservation}
+                  onChange={event => {
+                    setCreatingForMember(event.target.checked);
+                    setTargetMemberId("");
+                    setPreview(null);
+                  }} />}
+                label="Create on behalf of another member"
+              />
+              {creatingForMember && (
+                <MemberSearchInput
+                  name="reservation-target-member"
+                  placeholder="Search active members by name or email"
+                  excludeExpired
+                  excludeIds={[currentUser.id]}
+                  onChange={selection => setTargetMemberId(selection?.value || "")}
+                />
+              )}
+            </Grid>}
+            <Grid size={{ xs: 12 }}>
+              <TextField fullWidth required label="Title" value={title} onChange={event => setTitle(event.target.value)} />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <FormLabel>Shop</FormLabel>
+              <Select native fullWidth value={shopId} onChange={event => {
+                const next = event.target.value as string;
+                const shop = availableShops.find(item => item.id === next);
+                setShopId(next); setToolIds([]); setScope(shop?.reservable ? "shop" : "tools");
+              }}>
+                {editing && !catalog.shops.some(shop => shop.id === editing.shopId) &&
+                  <option value={editing.shopId}>{editing.shopName} (existing reservation)</option>}
+                {availableShops.map(shop => <option key={shop.id} value={shop.id}>{shop.name}</option>)}
+              </Select>
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <FormLabel>Resource</FormLabel>
+              <Select native fullWidth value={scope} onChange={event => setScope(event.target.value as any)}>
+                {selectedShop?.reservable && <option value="shop">Entire shop</option>}
+                {shopTools.length > 0 && <option value="tools">One or more tools</option>}
+                {editing && editing.reservationScope === "shop" && !selectedShop?.reservable &&
+                  <option value="shop">Entire shop (existing reservation)</option>}
+                {editing && editing.reservationScope === "tools" && shopTools.length === 0 &&
+                  <option value="tools">Tools (existing reservation)</option>}
+              </Select>
+            </Grid>
+            {scope === "tools" && <Grid size={{ xs: 12 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {shopTools.map(tool => <Chip key={tool.id} label={`${tool.name}${tool.outOfService ? " — Out of service" : ""}`} disabled={tool.outOfService && !toolIds.includes(tool.id)} clickable onClick={() => toggleTool(tool.id)}
+                  color={toolIds.includes(tool.id) ? "primary" : "default"}
+                  variant={toolIds.includes(tool.id) ? "filled" : "outlined"} />)}
+                {editing && editing.toolIds.filter(id => !shopTools.some(tool => tool.id === id)).map(id => {
+                  const index = editing.toolIds.indexOf(id);
+                  return <Chip key={id} label={`${editing.toolNames[index] || "Tool"} (existing)`}
+                    color="primary" variant="filled" />;
+                })}
+              </div>
+            </Grid>}
+            {(resourceConfiguredMaximum >= 24 || requiresFullDay || editing?.fullDay) && <Grid size={{ xs: 12 }}>
+              <FormControlLabel label="Full day" control={<Checkbox checked={fullDay} disabled={requiresFullDay}
+                onChange={event => {
+                  setFullDayChoice(event.target.checked);
+                  const next = moment.tz(date, ZONE).isAfter(moment().tz(ZONE), "day") ? moment.tz(date, ZONE) : moment().tz(ZONE).add(1, "day");
+                  setDate(next.format("YYYY-MM-DD"));
+                  setEndDate(next.clone().add(1, "day").format("YYYY-MM-DD"));
+                }} />} />
+            </Grid>}
+            {!bypassBookingNotice && selectedResources.length > 0 && <Grid size={{ xs: 12 }}>
+              <Alert severity="info">
+                Minimum advance notice: {noticeHours} hours (rounded down to a 30-minute interval).
+                {prohibitSameDay ? " Same day reservations are prohibited." : ""}
+                {" Earliest start under these rules: "}{(prohibitSameDay && noticeCutoff.isSame(moment.tz(ZONE), "day")
+                  ? moment.tz(ZONE).add(1, "day").startOf("day") : noticeCutoff).format("MMM D, YYYY HH:mm")}
+              </Alert>
+            </Grid>}
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField fullWidth type="date" label="Start date" value={date}
+                onChange={event => setDate(event.target.value)}
+                slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: (fullDay || (!editing && prohibitSameDay)) ? moment().tz(ZONE).add(1, "day").format("YYYY-MM-DD") : undefined } }} />
+            </Grid>
+            {fullDay && <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField fullWidth type="date" label="End date (exclusive)" value={endDate}
+                onChange={event => setEndDate(event.target.value)}
+                helperText="Ends at midnight on this date. Select the next date for one full day."
+                slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: moment.tz(date, ZONE).add(1, "day").format("YYYY-MM-DD") } }} />
+            </Grid>}
+            {!fullDay && <><Grid size={{ xs: 12, sm: 6 }}>
+              <TextField fullWidth label="Start time" value={startTime}
+                onChange={event => setStartTime(event.target.value)}
+                placeholder="09:00"
+                error={!!startTime && !validStart}
+                helperText={validStart ? "24-hour time (00:00–23:30), or enter AM/PM explicitly" : "Enter HH:mm, such as 18:30, or 6:30 PM"} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField fullWidth type="number" label="Duration (hours)" value={durationHours}
+                disabled={effectiveMaximum < 0.5}
+                onChange={event => {
+                  const value = Number(event.target.value);
+                  if (!Number.isFinite(value)) return;
+                  const rounded = Math.round(value * 2) / 2;
+                  setDurationHours(Math.max(0.5, Math.min(sliderMaximum, rounded)));
+                }}
+                slotProps={{ htmlInput: { min: 0.5, max: sliderMaximum, step: 0.5 } }} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 8 }} style={{ paddingLeft: 12, paddingRight: 12 }}>
+              <Typography variant="caption">Duration: {durationHours} hour{durationHours === 1 ? "" : "s"}</Typography>
+              <Slider min={0.5} max={sliderMaximum} step={0.5} value={Math.min(durationHours, sliderMaximum)}
+                disabled={effectiveMaximum < 0.5}
+                valueLabelDisplay="auto"
+                marks={sliderMaximum <= 12}
+                onChange={(_, value) => setDurationHours(value as number)} />
+            </Grid>
+            </>}
+            <Grid size={{ xs: 12 }}>
+              <Alert severity={effectiveMaximum < 0.5 ? "warning" : "info"}>
+                {endMoment
+                  ? `Computed end: ${endMoment.format(usesMeridiem ? "MMM D, YYYY h:mm A" : "MMM D, YYYY HH:mm")}`
+                  : "Enter a valid start date and time."}
+                {effectiveMaximum < 0.5
+                  ? " No 30-minute reservation fits within the current availability and membership limits."
+                  : ` Maximum available duration: ${effectiveMaximum} hour${effectiveMaximum === 1 ? "" : "s"}.`}
+              </Alert>
+            </Grid>
+            {preview && <Grid size={{ xs: 12 }}>
+              {preview.feeWarning && <Alert severity="warning">{preview.feeWarning}</Alert>}
+              {(preview.feeTotal || 0) > 0 && <Alert severity="warning">
+                Reservation fee: ${Number(preview.feeTotal).toFixed(2)}.
+                {preview.feeLines?.map((fee, i) => <div key={i}>{fee.resourceName}: {fee.units} × {fee.name} (${Number(fee.unitAmount).toFixed(2)}) = ${Number(fee.amount).toFixed(2)}</div>)}
+                {preview.requiresApproval && <div>The invoice will be issued only after RM approval.</div>}
+                {feeAccepted && <strong>Click again to approve this fee and save. Payment is due four hours before the reservation starts. Existing paid charges are credited; existing unpaid invoices remain payable.</strong>}
+              </Alert>}
+              {preview.requiresApproval && !preview.approvalDetails?.length &&
+                <Alert severity="warning">This reservation will require approval.</Alert>}
+              {preview.requiresApproval && <ApprovalDetails details={preview.approvalDetails} />}
+              {preview.missingPrerequisites.length > 0 &&
+                <Alert severity="error" style={{ marginTop: 6 }}>
+                  Missing checkouts: {preview.missingPrerequisites.map(tool => tool.name).join(", ")}
+                </Alert>}
+              {[...preview.errors, ...preview.conflicts].map(message =>
+                <Typography key={message} color="error" variant="body2">{message}</Typography>)}
+            </Grid>}
+            <Grid size={{ xs: 12 }} style={{ display: "flex", gap: 8 }}>
+              <Button variant="contained" disabled={saving || !preview?.eligible} onClick={submit}>
+                {saving ? "Saving…" : feeAccepted && (preview?.feeTotal || 0) > 0 ? `Approve $${Number(preview?.feeTotal).toFixed(2)} and save` : editing ? "Save Changes" : "Reserve"}
+              </Button>
+              {editing && <Button onClick={() => resetForm()}>Cancel Edit</Button>}
+            </Grid>
+          </Grid>
+        </Paper>
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 7, lg: 6 }}>
+        <DayAgenda date={date} reservations={reservations} blackouts={blackoutOccurrences} />
+      </Grid></>}
+
+      {activeTab === "mine" && <Grid size={{ xs: 12, lg: 10 }}>
+        <Typography variant="h6">My Reservations</Typography>
+        <Typography variant="subtitle2" style={{ marginTop: 8 }}>Upcoming</Typography>
+        {memberReservations.upcoming.length === 0 && <Typography color="textSecondary">No upcoming reservations.</Typography>}
+        {memberReservations.upcoming.map(item => <Paper key={item.id} style={{ padding: 12, marginTop: 8 }}>
+          <Grid container alignItems="center" spacing={1}>
+            <Grid size={{ xs: 12, sm: 7 }}>
+              <strong><ReservationTitle reservation={item} /></strong>{" "}
+              <Chip label={item.status} color={statusColor(item.status)} size="small" />
+              <Typography variant="body2">{moment(item.startAt).tz(ZONE).format("MMM D, HH:mm")}–{moment(item.endAt).tz(ZONE).format("MMM D, HH:mm")} · {item.toolNames?.join(", ") || item.shopName}</Typography>
+              {item.status === "pending" && <ApprovalDetails details={item.approvalDetails} compact />}
+            </Grid>
+            <Grid size={{ xs: 12, sm: 5 }} style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              {["pending", "unpaid", "approved"].includes(item.status) && moment(item.endAt).isAfter(moment()) && <>
+                {canCreateReservation && <Button size="small" onClick={() => edit(item)}>Edit</Button>}
+                <Button size="small" color="secondary" onClick={() => cancel(item.id)}>Cancel</Button>
+              </>}
+            </Grid>
+          </Grid>
+        </Paper>)}
+        <Typography variant="subtitle2" style={{ marginTop: 16 }}>Pending Approval</Typography>
+        {memberReservations.pending.length === 0 && <Typography color="textSecondary">No reservations pending approval.</Typography>}
+        {memberReservations.pending.map(item => <Paper key={item.id} style={{ padding: 12, marginTop: 8 }}>
+          <strong><ReservationTitle reservation={item} /></strong>{" "}
+          <Chip label={item.status} color={statusColor(item.status)} size="small" />
+          <Typography variant="body2">
+            {moment(item.startAt).tz(ZONE).format("MMM D, YYYY HH:mm")}–
+            {moment(item.endAt).tz(ZONE).format("MMM D, YYYY HH:mm")} · {item.toolNames?.join(", ") || item.shopName}
+          </Typography>
+          <ApprovalDetails details={item.approvalDetails} compact />
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            {canCreateReservation && <Button size="small" onClick={() => edit(item)}>Edit</Button>}
+            <Button size="small" color="secondary" onClick={() => cancel(item.id)}>Cancel</Button>
+          </div>
+        </Paper>)}
+
+        <Typography variant="subtitle2" style={{ marginTop: 16 }}>Cancelled</Typography>
+        {memberReservations.cancelled.length === 0 &&
+          <Typography color="textSecondary">No cancelled or denied upcoming reservations.</Typography>}
+        {memberReservations.cancelled.map(item => <Paper key={item.id} style={{ padding: 12, marginTop: 8 }}>
+          <strong><ReservationTitle reservation={item} /></strong>{" "}
+          <Chip label={item.status} color={statusColor(item.status)} size="small" />
+          <Typography variant="body2">
+            {moment(item.startAt).tz(ZONE).format("MMM D, YYYY HH:mm")}–
+            {moment(item.endAt).tz(ZONE).format("MMM D, YYYY HH:mm")} · {item.toolNames?.join(", ") || item.shopName}
+          </Typography>
+        </Paper>)}
+      </Grid>}
+
+      {activeTab === "history" && <Grid size={{ xs: 12, lg: 10 }}>
+        <Typography variant="h6">Reservation History</Typography>
+        {memberReservations.history.length === 0 &&
+          <Typography color="textSecondary">No past reservations.</Typography>}
+        {memberReservations.history.map(item => <Paper key={item.id} style={{ padding: 12, marginTop: 8 }}>
+          <strong><ReservationTitle reservation={item} /></strong>{" "}
+          <Chip label={item.status} color={statusColor(item.status)} size="small" />
+          <Typography variant="body2">
+            {moment(item.startAt).tz(ZONE).format("MMM D, YYYY HH:mm")}–
+            {moment(item.endAt).tz(ZONE).format("MMM D, YYYY HH:mm")} · {item.toolNames?.join(", ") || item.shopName}
+          </Typography>
+        </Paper>)}
+      </Grid>}
+
+      {isManager && activeTab === "managed" && <Grid size={{ xs: 12, lg: 10 }}>
+          <Typography variant="h6">Reservations In My Shops</Typography>
+          <Typography variant="subtitle2" style={{ marginTop: 8 }}>Pending Approval</Typography>
+          {pendingManaged.length === 0 && <Typography color="textSecondary">No pending reservations in your managed shops.</Typography>}
+          {pendingManaged.map(item => <Paper key={item.id} style={{ padding: 12, marginTop: 8 }}>
+            <Grid container alignItems="center">
+              <Grid size={{ xs: 12, sm: 8 }}>
+                <strong><ReservationTitle reservation={item} /></strong> — {item.memberName}{" "}
+                <Chip label={item.status} color={statusColor(item.status)} size="small" />
+                <Typography variant="body2">{item.shopName}: {item.toolNames?.join(", ") || "Entire shop"} · {moment(item.startAt).tz(ZONE).format("MMM D, HH:mm")}–{moment(item.endAt).tz(ZONE).format("MMM D, HH:mm")}</Typography>
+                <ApprovalDetails details={item.approvalDetails} compact />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }} style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <Button size="small" color="primary" onClick={() => decide(item.id, true)}>Approve</Button>
+                <Button size="small" color="secondary" onClick={() => decide(item.id, false)}>Deny</Button>
+                <Button size="small" onClick={() => edit(item, true)}>Edit</Button>
+                <Button size="small" onClick={() => managerCancel(item.id)}>Cancel</Button>
+              </Grid>
+            </Grid>
+          </Paper>)}
+          <Typography variant="subtitle2" style={{ marginTop: 16 }}>Upcoming Reservations</Typography>
+          {upcomingManaged.length === 0 &&
+            <Typography color="textSecondary">No upcoming reservations in your managed shops.</Typography>}
+          {upcomingManaged.map(item => <Paper key={item.id} style={{ padding: 12, marginTop: 8 }}>
+            <Grid container alignItems="center">
+              <Grid size={{ xs: 12, sm: 8 }}>
+                <strong><ReservationTitle reservation={item} /></strong> — {item.memberName}{" "}
+                <Chip label={item.status} color={statusColor(item.status)} size="small" />
+                <Typography variant="body2">
+                  {item.shopName}: {item.toolNames?.join(", ") || "Entire shop"} ·{" "}
+                  {moment(item.startAt).tz(ZONE).format("MMM D, HH:mm")}–
+                  {moment(item.endAt).tz(ZONE).format("MMM D, HH:mm")}
+                </Typography>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }} style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <Button size="small" onClick={() => edit(item, true)}>Edit</Button>
+                <Button size="small" onClick={() => managerCancel(item.id)}>Cancel</Button>
+              </Grid>
+            </Grid>
+          </Paper>)}
+          {failedManaged.length > 0 && <>
+            <Typography variant="subtitle2" style={{ marginTop: 18 }}>Calendar Sync Warnings</Typography>
+            {failedManaged.map(item => <Alert key={item.id} severity="warning" style={{ marginTop: 8 }}>
+              <strong><ReservationTitle reservation={item} /></strong>: {item.calendarSyncError || "Calendar synchronization failed."}
+            </Alert>)}
+          </>}
+        <Typography variant="subtitle2" style={{ marginTop: 18 }}>Cancelled</Typography>
+        {cancelledManaged.length === 0 &&
+          <Typography color="textSecondary">No cancelled reservations in your managed shops.</Typography>}
+        {cancelledManaged.map(item => <Paper key={item.id} style={{ padding: 12, marginTop: 8 }}>
+          <strong><ReservationTitle reservation={item} /></strong> — {item.memberName}{" "}
+          <Chip label={item.status} color={statusColor(item.status)} size="small" />
+          <Typography variant="body2">
+            {item.shopName}: {item.toolNames?.join(", ") || "Entire shop"} ·{" "}
+            {moment(item.startAt).tz(ZONE).format("MMM D, YYYY HH:mm")}–
+            {moment(item.endAt).tz(ZONE).format("MMM D, YYYY HH:mm")}
+          </Typography>
+        </Paper>)}
+      </Grid>}
+
+      {isManager && activeTab === "blackouts" && <Grid size={{ xs: 12, lg: 10 }}>
+        <ReservationBlackouts />
+      </Grid>}
+
+      {canManageShopTools && activeTab === "manageShops" &&
+        <Grid size={{ xs: 12, lg: 10 }}><ShopManager /></Grid>}
+
+      {canManageShopTools && activeTab === "manageTools" &&
+        <Grid size={{ xs: 12, lg: 10 }}><ToolManager /></Grid>}
+    </Grid>
+  );
+};
+
+export default ReservationsPage;

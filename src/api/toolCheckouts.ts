@@ -1,12 +1,17 @@
 import axios from "axios";
-import { Shop, Tool, ToolCheckout, CheckoutApprover } from "app/entities/toolCheckout";
+import { ApiDataResponse, ApiErrorResponse } from "makerspace-ts-api-client";
+import {
+  Shop, Tool, ToolCheckout, CheckoutApprover, ToolCheckoutRequest, GoogleCalendarColor
+} from "app/entities/toolCheckout";
+import { apiErrorMessage } from "ui/common/apiErrors";
+import { attachGlobalAuthInterceptor } from "ui/common/globalAuthInterceptor";
 
 const getCsrfToken = () => {
   const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : "";
 };
 
-const api = axios.create({ withCredentials: true });
+const api = attachGlobalAuthInterceptor(axios.create({ withCredentials: true }));
 api.interceptors.request.use(config => {
   config.headers.set("X-XSRF-TOKEN", getCsrfToken());
   config.headers.set("Content-Type", "application/json");
@@ -18,36 +23,99 @@ const wrapHeaders = (axiosHeaders: any) => ({
   has: (key: string) => key.toLowerCase() in axiosHeaders,
 });
 
-const buildResponse = async <T>(request: Promise<any>) => {
+const buildResponse = async <T>(request: Promise<any>): Promise<ApiDataResponse<T> | (ApiErrorResponse & { data?: undefined })> => {
   try {
     const res = await request;
     return { data: res.data, response: { ...res, headers: wrapHeaders(res.headers) } };
-  } catch (err) {
-    const error = err.response?.data?.error || { message: err.message };
+  } catch (err: any) {
+    const error = {
+      status: err.response?.status || 0,
+      error: err.response?.data?.error || "request_failed",
+      message: apiErrorMessage(err.response?.data, err.message || "Request failed")
+    };
     return { error, response: err.response };
   }
 };
+
+const normalizeSlackChannel = (value?: string) =>
+  value?.trim().replace(/^#+/, "") || "";
+
+// Checkout selection deliberately opts into server-side eligibility filtering.
+export const searchCheckoutMembers = (search: string) =>
+  buildResponse<Array<{ id: string; firstname: string; lastname: string; status?: string; expirationTime?: number }>>(
+    api.get("/api/members", { params: { search, fully_active_unexpired: true } })
+  );
 
 // ── Shops ─────────────────────────────────────────────────────────────────────
 
 export const listShops = (_params?: any) =>
   buildResponse<Shop[]>(api.get("/api/shops"));
 
+export const listManagedShops = (_params?: any) =>
+  buildResponse<Shop[]>(api.get("/api/admin/shops"));
+
+export const listGoogleCalendarColors = (params?: { colorId?: string }) =>
+  buildResponse<{ colors: GoogleCalendarColor[] }>(api.get(
+    "/api/admin/google_calendar/colors",
+    { params: params?.colorId ? { color_id: params.colorId } : {} }
+  ));
+
 export const adminCreateShop = ({ body }: { body: Partial<Shop> }) =>
   buildResponse<Shop>(api.post("/api/admin/shops", {
+    resource_manager_ids: body.resourceManagerIds,
     name: body.name,
-    slack_channel: body.slackChannel,
+    requestor_annotation: body.requestorAnnotation,
+    wiki_url: body.wikiUrlOverride ?? body.wikiUrl,
+    gdrive_id: body.gdriveId,
+    slack_channel: normalizeSlackChannel(body.slackChannel),
+    reservable: body.reservable,
+    max_concurrent_reservations: body.maxConcurrentReservations,
+    reservation_horizon_days: body.reservationHorizonDays,
+    minimum_advance_notice_hours: body.minimumAdvanceNoticeHours,
+    prohibit_same_day_reservations: body.prohibitSameDayReservations,
+    reservation_full_day: body.reservationFullDay,
+    duration_fees: body.durationFees?.map(fee => ({ invoice_option_id: fee.invoiceOptionId, minimum_hours: fee.minimumHours, maximum_hours: fee.maximumHours, full_day: fee.fullDay })),
+    max_reservation_duration_hours: body.maxReservationDurationHours,
+    reservation_requires_approval: body.reservationRequiresApproval,
+    reservation_prerequisite_tool_ids: body.reservationPrerequisiteToolIds || [],
+    color_id: body.colorId,
   }));
 
 export const adminUpdateShop = ({ id, body }: { id: string; body: Partial<Shop> }) =>
   buildResponse<Shop>(api.put(`/api/admin/shops/${id}`, {
+    resource_manager_ids: body.resourceManagerIds,
     name: body.name,
-    slack_channel: body.slackChannel,
+    requestor_annotation: body.requestorAnnotation,
+    wiki_url: body.wikiUrlOverride ?? body.wikiUrl,
+    gdrive_id: body.gdriveId,
+    slack_channel: normalizeSlackChannel(body.slackChannel),
     disabled: body.disabled,
+    reservable: body.reservable,
+    max_concurrent_reservations: body.maxConcurrentReservations,
+    reservation_horizon_days: body.reservationHorizonDays,
+    minimum_advance_notice_hours: body.minimumAdvanceNoticeHours,
+    prohibit_same_day_reservations: body.prohibitSameDayReservations,
+    reservation_full_day: body.reservationFullDay,
+    duration_fees: body.durationFees?.map(fee => ({ invoice_option_id: fee.invoiceOptionId, minimum_hours: fee.minimumHours, maximum_hours: fee.maximumHours, full_day: fee.fullDay })),
+    max_reservation_duration_hours: body.maxReservationDurationHours,
+    reservation_requires_approval: body.reservationRequiresApproval,
+    ...(body.reservationPrerequisiteToolIds !== undefined && {
+      reservation_prerequisite_tool_ids: body.reservationPrerequisiteToolIds,
+    }),
+    color_id: body.colorId,
+    ...(body.resourceManagerIds !== undefined && {
+      resource_manager_ids: body.resourceManagerIds,
+    }),
   }));
 
 export const adminDeleteShop = ({ id }: { id: string }) =>
   buildResponse<{}>(api.delete(`/api/admin/shops/${id}`));
+
+// Kept separate from the full shop update so a shop-scoped resource manager
+// can change request instructions without receiving permission to change
+// admin/board-only shop settings.
+export const adminUpdateShopAnnotation = ({ id, annotation }: { id: string; annotation: string | null }) =>
+  buildResponse<Shop>(api.patch(`/api/admin/shops/${id}/requestor_annotation`, { requestor_annotation: annotation }));
 
 // ── Tools ─────────────────────────────────────────────────────────────────────
 
@@ -59,22 +127,72 @@ export const listTools = (params?: { shopId?: string }) =>
 export const adminCreateTool = ({ body }: { body: Partial<Tool> }) =>
   buildResponse<Tool>(api.post("/api/admin/tools", {
     name: body.name,
+    requestor_annotation: body.requestorAnnotation,
+    wiki_url: body.wikiUrlOverride ?? body.wikiUrl,
+    gdrive_id: body.gdriveId,
     description: body.description,
     shop_id: body.shopId,
+    disabled: body.disabled,
+    open: body.open,
+    announce: body.announce,
+    announce_channel: normalizeSlackChannel(body.announceChannel),
+    users_channel: normalizeSlackChannel(body.usersChannel),
     prerequisite_ids: body.prerequisiteIds || [],
+    reservable: body.reservable,
+    max_concurrent_reservations: body.maxConcurrentReservations,
+    reservation_horizon_days: body.reservationHorizonDays,
+    minimum_advance_notice_hours: body.minimumAdvanceNoticeHours,
+    prohibit_same_day_reservations: body.prohibitSameDayReservations,
+    reservation_full_day: body.reservationFullDay,
+    duration_fees: body.durationFees?.map(fee => ({ invoice_option_id: fee.invoiceOptionId, minimum_hours: fee.minimumHours, maximum_hours: fee.maximumHours, full_day: fee.fullDay })),
+    max_reservation_duration_hours: body.maxReservationDurationHours,
+    reservation_requires_approval: body.reservationRequiresApproval,
+    reservation_prerequisite_tool_ids: body.reservationPrerequisiteToolIds || [],
   }));
 
 export const adminUpdateTool = ({ id, body }: { id: string; body: Partial<Tool> }) =>
   buildResponse<Tool>(api.put(`/api/admin/tools/${id}`, {
     name: body.name,
+    requestor_annotation: body.requestorAnnotation,
+    wiki_url: body.wikiUrlOverride ?? body.wikiUrl,
+    gdrive_id: body.gdriveId,
     description: body.description,
     shop_id: body.shopId,
     disabled: body.disabled,
+    open: body.open,
+    announce: body.announce,
+    announce_channel: normalizeSlackChannel(body.announceChannel),
+    users_channel: normalizeSlackChannel(body.usersChannel),
     prerequisite_ids: body.prerequisiteIds || [],
+    reservable: body.reservable,
+    max_concurrent_reservations: body.maxConcurrentReservations,
+    reservation_horizon_days: body.reservationHorizonDays,
+    minimum_advance_notice_hours: body.minimumAdvanceNoticeHours,
+    prohibit_same_day_reservations: body.prohibitSameDayReservations,
+    reservation_full_day: body.reservationFullDay,
+    duration_fees: body.durationFees?.map(fee => ({ invoice_option_id: fee.invoiceOptionId, minimum_hours: fee.minimumHours, maximum_hours: fee.maximumHours, full_day: fee.fullDay })),
+    max_reservation_duration_hours: body.maxReservationDurationHours,
+    reservation_requires_approval: body.reservationRequiresApproval,
+    reservation_prerequisite_tool_ids: body.reservationPrerequisiteToolIds || [],
   }));
 
 export const adminDeleteTool = ({ id }: { id: string }) =>
   buildResponse<{}>(api.delete(`/api/admin/tools/${id}`));
+
+// Separate from adminUpdateTool: any checkout approver for this tool may set
+// notes, not just shop managers/admins -- see #189.
+export const adminUpdateToolNotes = ({ id, notes }: { id: string; notes: string }) =>
+  buildResponse<Tool>(api.patch(`/api/admin/tools/${id}/notes`, { notes }));
+
+const tableParams = (params?: any) => ({
+  ...(params?.orderBy && { order_by: params.orderBy }),
+  ...(params?.order && { order: params.order }),
+  ...(params?.pageNum !== undefined && { page_num: params.pageNum }),
+  ...(params?.search && { search: params.search }),
+});
+
+export const listAvailableTools = (params?: any) =>
+  buildResponse<Tool[]>(api.get("/api/tools", { params: tableParams(params) }));
 
 // ── Tool Checkouts ────────────────────────────────────────────────────────────
 
@@ -93,9 +211,19 @@ export const listToolCheckouts = (params?: {
     }
   }));
 
-export const listMemberCheckouts = (params?: { memberId?: string }) =>
+export const listMemberCheckouts = (params?: {
+  memberId?: string;
+  shopId?: string;
+  active?: boolean;
+  includeHidden?: boolean;
+}) =>
   buildResponse<ToolCheckout[]>(api.get("/api/tool_checkouts", {
-    params: params?.memberId ? { member_id: params.memberId } : {}
+    params: {
+      ...(params?.memberId && { member_id: params.memberId }),
+      ...(params?.shopId && { shop_id: params.shopId }),
+      ...(params?.active !== undefined && { active: params.active }),
+      ...(params?.includeHidden && { include_hidden: true }),
+    }
   }));
 
 export const adminCreateToolCheckout = ({ body }: {
@@ -118,26 +246,62 @@ export const adminRevokeToolCheckout = ({ id, body }: {
     })
   );
 
+export const listToolCheckoutRequests = (params?: any) =>
+  buildResponse<ToolCheckoutRequest[]>(api.get("/api/admin/tool_checkout_requests", {
+    params: tableParams(params)
+  }));
+
+export const listMyToolCheckoutRequests = (params?: any) =>
+  buildResponse<ToolCheckoutRequest[]>(api.get("/api/tool_checkout_requests", {
+    params: tableParams(params)
+  }));
+
+export const createToolCheckoutRequest = ({ body }: {
+  body: { toolId: string; note?: string }
+}) =>
+  buildResponse<ToolCheckoutRequest>(api.post("/api/tool_checkout_requests", {
+    tool_id: body.toolId,
+    note: body.note,
+  }));
+
+export const updateToolCheckoutRequest = ({ id, body }: {
+  id: string;
+  body: { note?: string }
+}) =>
+  buildResponse<ToolCheckoutRequest>(api.put(`/api/tool_checkout_requests/${id}`, {
+    note: body.note,
+  }));
+
+export const deleteToolCheckoutRequest = ({ id }: { id: string }) =>
+  buildResponse<{}>(api.delete(`/api/tool_checkout_requests/${id}`));
+
 // ── Checkout Approvers ────────────────────────────────────────────────────────
 
 export const listCheckoutApprovers = (_params?: any) =>
   buildResponse<CheckoutApprover[]>(api.get("/api/admin/checkout_approvers"));
 
 export const adminCreateCheckoutApprover = ({ body }: {
-  body: { memberId: string; shopIds: string[] }
+  body: { memberId: string; shopIds: string[]; toolIds: string[] }
 }) =>
   buildResponse<CheckoutApprover>(api.post("/api/admin/checkout_approvers", {
     member_id: body.memberId,
     shop_ids: body.shopIds,
+    tool_ids: body.toolIds,
   }));
 
 export const adminUpdateCheckoutApprover = ({ id, body }: {
   id: string;
-  body: { shopIds: string[] }
+  body: { shopIds: string[]; toolIds: string[] }
 }) =>
   buildResponse<CheckoutApprover>(api.put(`/api/admin/checkout_approvers/${id}`, {
     shop_ids: body.shopIds,
+    tool_ids: body.toolIds,
   }));
 
 export const adminDeleteCheckoutApprover = ({ id }: { id: string }) =>
   buildResponse<{}>(api.delete(`/api/admin/checkout_approvers/${id}`));
+
+// This endpoint is intentionally available to admin/board, the tool's shop
+// resource managers, and every additional checkout approver for the tool.
+export const adminUpdateToolAnnotation = ({ id, annotation }: { id: string; annotation: string | null }) =>
+  buildResponse<Tool>(api.patch(`/api/admin/tools/${id}/requestor_annotation`, { requestor_annotation: annotation }));

@@ -3,45 +3,74 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
+import { useLocation } from "react-router-dom";
 
+import { CheckoutCatalogProvider } from "./CheckoutCatalog";
 import CheckoutRoster from "./CheckoutRoster";
 import ShopManager from "./ShopManager";
 import ToolManager from "./ToolManager";
 import CheckoutApproversManager from "./CheckoutApproversManager";
+import ToolCheckoutRequestsManager from "./ToolCheckoutRequestsManager";
 import { useAuthState } from "ui/reducer/hooks";
 import { memberIsResourceManager } from "ui/member/utils";
 import { useCapabilities } from "app/permissions";
 
-type TabKey = "roster" | "shops" | "tools" | "approvers";
+type TabKey = "active" | "requests" | "roster" | "shops" | "tools" | "approvers";
 
 const ToolCheckoutsPage: React.FC = () => {
   const { currentUser } = useAuthState();
   const isRM = memberIsResourceManager(currentUser);
+  const managesShops = isRM && ((currentUser as any).resourceManagerShopIds || []).length > 0;
   const caps = useCapabilities();
-  const [activeTab, setActiveTab] = React.useState<TabKey>("roster");
+  const { search } = useLocation();
+  const selfService = React.useMemo(
+    () => new URLSearchParams(search).get("mode") === "self-service",
+    [search]
+  );
+  const defaultTab: TabKey = selfService
+    ? "requests"
+    : caps.canManageCheckouts
+      ? "roster"
+      : "active";
+  const [activeTab, setActiveTab] = React.useState<TabKey>(defaultTab);
+  const [userSelectedTab, setUserSelectedTab] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!userSelectedTab) setActiveTab(defaultTab);
+  }, [defaultTab, userSelectedTab]);
 
   const tabs: { key: TabKey; label: string; adminOnly?: boolean }[] = [
-    { key: "roster", label: "Checkout Roster" },
-    { key: "shops", label: "Shops" },
-    { key: "tools", label: "Tools" },
+    { key: "active", label: "My Checkouts" },
+    { key: "requests", label: "Requests" },
+    { key: "roster", label: "Checkout Roster", adminOnly: true },
+    { key: "shops", label: "Shops", adminOnly: true },
+    { key: "tools", label: "Tools", adminOnly: true },
     { key: "approvers", label: "Approvers", adminOnly: true },
   ];
 
-  const visibleTabs = tabs.filter(t => !t.adminOnly || caps.canManageCheckoutApprovers);
+  const visibleTabs = tabs.filter(t => {
+    if (!t.adminOnly) return true;
+    if (t.key === "approvers") return caps.canManageCheckoutApprovers;
+    if (t.key === "shops") return caps.canViewShopQrCodes;
+    // Tools tab also needs to reach a plain (non-shop-manager) checkout
+    // approver so they can set a tool's notes -- see #189.
+    if (t.key === "tools") return managesShops || caps.canManageCheckoutApprovers || caps.canManageCheckouts;
+    return caps.canManageCheckouts;
+  });
 
   return (
+    <CheckoutCatalogProvider key={JSON.stringify(currentUser)} scopeKey={JSON.stringify(currentUser)}>
     <Grid container spacing={3} justifyContent="center">
       <Grid size={{ xs: 12, md: 10 }}>
         <Typography variant="h5" gutterBottom>Tool Checkouts</Typography>
         <Typography variant="body2" color="textSecondary">
-          Manage member tool checkouts, shops, tools, and checkout approvers.
-          Members can be checked out via the portal or via Slack slash command in the shop channel.
+          Manage and request member tool checkouts.
         </Typography>
       </Grid>
       <Grid size={{ xs: 12, md: 10 }}>
         <Tabs
           value={activeTab}
-          onChange={(_, val) => setActiveTab(val as TabKey)}
+          onChange={(_, val) => { setUserSelectedTab(true); setActiveTab(val as TabKey); }}
           indicatorColor="primary"
           textColor="primary"
           variant="scrollable"
@@ -53,12 +82,18 @@ const ToolCheckoutsPage: React.FC = () => {
         </Tabs>
       </Grid>
       <Grid size={{ xs: 12, md: 10 }}>
-        {activeTab === "roster" && <CheckoutRoster isAdmin={caps.canManageCheckouts} isResourceManager={isRM} />}
+        {activeTab === "active" &&
+          <CheckoutRoster memberView isAdmin={false} isResourceManager={false} />}
+        {activeTab === "requests" && (
+          <ToolCheckoutRequestsManager canManage={caps.canManageCheckouts && !selfService} />
+        )}
+        {activeTab === "roster" && caps.canManageCheckouts && <CheckoutRoster isAdmin={caps.canManageCheckouts} isResourceManager={managesShops} />}
         {activeTab === "shops" && <ShopManager />}
         {activeTab === "tools" && <ToolManager />}
         {activeTab === "approvers" && caps.canManageCheckoutApprovers && <CheckoutApproversManager />}
       </Grid>
     </Grid>
+    </CheckoutCatalogProvider>
   );
 };
 

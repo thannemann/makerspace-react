@@ -31,7 +31,10 @@ interface Household {
   groupName: string;
   groupRep: string;
   expiry: number;
-  primaryMember: HouseholdMember;
+  // The backend resolves this from a stored primary-member reference on the
+  // group record, which can dangle on legacy household data — null means the
+  // referenced member no longer exists, not a loading/error state.
+  primaryMember: HouseholdMember | null;
   secondaryMembers: HouseholdMember[];
 }
 
@@ -59,7 +62,11 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
   const [addingMember, setAddingMember] = React.useState(false);
 
   const memberAny = member as any;
-  const isInHousehold = !!memberAny.groupName;
+  // Keyed off householdRole, not raw groupName -- groupName can hold a
+  // legacy, non-household value (see the rails household_role fix) even
+  // when this member isn't really in a household, which previously showed
+  // "Manage Household" and fetched/displayed an unrelated legacy group.
+  const isInHousehold = !!memberAny.householdRole;
   const isPrimary = memberAny.householdRole === "primary";
 
   const fetchHousehold = React.useCallback(async () => {
@@ -260,6 +267,23 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
             </Grid>
           )}
 
+          {/* householdRole says this member really is a primary/secondary
+              (a real member exists at groupName), but the Group document
+              itself is missing -- e.g. deleted directly, bypassing the
+              cleanup Admin::GroupsController#destroy normally does. The
+              fetch fails and neither the "create" nor "exists" branch above
+              applies. FormModal/Form's own error display is gated behind
+              form.isDirty, which never becomes true here since there's no
+              editable field, so without this the modal would silently show
+              nothing but its title. */}
+          {isInHousehold && !household && !loading && error && (
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12 }}>
+                <ErrorMessage id="household-not-found-error" error={error} />
+              </Grid>
+            </Grid>
+          )}
+
           {/* Household exists */}
           {household && (
             <Grid container spacing={2}>
@@ -269,10 +293,17 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
                 <Typography variant="subtitle2" gutterBottom>Primary Member</Typography>
                 <List dense>
                   <ListItem>
-                    <ListItemText
-                      primary={`${household.primaryMember.firstname} ${household.primaryMember.lastname}`}
-                      secondary={household.primaryMember.email}
-                    />
+                    {household.primaryMember ? (
+                      <ListItemText
+                        primary={`${household.primaryMember.firstname} ${household.primaryMember.lastname}`}
+                        secondary={household.primaryMember.email}
+                      />
+                    ) : (
+                      <ListItemText
+                        primary="Primary member no longer exists"
+                        secondary="This household's primary member record could not be found."
+                      />
+                    )}
                   </ListItem>
                 </List>
               </Grid>

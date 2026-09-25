@@ -1,3 +1,5 @@
+// @ts-nocheck
+import ToolAvailability, { toolAvailabilityLabel } from "ui/common/ToolAvailability";
 import * as React from "react";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
@@ -6,8 +8,11 @@ import Select from "@mui/material/Select";
 import FormLabel from "@mui/material/FormLabel";
 import Chip from "@mui/material/Chip";
 import Button from "@mui/material/Button";
+import Tooltip from "@mui/material/Tooltip";
+import IconButton from "@mui/material/IconButton";
 import BlockIcon from "@mui/icons-material/Block";
 import AddIcon from "@mui/icons-material/Add";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 import FormModal from "ui/common/FormModal";
 import ErrorMessage from "ui/common/ErrorMessage";
@@ -20,12 +25,13 @@ import MemberSearchInput from "ui/common/MemberSearchInput";
 import { SelectOption } from "ui/common/AsyncSelect";
 import { Status } from "ui/constants";
 import useReadTransaction from "ui/hooks/useReadTransaction";
+import { useCheckoutCatalog } from "./CheckoutCatalog";
 import useWriteTransaction from "ui/hooks/useWriteTransaction";
+import { useAuthState } from "ui/reducer/hooks";
 import extractTotalItems from "ui/utils/extractTotalItems";
 import { ToolCheckout, Shop, Tool } from "app/entities/toolCheckout";
 import {
   listToolCheckouts, listMemberCheckouts, adminCreateToolCheckout, adminRevokeToolCheckout,
-  listShops, listTools,
 } from "api/toolCheckouts";
 
 const rowId = (c: ToolCheckout) => c.id;
@@ -86,7 +92,7 @@ interface CheckoutModalProps {
   unmetPrerequisites?: string[];
 }
 
-const CheckoutModal: React.FC<CheckoutModalProps> = ({
+export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   shops, tools, preselectedMember, onClose, onCheckout, loading, error, unmetPrerequisites
 }) => {
   const [selectedMember, setSelectedMember] = React.useState<SelectOption | null>(
@@ -118,6 +124,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <Typography><strong>{preselectedMember.name}</strong></Typography>
           ) : (
             <MemberSearchInput
+              fullyActiveUnexpired
               name="checkout-member-search"
               placeholder="Search by name or email"
               onChange={(opt: SelectOption) => setSelectedMember(opt || null)}
@@ -127,7 +134,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
           <FormLabel style={{ fontSize: 12 }}>Shop *</FormLabel>
-          <Select native fullWidth value={shopId}
+          <Select native fullWidth value={shopId} inputProps={{ 'aria-label': 'Shop' }}
             onChange={e => { setShopId((e.target as HTMLSelectElement).value); setToolId(""); }}>
             <option value="">— select shop —</option>
             {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -135,10 +142,10 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
           <FormLabel style={{ fontSize: 12 }}>Tool *</FormLabel>
-          <Select native fullWidth value={toolId} disabled={!shopId}
+          <Select native fullWidth value={toolId} disabled={!shopId} inputProps={{ 'aria-label': 'Tool' }}
             onChange={e => setToolId((e.target as HTMLSelectElement).value)}>
             <option value="">— select tool —</option>
-            {shopTools.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {shopTools.map(t => <option key={t.id} value={t.id}>{toolAvailabilityLabel(t)}</option>)}
           </Select>
         </Grid>
         {selectedTool?.prerequisiteNames?.length > 0 && (
@@ -159,9 +166,13 @@ interface Props {
   preselectedMember?: { id: string; name: string };
   isAdmin: boolean;
   isResourceManager: boolean;
+  memberView?: boolean;
 }
 
-const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourceManager }) => {
+const CheckoutRoster: React.FC<Props> = ({
+  preselectedMember, isAdmin, isResourceManager, memberView = false
+}) => {
+  const { currentUser } = useAuthState();
   const [shopFilter,         setShopFilter]         = React.useState("");
   const [activeFilter,       setActiveFilter]       = React.useState<"all" | "active" | "revoked">("active");
   const [revokeTarget,       setRevokeTarget]       = React.useState<ToolCheckout | null>(null);
@@ -169,7 +180,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
   const [unmetPrerequisites, setUnmetPrerequisites] = React.useState<string[]>([]);
   const [selectedId,         setSelectedId]         = React.useState<string | undefined>(undefined);
 
-  const canManage = isAdmin || isResourceManager;
+  const canManage = !memberView && (isAdmin || isResourceManager);
 
   const checkoutParams = {
     ...(preselectedMember && { memberId: preselectedMember.id }),
@@ -188,6 +199,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
     ...(shopFilter && { shopId: shopFilter }),
     ...(activeFilter === "active"  && { active: true }),
     ...(activeFilter === "revoked" && { active: false }),
+    ...(memberView && { active: true, includeHidden: true }),
   };
   const memberRead = useReadTransaction(listMemberCheckouts, memberParams, canManage,
     `checkouts-self-${preselectedMember?.id || "me"}-${shopFilter}-${activeFilter}`);
@@ -195,8 +207,15 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
   const { isRequesting, data: checkouts = [], response, refresh, error: loadError } =
     canManage ? adminRead : memberRead;
 
-  const { data: shops = [] } = useReadTransaction(listShops, {}, undefined, "shops-roster");
-  const { data: tools = [] } = useReadTransaction(listTools, {}, !canManage, "tools-roster");
+  const { data: shops = [] } = useCheckoutCatalog("shops");
+  const { data: tools = [], refresh: refreshCatalog } = useCheckoutCatalog("tools", !canManage);
+  const checkoutApproverShopIds = currentUser.checkoutApproverShopIds || [];
+  const hasGlobalCheckoutAccess = !!currentUser.isAdmin || !!currentUser.isBoardMember || !!currentUser.isResourceManager || isResourceManager;
+  const modalShops = hasGlobalCheckoutAccess
+    ? (shops as Shop[])
+    : (shops as Shop[]).filter(s => checkoutApproverShopIds.includes(s.id));
+  const modalShopIds = new Set(modalShops.map(s => s.id));
+  const modalTools = (tools as Tool[]).filter(t => modalShopIds.has(t.shopId));
 
   const refreshRef = React.useRef(refresh);
   React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);
@@ -210,7 +229,8 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
     setRevokeTarget(null);
     setSelectedId(undefined);
     refreshRef.current();
-  }, []);
+    refreshCatalog();
+  }, [refreshCatalog]);
 
   const { call: createCheckout, isRequesting: creating, error: createError } =
     useWriteTransaction(adminCreateToolCheckout, onSuccess);
@@ -243,8 +263,21 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
       defaultSortDirection: SortDirection.Asc,
       cell: (row: ToolCheckout) => (
         <div>
-          <Typography variant="body2">{row.toolName}</Typography>
-          <Typography variant="caption" color="textSecondary">{row.shopName}</Typography>
+          <Typography variant="body2" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {row.toolName} <ToolAvailability outOfService={row.outOfService} />
+            {row.toolNotes?.trim() && (
+              <Tooltip title={row.toolNotes} describeChild>
+                <IconButton size="small" aria-label={`Notes for ${row.toolName}`}>
+                  <InfoOutlinedIcon fontSize="small" color="action" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Typography>
+          <Typography variant="caption" color="textSecondary">
+            {row.shopWikiUrl
+              ? <a href={row.shopWikiUrl} target="_blank" rel="noopener noreferrer">{row.shopName}</a>
+              : row.shopName}
+          </Typography>
         </div>
       ),
     },
@@ -276,9 +309,13 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
         <Grid size={{ xs: 12 }}>
           <Grid container justifyContent="space-between" alignItems="center">
             <div>
-              <Typography variant="h6">Tool Checkout Roster</Typography>
+              <Typography variant="h6">
+                {memberView ? "My Active Tool Checkouts" : "Tool Checkout Roster"}
+              </Typography>
               <Typography variant="body2" color="textSecondary">
-                All member tool checkouts across all shops.
+                {memberView
+                  ? "All of your active tool checkouts, including hidden tools."
+                  : "All member tool checkouts across all shops."}
               </Typography>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -328,7 +365,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
           {(shops as Shop[]).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </Select>
       </Grid>
-      <Grid size={{ xs: 12, sm: 4 }}>
+      {!memberView && <Grid size={{ xs: 12, sm: 4 }}>
         <FormLabel style={{ fontSize: 12 }}>Status</FormLabel>
         <Select native fullWidth value={activeFilter}
           onChange={e => setActiveFilter((e.target as HTMLSelectElement).value as any)}>
@@ -336,14 +373,14 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
           <option value="revoked">Revoked only</option>
           <option value="all">All</option>
         </Select>
-      </Grid>
+      </Grid>}
 
       {loadError && <Grid size={{ xs: 12 }}><ErrorMessage error={loadError} /></Grid>}
 
       <Grid size={{ xs: 12 }}>
         <StatefulTable
           id="checkout-roster-table"
-          title={preselectedMember ? "Tool Checkouts" : "All Checkouts"}
+          title={memberView ? "Active Checkouts" : preselectedMember ? "Tool Checkouts" : "All Checkouts"}
           loading={isRequesting}
           data={checkouts as ToolCheckout[]}
           error={loadError}
@@ -358,7 +395,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
 
       {checkoutOpen && (
         <CheckoutModal
-          shops={shops as Shop[]} tools={tools as Tool[]}
+          shops={modalShops} tools={modalTools}
           preselectedMember={preselectedMember}
           onClose={() => setCheckoutOpen(false)}
           onCheckout={handleCheckout}

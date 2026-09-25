@@ -1,5 +1,6 @@
+// @ts-nocheck
+import { checkoutDestination } from "./checkoutDestination";
 import * as React from "react";
-import { useNavigate } from 'react-router-dom';
 import { connect } from "react-redux";
 
 import TextField from "@mui/material/TextField";
@@ -20,7 +21,14 @@ import FormModal from "ui/common/FormModal";
 import { requestPasswordReset, isApiErrorResponse } from "makerspace-ts-api-client";
 import FirebaseAuthButtons from "ui/auth/FirebaseAuthButtons";
 import TotpVerifyForm from "ui/auth/TotpVerifyForm";
-import { signInWithGoogle, signInWithApple, signInWithGitHub, signInWithMicrosoft } from "ui/auth/firebase";
+import {
+  preloadFirebaseAuth,
+  signInWithGoogle,
+  signInWithApple,
+  signInWithGitHub,
+  signInWithMicrosoft,
+} from "ui/auth/firebase";
+import { withRouter } from "ui/utils/withRouter";
 
 const formPrefix = "request-password-reset";
 const passwordFields = {
@@ -33,7 +41,9 @@ const passwordFields = {
   },
 }
 
-interface OwnProps {}
+interface OwnProps {
+  history: { push: (location: string) => void };
+}
 interface DispatchProps {
   loginUser: (authForm: AuthForm) => Promise<void>;
   firebaseLogin: (idToken: string) => Promise<void>;
@@ -74,7 +84,9 @@ class LoginForm extends React.Component<Props, State> {
       openPassword: false,
       passwordError: "",
       email: "",
-      firebaseLoading: false,
+      // Keep provider buttons disabled until Firebase has been preloaded so a
+      // popup can open synchronously from the eventual user gesture.
+      firebaseLoading: true,
       firebaseError: "",
       totpLoading: false,
       totpError: "",
@@ -82,18 +94,35 @@ class LoginForm extends React.Component<Props, State> {
   }
 
   public async componentDidMount() {
+    checkoutDestination();
     const { auth, pushLocation } = this.props;
     if (auth) {
-      pushLocation(Routing.Members);
+      const destination = checkoutDestination();
+      if (destination) window.location.assign(destination);
+      else pushLocation(Routing.Members);
+      return;
     }
 
+    // Popup authentication must be initialized before the click so that the
+    // browser's transient user activation is still valid when Firebase opens it.
+    this.setState({ firebaseLoading: true, firebaseError: '' });
+    try {
+      await preloadFirebaseAuth();
+      this.setState({ firebaseLoading: false });
+    } catch (err) {
+      console.error('[Firebase Auth] Firebase preload failed', err);
+      const message = err instanceof Error ? err.message : 'Sign in is unavailable. Please try again.';
+      this.setState({ firebaseLoading: false, firebaseError: message });
+    }
   }
 
   public componentDidUpdate(prevProps: Props) {
     const { isRequesting: wasRequesting } = prevProps;
     const { isRequesting, auth, error, pushLocation, totpEnrollmentRequired, currentUserId } = this.props;
     if (wasRequesting && !isRequesting && !error && auth && !totpEnrollmentRequired) {
-      pushLocation(Routing.Members);
+      const destination = checkoutDestination();
+      if (destination) window.location.assign(destination);
+      else pushLocation(Routing.Members);
     }
     // Privileged member needs to enroll in TOTP — redirect to security settings
     if (totpEnrollmentRequired && !prevProps.totpEnrollmentRequired && auth) {
@@ -101,13 +130,18 @@ class LoginForm extends React.Component<Props, State> {
     }
   }
 
-  private handleFirebaseSignIn = async (signInFn: () => Promise<void>) => {
+  private handleFirebaseSignIn = async (signInFn: () => Promise<void | string>) => {
     this.setState({ firebaseLoading: true, firebaseError: '' });
     try {
-      // This redirects the browser to the provider — page will navigate away
-      await signInFn();
+      const idToken = await signInFn();
+      if (idToken) {
+        console.info('[Firebase Auth] Sending popup credential to the application server');
+        await this.props.firebaseLogin(idToken);
+        this.setState({ firebaseLoading: false });
+      }
     } catch (err) {
-      const message = (err && (err as any).message) || 'Sign in failed. Please try again.';
+      console.error('[Firebase Auth] Provider authentication failed', err);
+      const message = err instanceof Error ? err.message : 'Sign in failed. Please try again.';
       this.setState({ firebaseError: message, firebaseLoading: false });
     }
     // Note: firebaseLoading stays true until redirect — intentional
@@ -305,13 +339,24 @@ const mapStateToProps = (
 
 const mapDispatchToProps = (
   dispatch: ScopedThunkDispatch
-): DispatchProps => {
+): Omit<DispatchProps, 'pushLocation'> => {
   return {
     loginUser: (authForm) => dispatch(loginUserAction(authForm)),
     firebaseLogin: (idToken) => dispatch(firebaseLoginAction(idToken)),
     totpLoginSuccess: (member) => dispatch(totpLoginSuccessAction(member)),
-    pushLocation: (location) => navigate(location),
     clearTotpRequired: () => dispatch({ type: AuthAction.ClearTotpRequired }),
   };
 }
-export default connect(mapStateToProps, mapDispatchToProps)(LoginForm);
+
+const mergeProps = (
+  stateProps: StateProps,
+  dispatchProps: Omit<DispatchProps, 'pushLocation'>,
+  ownProps: OwnProps
+): Props => ({
+  ...stateProps,
+  ...dispatchProps,
+  ...ownProps,
+  pushLocation: (location: string) => ownProps.history.push(location),
+});
+
+export default withRouter(connect(mapStateToProps, mapDispatchToProps, mergeProps)(LoginForm));

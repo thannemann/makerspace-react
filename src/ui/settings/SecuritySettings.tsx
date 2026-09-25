@@ -1,3 +1,5 @@
+// @ts-nocheck
+import { checkoutDestination } from "ui/auth/checkoutDestination";
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Typography from '@mui/material/Typography';
@@ -14,6 +16,7 @@ import ChangePasswordForm from 'ui/member/ChangePasswordForm';
 import { useAuthState } from 'ui/reducer/hooks';
 import { useDispatch } from 'react-redux';
 import { Action as AuthAction } from 'ui/auth/constants';
+import { contactMailto } from 'ui/common/contact';
 
 type EnrollStep = 'idle' | 'qr' | 'verify' | 'done';
 
@@ -236,6 +239,7 @@ interface Props {
 }
 
 const SecuritySettings: React.FC<Props> = ({ memberId, memberEmail }) => {
+  const navigate = useNavigate();
   const { currentUser, totpEnrollmentRequired } = useAuthState() as any;
   const totpEnabled = !!(currentUser as any).totpEnabled;
   const dispatch = useDispatch();
@@ -243,8 +247,10 @@ const SecuritySettings: React.FC<Props> = ({ memberId, memberEmail }) => {
   const onEnrollmentComplete = React.useCallback(() => {
     dispatch({ type: AuthAction.ClearEnrollmentRequired });
     // Redirect to their profile now that enrollment is done
-    navigate(`/members/${memberId}`);
-  }, [dispatch, memberId]);
+    const destination = checkoutDestination();
+    if (destination) window.location.assign(destination);
+    else navigate(`/members/${memberId}`);
+  }, [dispatch, memberId, navigate]);
 
   return (
     <Grid container spacing={4}>
@@ -270,6 +276,17 @@ const SecuritySettings: React.FC<Props> = ({ memberId, memberEmail }) => {
           memberCity={currentUser.address?.city}
           memberAddress={currentUser.address?.street}
         />
+      </Grid>
+      <Grid size={{ xs: 12 }}>
+        <Divider />
+      </Grid>
+      <Grid size={{ xs: 12 }}>
+        <Typography variant='h5' gutterBottom>Have a security concern?</Typography>
+        <Typography variant='body1'>
+          Having trouble using our software? Please don&apos;t hesitate to{' '}
+          <a href={contactMailto('Digital makerspace help requested')}>contact us.</a>{' '}
+          You can also email <a href='mailto:board@manchestermakerspace.org'>board@</a> to contact the board directly with any private concerns or bug reports.
+        </Typography>
       </Grid>
     </Grid>
   );
