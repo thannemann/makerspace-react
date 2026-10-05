@@ -122,9 +122,9 @@ const EditFeeItemRow: React.FC<EditFeeItemRowProps> = ({ item, onSave, onCancel,
       <TextField size="small" value={amount} onChange={e => setAmount(e.target.value)}
         placeholder="0.00" type="number" slotProps={{ htmlInput: { min: "0.01", step: "0.01" } }} style={{ flex: 1 }} />
       <Tooltip title="Save changes"><span>
-        <IconButton size="small" color="primary" disabled={saving || !name || !amount}
+        <IconButton size="medium" color="primary" disabled={saving || !name || !amount}
           onClick={() => onSave(item.id, { name, description, amount })}>
-          <SaveIcon fontSize="small" />
+          <SaveIcon fontSize="medium" />
         </IconButton>
       </span></Tooltip>
       <Tooltip title="Cancel">
@@ -211,7 +211,7 @@ const FeeCatalog: React.FC = () => {
   return (
     <Grid container spacing={3}>
       <Grid size={{ xs: 12 }}>
-        <Grid container justifyContent="space-between" alignItems="center">
+        <Grid container justifyContent="space-between" alignItems="center" sx={{ columnGap: 2, rowGap: 1.5 }}>
           <div>
             <Typography variant="h6">Fee Catalog</Typography>
             <Typography variant="body2" color="textSecondary" style={{ marginTop: 4 }}>

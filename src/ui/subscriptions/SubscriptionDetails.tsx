@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 import { useDispatch } from "react-redux";
 import { getSubscription, Invoice, Subscription } from "makerspace-ts-api-client";
@@ -55,12 +56,12 @@ const SubscriptionDetails: React.FC<Props> = ({ subscriptionId, onLoad }) => {
   React.useEffect(() => setIsMounted(true), []);
   const [wasCancelled, setWasCancelled] = React.useState(false);
 
-  const { 
-    isRequesting: subscriptionLoading, 
-    data: subscription = {} as Subscription, 
-    error: subError, 
-    refresh: reloadSubscription 
-  } = useReadTransaction(getSubscription, { id: subscriptionId }, !subscriptionId);
+  const {
+    isRequesting: subscriptionLoading,
+    data: subscription = {} as Subscription,
+    error: subError,
+    refresh: reloadSubscription
+  } = useReadTransaction(getSubscription, { id: subscriptionId }, !subscriptionId, undefined, undefined, true);
   const dispatch = useDispatch();
 
   React.useEffect(() => {

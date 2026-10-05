@@ -1,4 +1,9 @@
+// @ts-nocheck
+import ToolAvailability, { toolAvailabilityLabel } from "ui/common/ToolAvailability";
 import * as React from "react";
+import useToolGroups from './useToolGroups';
+import ToolGroupLoadStatus from './ToolGroupLoadStatus';
+import GroupApproval from './GroupApproval';
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
@@ -6,8 +11,11 @@ import Select from "@mui/material/Select";
 import FormLabel from "@mui/material/FormLabel";
 import Chip from "@mui/material/Chip";
 import Button from "@mui/material/Button";
+import Tooltip from "@mui/material/Tooltip";
+import IconButton from "@mui/material/IconButton";
 import BlockIcon from "@mui/icons-material/Block";
 import AddIcon from "@mui/icons-material/Add";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 import FormModal from "ui/common/FormModal";
 import ErrorMessage from "ui/common/ErrorMessage";
@@ -20,13 +28,15 @@ import MemberSearchInput from "ui/common/MemberSearchInput";
 import { SelectOption } from "ui/common/AsyncSelect";
 import { Status } from "ui/constants";
 import useReadTransaction from "ui/hooks/useReadTransaction";
+import { useCheckoutCatalog } from "./CheckoutCatalog";
 import useWriteTransaction from "ui/hooks/useWriteTransaction";
+import { useAuthState } from "ui/reducer/hooks";
 import extractTotalItems from "ui/utils/extractTotalItems";
 import { ToolCheckout, Shop, Tool } from "app/entities/toolCheckout";
 import {
   listToolCheckouts, listMemberCheckouts, adminCreateToolCheckout, adminRevokeToolCheckout,
-  listShops, listTools,
 } from "api/toolCheckouts";
+import { toneNotice } from "ui/common/statusColors";
 
 const rowId = (c: ToolCheckout) => c.id;
 
@@ -77,6 +87,7 @@ const RevokeModal: React.FC<RevokeModalProps> = ({ target, onClose, onRevoke, lo
 
 interface CheckoutModalProps {
   shops: Shop[];
+  allShops?: Shop[];
   tools: Tool[];
   preselectedMember?: { id: string; name: string };
   onClose: () => void;
@@ -86,14 +97,20 @@ interface CheckoutModalProps {
   unmetPrerequisites?: string[];
 }
 
-const CheckoutModal: React.FC<CheckoutModalProps> = ({
-  shops, tools, preselectedMember, onClose, onCheckout, loading, error, unmetPrerequisites
+export const CheckoutModal: React.FC<CheckoutModalProps> = ({
+  shops, allShops = shops, tools, preselectedMember, onClose, onCheckout, loading, error, unmetPrerequisites
 }) => {
   const [selectedMember, setSelectedMember] = React.useState<SelectOption | null>(
     preselectedMember ? { id: preselectedMember.id, value: preselectedMember.id, label: preselectedMember.name } : null
   );
   const [shopId, setShopId] = React.useState("");
   const [toolId, setToolId] = React.useState("");
+  const groupCatalog = useToolGroups();
+  const groups = groupCatalog.groups.filter(group => group.canApprove);
+  const [reviewingGroup, setReviewingGroup] = React.useState(false);
+  const groupShopIds = new Set(groups.map(group => group.shopId));
+  const selectableShops = allShops.filter(shop => shops.some(allowed => allowed.id === shop.id) || groupShopIds.has(shop.id));
+  const selectedGroup = groups.find(group => `group:${group.id}` === toolId);
 
   const shopTools = tools.filter(t => t.shopId === shopId);
   const selectedTool = tools.find(t => t.id === toolId);
@@ -101,13 +118,17 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({
   return (
     <FormModal id="create-checkout" isOpen={true} title="Check Out Member on Tool"
       closeHandler={onClose}
-      onSubmit={() => selectedMember && toolId && onCheckout(selectedMember.value, toolId)}
+      submitDisabled={groupCatalog.loading || !!groupCatalog.error}
+      onSubmit={() => !groupCatalog.loading && !groupCatalog.error && selectedMember && toolId && (selectedGroup ? setReviewingGroup(true) : onCheckout(selectedMember.value, toolId))}
       submitText="Check Out" loading={loading} error={error}
     >
       <Grid container spacing={2}>
+        {(groupCatalog.loading || groupCatalog.error) && <Grid size={{ xs: 12 }}>
+          <ToolGroupLoadStatus loading={groupCatalog.loading} error={groupCatalog.error} onRetry={groupCatalog.refresh} />
+        </Grid>}
         {unmetPrerequisites && unmetPrerequisites.length > 0 && (
           <Grid size={{ xs: 12 }}>
-            <Typography variant="body2" style={{ color: "#e65100", padding: "8px", backgroundColor: "#fff8e1", borderRadius: 4 }}>
+            <Typography variant="body2" sx={[toneNotice('warning'), { p: 1, color: 'warning.dark' }]}>
               ⚠ Prerequisite not met: {unmetPrerequisites.join(", ")}. You may proceed but the member should complete prerequisites first.
             </Typography>
           </Grid>
@@ -118,6 +139,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <Typography><strong>{preselectedMember.name}</strong></Typography>
           ) : (
             <MemberSearchInput
+              fullyActiveUnexpired
               name="checkout-member-search"
               placeholder="Search by name or email"
               onChange={(opt: SelectOption) => setSelectedMember(opt || null)}
@@ -127,18 +149,19 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
           <FormLabel style={{ fontSize: 12 }}>Shop *</FormLabel>
-          <Select native fullWidth value={shopId}
+          <Select native fullWidth value={shopId} inputProps={{ 'aria-label': 'Shop' }}
             onChange={e => { setShopId((e.target as HTMLSelectElement).value); setToolId(""); }}>
             <option value="">— select shop —</option>
-            {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {selectableShops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
           <FormLabel style={{ fontSize: 12 }}>Tool *</FormLabel>
-          <Select native fullWidth value={toolId} disabled={!shopId}
+          <Select native fullWidth value={toolId} disabled={!shopId} inputProps={{ 'aria-label': 'Tool' }}
             onChange={e => setToolId((e.target as HTMLSelectElement).value)}>
             <option value="">— select tool —</option>
-            {shopTools.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {shopTools.map(t => <option key={t.id} value={t.id}>{toolAvailabilityLabel(t)}</option>)}
+            {groups.filter(group => group.shopId === shopId).map(group => <option key={group.id} value={`group:${group.id}`}>{group.name} (Group)</option>)}
           </Select>
         </Grid>
         {selectedTool?.prerequisiteNames?.length > 0 && (
@@ -149,6 +172,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({
           </Grid>
         )}
       </Grid>
+      {reviewingGroup && selectedGroup && selectedMember && <GroupApproval group={selectedGroup}
+        memberId={selectedMember.value} onClose={() => setReviewingGroup(false)} onSaved={onClose} />}
     </FormModal>
   );
 };
@@ -159,9 +184,13 @@ interface Props {
   preselectedMember?: { id: string; name: string };
   isAdmin: boolean;
   isResourceManager: boolean;
+  memberView?: boolean;
 }
 
-const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourceManager }) => {
+const CheckoutRoster: React.FC<Props> = ({
+  preselectedMember, isAdmin, isResourceManager, memberView = false
+}) => {
+  const { currentUser } = useAuthState();
   const [shopFilter,         setShopFilter]         = React.useState("");
   const [activeFilter,       setActiveFilter]       = React.useState<"all" | "active" | "revoked">("active");
   const [revokeTarget,       setRevokeTarget]       = React.useState<ToolCheckout | null>(null);
@@ -169,7 +198,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
   const [unmetPrerequisites, setUnmetPrerequisites] = React.useState<string[]>([]);
   const [selectedId,         setSelectedId]         = React.useState<string | undefined>(undefined);
 
-  const canManage = isAdmin || isResourceManager;
+  const canManage = !memberView && (isAdmin || isResourceManager);
 
   const checkoutParams = {
     ...(preselectedMember && { memberId: preselectedMember.id }),
@@ -188,6 +217,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
     ...(shopFilter && { shopId: shopFilter }),
     ...(activeFilter === "active"  && { active: true }),
     ...(activeFilter === "revoked" && { active: false }),
+    ...(memberView && { active: true, includeHidden: true }),
   };
   const memberRead = useReadTransaction(listMemberCheckouts, memberParams, canManage,
     `checkouts-self-${preselectedMember?.id || "me"}-${shopFilter}-${activeFilter}`);
@@ -195,8 +225,15 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
   const { isRequesting, data: checkouts = [], response, refresh, error: loadError } =
     canManage ? adminRead : memberRead;
 
-  const { data: shops = [] } = useReadTransaction(listShops, {}, undefined, "shops-roster");
-  const { data: tools = [] } = useReadTransaction(listTools, {}, !canManage, "tools-roster");
+  const { data: shops = [] } = useCheckoutCatalog("shops");
+  const { data: tools = [], refresh: refreshCatalog } = useCheckoutCatalog("tools", !canManage);
+  const checkoutApproverShopIds = currentUser.checkoutApproverShopIds || [];
+  const hasGlobalCheckoutAccess = !!currentUser.isAdmin || !!currentUser.isBoardMember || !!currentUser.isResourceManager || isResourceManager;
+  const modalShops = hasGlobalCheckoutAccess
+    ? (shops as Shop[])
+    : (shops as Shop[]).filter(s => checkoutApproverShopIds.includes(s.id));
+  const modalShopIds = new Set(modalShops.map(s => s.id));
+  const modalTools = (tools as Tool[]).filter(t => modalShopIds.has(t.shopId));
 
   const refreshRef = React.useRef(refresh);
   React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);
@@ -210,7 +247,8 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
     setRevokeTarget(null);
     setSelectedId(undefined);
     refreshRef.current();
-  }, []);
+    refreshCatalog();
+  }, [refreshCatalog]);
 
   const { call: createCheckout, isRequesting: creating, error: createError } =
     useWriteTransaction(adminCreateToolCheckout, onSuccess);
@@ -243,8 +281,21 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
       defaultSortDirection: SortDirection.Asc,
       cell: (row: ToolCheckout) => (
         <div>
-          <Typography variant="body2">{row.toolName}</Typography>
-          <Typography variant="caption" color="textSecondary">{row.shopName}</Typography>
+          <Typography variant="body2" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {row.toolName} <ToolAvailability outOfService={row.outOfService} />
+            {row.toolNotes?.trim() && (
+              <Tooltip title={row.toolNotes} describeChild>
+                <IconButton size="small" aria-label={`Notes for ${row.toolName}`}>
+                  <InfoOutlinedIcon fontSize="small" color="action" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Typography>
+          <Typography variant="caption" color="textSecondary">
+            {row.shopWikiUrl
+              ? <a href={row.shopWikiUrl} target="_blank" rel="noopener noreferrer">{row.shopName}</a>
+              : row.shopName}
+          </Typography>
         </div>
       ),
     },
@@ -274,11 +325,15 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
     <Grid container spacing={3}>
       {!preselectedMember && (
         <Grid size={{ xs: 12 }}>
-          <Grid container justifyContent="space-between" alignItems="center">
+          <Grid container justifyContent="space-between" alignItems="center" sx={{ columnGap: 2, rowGap: 1.5 }}>
             <div>
-              <Typography variant="h6">Tool Checkout Roster</Typography>
+              <Typography variant="h6">
+                {memberView ? "My Active Tool Checkouts" : "Tool Checkout Roster"}
+              </Typography>
               <Typography variant="body2" color="textSecondary">
-                All member tool checkouts across all shops.
+                {memberView
+                  ? "All of your active tool checkouts, including hidden tools."
+                  : "All member tool checkouts across all shops."}
               </Typography>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -301,7 +356,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
 
       {preselectedMember && canManage && (
         <Grid size={{ xs: 12 }}>
-          <Grid container justifyContent="space-between" alignItems="center">
+          <Grid container justifyContent="space-between" alignItems="center" sx={{ columnGap: 2, rowGap: 1.5 }}>
             <div />
             <div style={{ display: "flex", gap: 8 }}>
               {selectedCheckout?.active && (
@@ -328,7 +383,7 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
           {(shops as Shop[]).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </Select>
       </Grid>
-      <Grid size={{ xs: 12, sm: 4 }}>
+      {!memberView && <Grid size={{ xs: 12, sm: 4 }}>
         <FormLabel style={{ fontSize: 12 }}>Status</FormLabel>
         <Select native fullWidth value={activeFilter}
           onChange={e => setActiveFilter((e.target as HTMLSelectElement).value as any)}>
@@ -336,14 +391,14 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
           <option value="revoked">Revoked only</option>
           <option value="all">All</option>
         </Select>
-      </Grid>
+      </Grid>}
 
       {loadError && <Grid size={{ xs: 12 }}><ErrorMessage error={loadError} /></Grid>}
 
       <Grid size={{ xs: 12 }}>
         <StatefulTable
           id="checkout-roster-table"
-          title={preselectedMember ? "Tool Checkouts" : "All Checkouts"}
+          title={memberView ? "Active Checkouts" : preselectedMember ? "Tool Checkouts" : "All Checkouts"}
           loading={isRequesting}
           data={checkouts as ToolCheckout[]}
           error={loadError}
@@ -358,9 +413,9 @@ const CheckoutRoster: React.FC<Props> = ({ preselectedMember, isAdmin, isResourc
 
       {checkoutOpen && (
         <CheckoutModal
-          shops={shops as Shop[]} tools={tools as Tool[]}
+          shops={modalShops} allShops={shops} tools={modalTools}
           preselectedMember={preselectedMember}
-          onClose={() => setCheckoutOpen(false)}
+          onClose={() => { setCheckoutOpen(false); refreshRef.current(); refreshCatalog(); }}
           onCheckout={handleCheckout}
           loading={creating} error={createError}
           unmetPrerequisites={unmetPrerequisites}

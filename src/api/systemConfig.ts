@@ -1,11 +1,12 @@
 import axios from 'axios';
+import { attachGlobalAuthInterceptor } from 'ui/common/globalAuthInterceptor';
 
 const getCsrfToken = () => {
   const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : '';
 };
 
-const api = axios.create({ withCredentials: true });
+const api = attachGlobalAuthInterceptor(axios.create({ withCredentials: true }));
 api.interceptors.request.use(config => {
   config.headers.set('X-XSRF-TOKEN', getCsrfToken());
   config.headers.set('Content-Type', 'application/json');
@@ -39,7 +40,14 @@ export interface SlackSettings {
   slack_channel_rm: string;
   slack_channel_admin: string;
   slack_channel_logs: string;
+  slack_channel_tickets: string;
+  slack_channel_new_members: string;
   volunteer_pending_slack_channel: string;
+  channel_cache: {
+    available: boolean;
+    total_channels: number | null;
+    last_updated_at: string | null;
+  };
 }
 
 export interface VolunteerSettings {
@@ -49,6 +57,7 @@ export interface VolunteerSettings {
    *  The discount ID must contain 'volunteer' (e.g. volunteer_discount_10). */
   volunteer_discount_id: string;
   volunteer_task_max_credit: string;
+  ticket_bounty_max_credit: string;
   volunteer_bounty_token: string;
   volunteer_rolling_days: string;
   volunteer_leaderboard_top: string;
@@ -60,6 +69,19 @@ export interface TotpSettings {
   require_totp_rm: boolean;
 }
 
+export interface ReservationSettings {
+  reservation_token: string;
+}
+
+/** Day-of-month (1-31, as a string) each "monthly" job actually does real
+ *  work on -- Heroku Scheduler only supports daily cadence, so these jobs
+ *  run daily and no-op except on their configured day. */
+export interface JobScheduleSettings {
+  channel_cache_refresh_day: string;
+  card_expiration_check_day: string;
+  garbage_collect_day: string;
+}
+
 export interface SystemConfigData {
   flags: {
     slack_sync_enabled: boolean;
@@ -68,11 +90,41 @@ export interface SystemConfigData {
     require_totp_admin: boolean;
     require_totp_board: boolean;
     require_totp_rm: boolean;
+    signup_lockout_enabled: boolean;
   };
   jobs: JobStatus[];
   slack: SlackSettings;
   volunteer: VolunteerSettings;
   totp: TotpSettings;
+  reservation: ReservationSettings;
+  job_schedule: JobScheduleSettings;
+}
+
+export type TemplateStatusValue =
+  | 'ok'
+  | 'empty'
+  | 'uncached'
+  | 'missing_env'
+  | 'invalid'
+  | 'permission_error'
+  | 'error';
+
+export interface ExternalTemplateStatus {
+  name: string;
+  env_key: string;
+  status: TemplateStatusValue;
+  checked_at: string | null;
+  fetched_at: string | null;
+  empty: boolean;
+  error: string | null;
+  edit_url: string | null;
+  placeholders: string[];
+  template_placeholders: string[];
+  common_placeholders: string[];
+  metadata?: {
+    name?: string;
+    modified_time?: string;
+  } | null;
 }
 
 /** A Braintree discount as returned by /api/billing/discounts */
@@ -93,13 +145,30 @@ export const updateSystemFlag = (key: string, value: boolean) =>
 
 export const updateSystemSetting = ({ key, value }: { key: string; value: string }) =>
   buildResponse<{ key: string; value: string }>(
-    api.put('/api/admin/system_configs/update_setting', { key, value })
+    api.put('/api/admin/system_configs/update_setting', {
+      key,
+      value: key.startsWith('slack_channel_') || key === 'volunteer_pending_slack_channel'
+        ? value.trim().replace(/^#+/, '')
+        : value
+    })
   );
 
 export const runSystemJob = ({ key }: { key: string }) =>
   buildResponse<{ message: string }>(
     api.post('/api/admin/system_configs/run_job', { key })
   );
+
+export const getExternalTemplates = () =>
+  buildResponse<{ templates: ExternalTemplateStatus[] }>(
+    api.get('/api/admin/templates')
+  );
+
+export const runExternalTemplateAction = (
+  name: string,
+  action: 'refresh' | 'restore' | 'populate'
+) => buildResponse<{ template: ExternalTemplateStatus }>(
+  api.post(`/api/admin/templates/${encodeURIComponent(name)}/${action}`)
+);
 
 /**
  * Fetches Braintree discounts filtered to the 'volunteer' type.

@@ -4,8 +4,10 @@ import { connect } from 'react-redux';
 import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
 import Grid from "@mui/material/Grid";
-import { completeProviderSignIn } from 'ui/auth/firebase';
+import { clearProviderSignInState, completeProviderSignIn } from 'ui/auth/firebase';
 import { firebaseLoginAction } from 'ui/auth/actions';
+import { checkoutDestination } from './checkoutDestination';
+import { loginDestination } from './loginDestination';
 import { Routing } from 'app/constants';
 import { ScopedThunkDispatch } from 'ui/reducer';
 
@@ -14,7 +16,7 @@ interface DispatchProps {
 }
 
 interface OwnProps {
-  history: any;
+  navigate: ReturnType<typeof useNavigate>;
 }
 
 interface Props extends DispatchProps, OwnProps {}
@@ -38,9 +40,14 @@ class FirebaseCallback extends React.Component<Props, State> {
     try {
       const idToken = await completeProviderSignIn();
       await this.props.firebaseLogin(idToken);
-      this.props.navigate(Routing.Members);
-    } catch (err) {
-      const message = (err && (err as any).message) || 'Sign in failed. Please try again.';
+      clearProviderSignInState();
+      const destination = checkoutDestination();
+      const redirect = loginDestination();
+      this.props.navigate(destination ? `${Routing.Login}?return_to=${encodeURIComponent(destination)}`
+        : redirect ? `${Routing.Login}?redirect=${encodeURIComponent(redirect)}` : Routing.Login);
+    } catch (err: unknown) {
+      console.error('[Firebase Auth] Redirect callback failed', err);
+      const message = err instanceof Error ? err.message : 'Sign in failed. Please try again.';
       this.setState({ error: message });
     }
   }
@@ -82,10 +89,10 @@ const mapDispatchToProps = (dispatch: ScopedThunkDispatch): DispatchProps => ({
 
 const ConnectedFirebaseCallback = connect(null, mapDispatchToProps)(FirebaseCallback);
 
-// Wrap with router to get history prop
+// Wrap with router to get the navigation function.
 const FirebaseCallbackWithRouter: React.FC<{}> = () => {
   const navigate = useNavigate();
-  return <ConnectedFirebaseCallback history={history} />;
+  return <ConnectedFirebaseCallback navigate={navigate} />;
 };
 
 export default FirebaseCallbackWithRouter;

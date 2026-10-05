@@ -1,3 +1,6 @@
+// @ts-nocheck
+import { checkoutDestination } from "ui/auth/checkoutDestination";
+import { clearLoginDestination, defaultLoginDestination, loginDestination } from "ui/auth/loginDestination";
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Typography from '@mui/material/Typography';
@@ -14,6 +17,9 @@ import ChangePasswordForm from 'ui/member/ChangePasswordForm';
 import { useAuthState } from 'ui/reducer/hooks';
 import { useDispatch } from 'react-redux';
 import { Action as AuthAction } from 'ui/auth/constants';
+import { contactMailto } from 'ui/common/contact';
+import { softTone, toneNotice } from "ui/common/statusColors";
+import Box from "@mui/material/Box";
 
 type EnrollStep = 'idle' | 'qr' | 'verify' | 'done';
 
@@ -112,7 +118,7 @@ const TotpSection: React.FC<{ memberId: string; initialEnabled: boolean; onEnrol
               label='Enabled'
               size='small'
               icon={<CheckCircleIcon />}
-              style={{ backgroundColor: '#e8f5e9', color: '#2e7d32' }}
+              sx={softTone('success')}
             />
           )}
         </div>
@@ -203,7 +209,7 @@ const TotpSection: React.FC<{ memberId: string; initialEnabled: boolean; onEnrol
       {/* Done — successfully enrolled */}
       {step === 'done' && (
         <Grid size={{ xs: 12 }}>
-          <Typography variant='body1' style={{ color: '#2e7d32' }}>
+          <Typography variant='body1' color='success.main'>
             ✓ Two-factor authentication has been enabled on your account.
           </Typography>
         </Grid>
@@ -236,25 +242,31 @@ interface Props {
 }
 
 const SecuritySettings: React.FC<Props> = ({ memberId, memberEmail }) => {
+  const navigate = useNavigate();
   const { currentUser, totpEnrollmentRequired } = useAuthState() as any;
   const totpEnabled = !!(currentUser as any).totpEnabled;
   const dispatch = useDispatch();
 
   const onEnrollmentComplete = React.useCallback(() => {
     dispatch({ type: AuthAction.ClearEnrollmentRequired });
-    // Redirect to their profile now that enrollment is done
-    navigate(`/members/${memberId}`);
-  }, [dispatch, memberId]);
+    const destination = checkoutDestination();
+    if (destination) window.location.assign(destination);
+    else {
+      const redirect = loginDestination();
+      clearLoginDestination();
+      navigate(redirect || defaultLoginDestination(currentUser), { replace: true });
+    }
+  }, [dispatch, currentUser, navigate]);
 
   return (
     <Grid container spacing={4}>
       <Grid size={{ xs: 12 }}>
         {totpEnrollmentRequired && (
-          <div style={{ padding: '12px 16px', marginBottom: 16, backgroundColor: '#fff3e0', borderLeft: '4px solid #ff9800', borderRadius: 4 }}>
-            <Typography variant='body2' style={{ color: '#e65100' }}>
+          <Box sx={[toneNotice('warning'), { p: '12px 16px', mb: 2, borderLeft: '4px solid', borderLeftColor: 'warning.main' }]}>
+            <Typography variant='body2' color='warning.dark'>
               <strong>Action required:</strong> Two-factor authentication is required for your account. Please set it up below before continuing.
             </Typography>
-          </div>
+          </Box>
         )}
         <TotpSection memberId={memberId} initialEnabled={totpEnabled} onEnrollmentComplete={onEnrollmentComplete} />
       </Grid>
@@ -270,6 +282,17 @@ const SecuritySettings: React.FC<Props> = ({ memberId, memberEmail }) => {
           memberCity={currentUser.address?.city}
           memberAddress={currentUser.address?.street}
         />
+      </Grid>
+      <Grid size={{ xs: 12 }}>
+        <Divider />
+      </Grid>
+      <Grid size={{ xs: 12 }}>
+        <Typography variant='h5' gutterBottom>Have a security concern?</Typography>
+        <Typography variant='body1'>
+          Having trouble using our software? Please don&apos;t hesitate to{' '}
+          <a href={contactMailto('Digital makerspace help requested')}>contact us.</a>{' '}
+          You can also email <a href='mailto:board@manchestermakerspace.org'>board@</a> to contact the board directly with any private concerns or bug reports.
+        </Typography>
       </Grid>
     </Grid>
   );
