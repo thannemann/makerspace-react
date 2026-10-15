@@ -1,4 +1,5 @@
 import * as React from "react";
+import { contactMailto } from "ui/common/contact";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -158,7 +159,7 @@ export class ReportForm extends React.Component<OwnProps> {
                     requirement={baseReq}
                     reportRequirement={isReportRequirement(requirement) && requirement}
                     index={index}
-                    ref={(ref) => this.reportRequirementRefs[index] = ref}
+                    ref={(ref) => { this.reportRequirementRefs[index] = ref; }}
                   />
               </>
             )
@@ -173,7 +174,7 @@ export class ReportForm extends React.Component<OwnProps> {
     return (
       <Typography variant="body1">
         You have no current requirements to report, which usually indicates an error in our system.
-        Please <a href='mailto:contact@manchestermakerspace.org"'>email us</a> so we can straighten things out.
+        Please <a href={contactMailto()}>email us</a> so we can straighten things out.
       </Typography>
     )
   }

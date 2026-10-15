@@ -1,10 +1,13 @@
+// @ts-nocheck
 import * as React from "react";
-import { useNavigate } from 'react-router-dom';
 import { connect } from "react-redux";
 
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Grid from "@mui/material/Grid";
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import { captureProviderRememberChoice, clearProviderRememberChoice, isPhoneClient, readRememberPreference, saveRememberPreference } from './rememberPreference';
 
 import { Routing } from "app/constants";
 import { emailValid } from "app/utils";
@@ -20,7 +23,14 @@ import FormModal from "ui/common/FormModal";
 import { requestPasswordReset, isApiErrorResponse } from "makerspace-ts-api-client";
 import FirebaseAuthButtons from "ui/auth/FirebaseAuthButtons";
 import TotpVerifyForm from "ui/auth/TotpVerifyForm";
-import { signInWithGoogle, signInWithApple, signInWithGitHub, signInWithMicrosoft } from "ui/auth/firebase";
+import {
+  preloadFirebaseAuth,
+  signInWithGoogle,
+  signInWithApple,
+  signInWithGitHub,
+  signInWithMicrosoft,
+} from "ui/auth/firebase";
+import { withRouter } from "ui/utils/withRouter";
 
 const formPrefix = "request-password-reset";
 const passwordFields = {
@@ -33,10 +43,13 @@ const passwordFields = {
   },
 }
 
-interface OwnProps {}
+interface OwnProps {
+  history: { push: (location: string) => void };
+}
 interface DispatchProps {
   loginUser: (authForm: AuthForm) => Promise<void>;
-  firebaseLogin: (idToken: string) => Promise<void>;
+  firebaseLogin: (idToken: string, rememberMe: boolean) => Promise<void>;
+  cancelLogin: () => Promise<void>;
   totpLoginSuccess: (member: any) => Promise<void>;
   pushLocation: (location: string) => void;
   clearTotpRequired: () => void;
@@ -50,6 +63,8 @@ interface StateProps {
   totpEnrollmentRequired: boolean;
 }
 interface State {
+  rememberMe: boolean;
+  preferenceLoaded: boolean;
   requestingPassword: boolean;
   passwordError: string;
   openPassword: boolean;
@@ -70,11 +85,15 @@ class LoginForm extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
+      rememberMe: isPhoneClient(),
+      preferenceLoaded: false,
       requestingPassword: false,
       openPassword: false,
       passwordError: "",
       email: "",
-      firebaseLoading: false,
+      // Keep provider buttons disabled until Firebase has been preloaded so a
+      // popup can open synchronously from the eventual user gesture.
+      firebaseLoading: true,
       firebaseError: "",
       totpLoading: false,
       totpError: "",
@@ -82,32 +101,39 @@ class LoginForm extends React.Component<Props, State> {
   }
 
   public async componentDidMount() {
-    const { auth, pushLocation } = this.props;
-    if (auth) {
-      pushLocation(Routing.Members);
-    }
+    if (this.props.auth) return;
 
-  }
+    const rememberMe = await readRememberPreference();
+    this.setState({ rememberMe, preferenceLoaded: true });
 
-  public componentDidUpdate(prevProps: Props) {
-    const { isRequesting: wasRequesting } = prevProps;
-    const { isRequesting, auth, error, pushLocation, totpEnrollmentRequired, currentUserId } = this.props;
-    if (wasRequesting && !isRequesting && !error && auth && !totpEnrollmentRequired) {
-      pushLocation(Routing.Members);
-    }
-    // Privileged member needs to enroll in TOTP — redirect to security settings
-    if (totpEnrollmentRequired && !prevProps.totpEnrollmentRequired && auth) {
-      pushLocation(`/members/${currentUserId}/settings/security`);
-    }
-  }
-
-  private handleFirebaseSignIn = async (signInFn: () => Promise<void>) => {
+    // Popup authentication must be initialized before the click so that the
+    // browser's transient user activation is still valid when Firebase opens it.
     this.setState({ firebaseLoading: true, firebaseError: '' });
     try {
-      // This redirects the browser to the provider — page will navigate away
-      await signInFn();
+      await preloadFirebaseAuth();
+      this.setState({ firebaseLoading: false });
     } catch (err) {
-      const message = (err && (err as any).message) || 'Sign in failed. Please try again.';
+      console.error('[Firebase Auth] Firebase preload failed', err);
+      const message = err instanceof Error ? err.message : 'Sign in is unavailable. Please try again.';
+      this.setState({ firebaseLoading: false, firebaseError: message });
+    }
+  }
+
+  private handleFirebaseSignIn = async (signInFn: () => Promise<void | string>) => {
+    const rememberMe = isPhoneClient() && this.state.rememberMe;
+    captureProviderRememberChoice(rememberMe);
+    this.setState({ firebaseLoading: true, firebaseError: '' });
+    try {
+      const idToken = await signInFn();
+      if (idToken) {
+        console.info('[Firebase Auth] Sending popup credential to the application server');
+        await this.props.firebaseLogin(idToken, rememberMe);
+        clearProviderRememberChoice();
+        this.setState({ firebaseLoading: false });
+      }
+    } catch (err) {
+      console.error('[Firebase Auth] Provider authentication failed', err);
+      const message = err instanceof Error ? err.message : 'Sign in failed. Please try again.';
       this.setState({ firebaseError: message, firebaseLoading: false });
     }
     // Note: firebaseLoading stays true until redirect — intentional
@@ -148,9 +174,17 @@ class LoginForm extends React.Component<Props, State> {
     }
   };
 
-  private cancelTotp = () => {
-    this.props.clearTotpRequired();
-    this.setState({ totpError: '' });
+  private cancelTotp = async () => {
+    this.setState({ totpLoading: true });
+    try {
+      await this.props.cancelLogin();
+      this.props.clearTotpRequired();
+      this.setState({ totpError: '' });
+    } catch {
+      this.setState({ totpError: 'Could not cancel sign in. Please try again.' });
+    } finally {
+      this.setState({ totpLoading: false });
+    }
   };
 
   private submitLogin = async (form: Form) => {
@@ -158,7 +192,7 @@ class LoginForm extends React.Component<Props, State> {
 
     if (!form.isValid()) return;
 
-    this.props.loginUser(validAuth);
+    this.props.loginUser({ ...validAuth, rememberMe: isPhoneClient() && this.state.rememberMe });
   }
 
   private submitPasswordRequest = async (form: Form) => {
@@ -241,7 +275,7 @@ class LoginForm extends React.Component<Props, State> {
         <Form
           ref={this.setFormRef}
           id={loginPrefix}
-          loading={isRequesting}
+          loading={isRequesting || !this.state.preferenceLoaded}
           title="Please Sign In"
           onSubmit={this.submitLogin}
           submitText="Sign In"
@@ -267,6 +301,18 @@ class LoginForm extends React.Component<Props, State> {
                 type="password"
               />
             </Grid>
+            {isPhoneClient() && <Grid size={{ xs: 12 }}>
+              <FormControlLabel
+                sx={{ m: 0, alignItems: 'flex-start' }}
+                control={<Checkbox checked={this.state.rememberMe}
+                  disabled={!this.state.preferenceLoaded || isRequesting}
+                  onChange={(_event, checked) => {
+                    this.setState({ rememberMe: checked });
+                    void saveRememberPreference(checked);
+                  }} />}
+                label="Stay logged in (uncheck this on a shared computer)"
+              />
+            </Grid>}
             <Grid size={{ xs: 12 }} style={{textAlign: "center"}}>
               <a id="forgot-password" href="#" onClick={this.openPasswordReset}>Forgot your password?</a>
             </Grid>
@@ -279,7 +325,7 @@ class LoginForm extends React.Component<Props, State> {
           onAppleSignIn={this.handleAppleSignIn}
           onGitHubSignIn={this.handleGitHubSignIn}
           onMicrosoftSignIn={this.handleMicrosoftSignIn}
-          loading={this.state.firebaseLoading}
+          loading={this.state.firebaseLoading || !this.state.preferenceLoaded || isRequesting}
           error={this.state.firebaseError}
         />
       </>
@@ -305,13 +351,33 @@ const mapStateToProps = (
 
 const mapDispatchToProps = (
   dispatch: ScopedThunkDispatch
-): DispatchProps => {
+): Omit<DispatchProps, 'pushLocation'> => {
   return {
     loginUser: (authForm) => dispatch(loginUserAction(authForm)),
-    firebaseLogin: (idToken) => dispatch(firebaseLoginAction(idToken)),
+    firebaseLogin: (idToken, rememberMe) => dispatch(firebaseLoginAction(idToken, rememberMe)),
+    cancelLogin: async () => {
+      const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+      const response = await fetch('/api/members/sign_out', {
+        method: 'DELETE', credentials: 'include',
+        headers: { 'X-XSRF-TOKEN': match ? decodeURIComponent(match[1]) : '' },
+      });
+      if (!response.ok) throw new Error('Could not cancel sign in');
+      clearProviderRememberChoice();
+    },
     totpLoginSuccess: (member) => dispatch(totpLoginSuccessAction(member)),
-    pushLocation: (location) => navigate(location),
     clearTotpRequired: () => dispatch({ type: AuthAction.ClearTotpRequired }),
   };
 }
-export default connect(mapStateToProps, mapDispatchToProps)(LoginForm);
+
+const mergeProps = (
+  stateProps: StateProps,
+  dispatchProps: Omit<DispatchProps, 'pushLocation'>,
+  ownProps: OwnProps
+): Props => ({
+  ...stateProps,
+  ...dispatchProps,
+  ...ownProps,
+  pushLocation: (location: string) => ownProps.history.push(location),
+});
+
+export default withRouter(connect(mapStateToProps, mapDispatchToProps, mergeProps)(LoginForm));

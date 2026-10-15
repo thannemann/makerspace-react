@@ -13,6 +13,7 @@ interface FormModalProps {
   cancelText?: string;
   onSubmit?: (form: Form) => void;
   submitText?: string;
+  submitDisabled?: boolean;
   loading?: boolean;
   children?: React.ReactNode;
   error?: string;
@@ -30,6 +31,7 @@ const FormModal = (props: FormModalProps) => {
 
   return (
     <Dialog
+      aria-labelledby={title ? `${id}-title` : undefined}
       className={formDialogClass}
       sx={{ "& .MuiDialog-paperScrollPaper": { overflow: "visible" } }}
       fullWidth={true}
@@ -39,7 +41,7 @@ const FormModal = (props: FormModalProps) => {
       scroll={"body"}
     >
       <Form
-        ref={formRef}
+        ref={(ref) => { formRef?.(ref); }}
         id={id}
         title={title}
         onCancel={closeHandler}
@@ -47,6 +49,7 @@ const FormModal = (props: FormModalProps) => {
         loading={loading}
         onSubmit={onSubmit}
         submitText={submitText}
+        submitDisabled={props.submitDisabled}
         error={error}
         style={style}
       >

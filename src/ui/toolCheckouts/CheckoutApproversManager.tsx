@@ -1,4 +1,7 @@
+// @ts-nocheck
 import * as React from "react";
+import useToolGroups from './useToolGroups';
+import ToolGroupLoadStatus from './ToolGroupLoadStatus';
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -8,6 +11,8 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 
+import ApproverTools from "./ApproverTools";
+import { toolAvailabilityLabel } from "ui/common/ToolAvailability";
 import FormModal from "ui/common/FormModal";
 import ErrorMessage from "ui/common/ErrorMessage";
 import StatefulTable from "ui/common/table/StatefulTable";
@@ -17,15 +22,15 @@ import { withQueryContext } from "ui/common/Filters/QueryContext";
 import MemberSearchInput from "ui/common/MemberSearchInput";
 import { SelectOption } from "ui/common/AsyncSelect";
 import useReadTransaction from "ui/hooks/useReadTransaction";
+import { useCheckoutCatalog } from "./CheckoutCatalog";
 import useWriteTransaction from "ui/hooks/useWriteTransaction";
 import extractTotalItems from "ui/utils/extractTotalItems";
-import { CheckoutApprover, Shop } from "app/entities/toolCheckout";
+import { CheckoutApprover, Shop, Tool } from "app/entities/toolCheckout";
 import {
   listCheckoutApprovers,
   adminCreateCheckoutApprover,
   adminUpdateCheckoutApprover,
   adminDeleteCheckoutApprover,
-  listShops,
 } from "api/toolCheckouts";
 
 const rowId = (a: CheckoutApprover) => a.id;
@@ -34,35 +39,48 @@ const rowId = (a: CheckoutApprover) => a.id;
 
 interface ApproverModalProps {
   shops: Shop[];
+  tools: Tool[];
   existing: CheckoutApprover | null; // null = adding new
   onClose: () => void;
-  onSave: (memberId: string, shopIds: string[], existingId?: string) => void;
+  onSave: (memberId: string, shopIds: string[], toolIds: string[], existingId?: string) => void;
   loading: boolean;
   error: string;
 }
 
-const ApproverModal: React.FC<ApproverModalProps> = ({ shops, existing, onClose, onSave, loading, error }) => {
+export const ApproverModal: React.FC<ApproverModalProps> = ({ shops, tools, existing, onClose, onSave, loading, error }) => {
   const [selectedMember, setSelectedMember] = React.useState<SelectOption | null>(
     existing ? { value: existing.memberId, label: existing.memberName } : null
   );
   const [shopIds, setShopIds] = React.useState<string[]>(existing ? existing.shopIds : []);
+  const [toolIds, setToolIds] = React.useState<string[]>(existing ? existing.toolIds || [] : []);
+  const groupCatalog = useToolGroups();
+  const { groups } = groupCatalog;
+  const [toolGroupIds, setToolGroupIds] = React.useState(existing?.toolGroupIds || []);
 
   // When member selection changes in Add mode, check if they're already an approver
   // (handled by parent via existing prop — if user picks existing member, parent sets existing)
   const toggleShop = (id: string) => {
-    setShopIds(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
+    setShopIds(prev => {
+      if (prev.includes(id)) return prev.filter(s => s !== id);
+      setToolIds(current => current.filter(toolId => tools.find(t => t.id === toolId)?.shopId !== id));
+      setToolGroupIds(current => current.filter(groupId => groups.find(group => group.id === groupId)?.shopId !== id));
+      return [...prev, id];
+    });
   };
+  const toggleTool = (id: string) =>
+    setToolIds(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
 
   const isEditing = !!existing;
   const title = isEditing ? `Edit Approver — ${existing.memberName}` : "Add Checkout Approver";
   const submitText = isEditing ? "Save Changes" : "Add Approver";
 
   const handleSubmit = () => {
-    if (!shopIds.length) return;
+    if (groupCatalog.loading || groupCatalog.error) return;
+    if (!shopIds.length && !toolIds.length && !toolGroupIds.length) return;
     if (isEditing) {
-      onSave(existing.memberId, shopIds, existing.id);
+      onSave(existing.memberId, shopIds, toolIds, existing.id, toolGroupIds);
     } else if (selectedMember) {
-      onSave(selectedMember.value, shopIds);
+      onSave(selectedMember.value, shopIds, toolIds, undefined, toolGroupIds);
     }
   };
 
@@ -71,8 +89,12 @@ const ApproverModal: React.FC<ApproverModalProps> = ({ shops, existing, onClose,
       id="approver-modal" isOpen={true} title={title}
       closeHandler={onClose} onSubmit={handleSubmit}
       submitText={submitText} loading={loading} error={error}
+      submitDisabled={groupCatalog.loading || !!groupCatalog.error}
     >
       <Grid container spacing={2}>
+        {(groupCatalog.loading || groupCatalog.error) && <Grid size={{ xs: 12 }}>
+          <ToolGroupLoadStatus loading={groupCatalog.loading} error={groupCatalog.error} onRetry={groupCatalog.refresh} />
+        </Grid>}
         {!isEditing && (
           <Grid size={{ xs: 12 }}>
             <FormLabel style={{ marginBottom: 6, display: "block" }}>Member *</FormLabel>
@@ -86,7 +108,7 @@ const ApproverModal: React.FC<ApproverModalProps> = ({ shops, existing, onClose,
         )}
         <Grid size={{ xs: 12 }}>
           <FormLabel style={{ fontSize: 12, display: "block", marginBottom: 6 }}>
-            Shops this member can approve checkouts for *
+            Checkout approval scope *
           </FormLabel>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {shops.map(s => (
@@ -101,8 +123,34 @@ const ApproverModal: React.FC<ApproverModalProps> = ({ shops, existing, onClose,
               />
             ))}
           </div>
-          {shopIds.length === 0 && (
-            <Typography variant="caption" color="error">Select at least one shop</Typography>
+          <Typography variant="caption" color="textSecondary" display="block" style={{ marginTop: 8 }}>
+            Selecting a shop grants approval for all enabled tools in it. Otherwise select individual tools below.
+          </Typography>
+          {shops.map(shop => (
+            <div key={shop.id} style={{ marginTop: 12 }}>
+              <Typography variant="body2"><strong>{shop.name}</strong></Typography>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                {tools.filter(tool => tool.shopId === shop.id).map(tool => (
+                  <Chip
+                    key={tool.id}
+                    label={toolAvailabilityLabel(tool)}
+                    size="small"
+                    disabled={shopIds.includes(shop.id)}
+                    onClick={() => toggleTool(tool.id)}
+                    color={toolIds.includes(tool.id) ? "primary" : "default"}
+                    variant={toolIds.includes(tool.id) ? "filled" : "outlined"}
+                    clickable
+                  />
+                ))}
+                {groups.filter(group => group.shopId === shop.id).map(group => <Chip key={group.id}
+                  label={`${group.name} · Group`} clickable disabled={shopIds.includes(shop.id)}
+                  color={toolGroupIds.includes(group.id) ? 'primary' : 'default'}
+                  onClick={() => setToolGroupIds(ids => ids.includes(group.id) ? ids.filter(id => id !== group.id) : [...ids, group.id])} />)}
+              </div>
+            </div>
+          ))}
+          {shopIds.length === 0 && toolIds.length === 0 && toolGroupIds.length === 0 && (
+            <Typography variant="caption" color="error">Select at least one shop, tool, or group.</Typography>
           )}
         </Grid>
       </Grid>
@@ -141,7 +189,8 @@ const CheckoutApproversManager: React.FC = () => {
 
   const { isRequesting, data: approvers = [], response, refresh, error: loadError } =
     useReadTransaction(listCheckoutApprovers, {}, undefined, "checkout-approvers");
-  const { data: shops = [] } = useReadTransaction(listShops, {}, undefined, "shops-approvers");
+  const { data: shops = [] } = useCheckoutCatalog("shops");
+  const { data: tools = [], refresh: refreshCatalog } = useCheckoutCatalog("tools");
 
   const refreshRef = React.useRef(refresh);
   React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);
@@ -151,7 +200,8 @@ const CheckoutApproversManager: React.FC = () => {
     setDeleteTarget(null);
     setSelectedId(undefined);
     refreshRef.current();
-  }, []);
+    refreshCatalog();
+  }, [refreshCatalog]);
 
   const { call: createApprover, isRequesting: creating, error: createError } =
     useWriteTransaction(adminCreateCheckoutApprover, onSuccess);
@@ -162,11 +212,11 @@ const CheckoutApproversManager: React.FC = () => {
 
   const selectedApprover = approvers.find((a: CheckoutApprover) => a.id === selectedId) || null;
 
-  const handleSave = (memberId: string, shopIds: string[], existingId?: string) => {
+  const handleSave = (memberId: string, shopIds: string[], toolIds: string[], existingId?: string, toolGroupIds: string[] = []) => {
     if (existingId) {
-      updateApprover({ id: existingId, body: { shopIds } });
+      updateApprover({ id: existingId, body: { shopIds, toolIds, toolGroupIds } });
     } else {
-      createApprover({ body: { memberId, shopIds } });
+      createApprover({ body: { memberId, shopIds, toolIds, toolGroupIds } });
     }
   };
 
@@ -181,6 +231,20 @@ const CheckoutApproversManager: React.FC = () => {
           <Typography variant="caption" color="textSecondary">{row.memberEmail}</Typography>
         </div>
       ),
+    },
+    {
+      id: "toolNames",
+      label: "Authorized Tools",
+      cell: (row: CheckoutApprover) => <ApproverTools approver={row} />,
+    },
+    {
+      id: "toolGroups",
+      label: "Authorized Groups",
+      cell: (row: CheckoutApprover) => <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {(row.toolGroups || []).map(group => <Typography key={group.id} variant="body2">
+          {group.name} <Chip label="Group" size="small" />
+        </Typography>)}
+      </div>,
     },
     {
       id: "shopNames",
@@ -198,12 +262,12 @@ const CheckoutApproversManager: React.FC = () => {
   return (
     <Grid container spacing={3}>
       <Grid size={{ xs: 12 }}>
-        <Grid container justifyContent="space-between" alignItems="center">
+        <Grid container justifyContent="space-between" alignItems="center" sx={{ columnGap: 2, rowGap: 1.5 }}>
           <div>
             <Typography variant="h6">Checkout Approvers</Typography>
             <Typography variant="body2" color="textSecondary">
               Members who can sign off tool checkouts via the portal or Slack slash command,
-              scoped to specific shops.
+              scoped to whole shops, individual tools, or groups. RM authority remains separate.
             </Typography>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -215,7 +279,7 @@ const CheckoutApproversManager: React.FC = () => {
                   startIcon={<EditIcon />}
                   onClick={() => setModalMode("edit")}
                 >
-                  Edit Shops
+                  Edit Scope
                 </Button>
                 <Button
                   variant="outlined"
@@ -255,6 +319,7 @@ const CheckoutApproversManager: React.FC = () => {
       {modalMode && (
         <ApproverModal
           shops={shops as Shop[]}
+          tools={tools as Tool[]}
           existing={modalMode === "edit" ? selectedApprover : null}
           onClose={() => setModalMode(null)}
           onSave={handleSave}

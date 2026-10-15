@@ -22,6 +22,7 @@ import useReadTransaction from 'ui/hooks/useReadTransaction';
 import useWriteTransaction from 'ui/hooks/useWriteTransaction';
 import extractTotalItems from 'ui/utils/extractTotalItems';
 import ErrorMessage from 'ui/common/ErrorMessage';
+import { VOLUNTEER_CREDIT_TIMING_MESSAGE, VOLUNTEER_REVIEW_MESSAGE } from './volunteerMessages';
 
 import { VolunteerCredit, VolunteerTask, VolunteerEvent, VolunteerSummary } from 'app/entities/volunteer';
 import {
@@ -77,7 +78,7 @@ const CreditHistoryInner: React.FC = () => {
       defaultSortDirection: SortDirection.Asc,
       cell: (row: VolunteerCredit) => (
         <div>
-          <Typography variant='body2' style={{ color: row.status === 'reversal' ? '#c62828' : undefined }}>
+          <Typography variant='body2' color={row.status === 'reversal' ? 'error.main' : undefined}>
             {row.description}
           </Typography>
           {row.taskTitle && (
@@ -100,7 +101,7 @@ const CreditHistoryInner: React.FC = () => {
       id: 'creditValue',
       label: 'Credits',
       cell: (row: VolunteerCredit) => (
-        <Typography variant='body2' style={{ color: row.creditValue < 0 ? '#c62828' : undefined }}>
+        <Typography variant='body2' color={row.creditValue < 0 ? 'error.main' : undefined}>
           {row.creditValue > 0 ? `+${row.creditValue}` : row.creditValue}
         </Typography>
       ),
@@ -155,10 +156,11 @@ const CreditHistory = withQueryContext(CreditHistoryInner);
 
 interface MyClaimsProps {
   member: Member;
-  onRefresh: () => void;
+  onRefresh: (notice?: string) => void;
+  onActionStart: () => void;
 }
 
-const MyClaimsInner: React.FC<MyClaimsProps> = ({ member, onRefresh }) => {
+const MyClaimsInner: React.FC<MyClaimsProps> = ({ member, onRefresh, onActionStart }) => {
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
 
   const { isRequesting, data: claims = [], response, error, refresh } =
@@ -170,7 +172,7 @@ const MyClaimsInner: React.FC<MyClaimsProps> = ({ member, onRefresh }) => {
   const onSuccess = React.useCallback(() => {
     setSelectedIds([]);
     refreshRef.current();
-    onRefresh();
+    onRefresh('Completion submitted for verification.');
   }, [onRefresh]);
 
   const { call: markComplete, isRequesting: completing, error: completeError } =
@@ -201,6 +203,11 @@ const MyClaimsInner: React.FC<MyClaimsProps> = ({ member, onRefresh }) => {
           {row.shopName && (
             <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>{row.shopName}</Typography>
           )}
+          {row.prerequisiteToolNames?.length > 0 && (
+            <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>
+              Required checkouts: {row.prerequisiteToolNames.join(', ')}
+            </Typography>
+          )}
           {row.claimedAt && (
             <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>
               Claimed {new Date(row.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -229,7 +236,7 @@ const MyClaimsInner: React.FC<MyClaimsProps> = ({ member, onRefresh }) => {
       <Grid size={{ xs: 12 }}>
         <Typography variant='h6'>My Active Claims</Typography>
         <Typography variant='body2' color='textSecondary'>
-          Tasks you have claimed that are awaiting completion or verification.
+          Tasks you have claimed that are awaiting completion or verification. When you finish the work, select the claim and choose Mark Complete.
         </Typography>
       </Grid>
 
@@ -237,7 +244,7 @@ const MyClaimsInner: React.FC<MyClaimsProps> = ({ member, onRefresh }) => {
         <Grid size={{ xs: 12 }}>
           <Button variant='contained' color='primary' size='small'
             disabled={completing} startIcon={<CheckIcon />}
-            onClick={() => markComplete({ id: selectedClaim.id })}>
+            onClick={() => { onActionStart(); markComplete({ id: selectedClaim.id }); }}>
             Mark Complete
           </Button>
           {completeError && <ErrorMessage error={completeError} />}
@@ -247,7 +254,7 @@ const MyClaimsInner: React.FC<MyClaimsProps> = ({ member, onRefresh }) => {
       {selectedClaim?.status === 'pending' && (
         <Grid size={{ xs: 12 }}>
           <Typography variant='body2' color='textSecondary'>
-            Awaiting admin verification — you'll be notified via Slack when reviewed.
+            {VOLUNTEER_REVIEW_MESSAGE} Check Credit History for updates.
           </Typography>
         </Grid>
       )}
@@ -278,10 +285,11 @@ const MyClaims = withQueryContext(MyClaimsInner);
 
 interface TasksTableProps {
   member: Member;
-  onRefresh: () => void;
+  onRefresh: (notice?: string) => void;
+  onActionStart: () => void;
 }
 
-const TasksTableInner: React.FC<TasksTableProps> = ({ member, onRefresh }) => {
+const TasksTableInner: React.FC<TasksTableProps> = ({ member, onRefresh, onActionStart }) => {
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
 
   const { isRequesting, data: tasks = [], response, error, refresh } =
@@ -293,7 +301,7 @@ const TasksTableInner: React.FC<TasksTableProps> = ({ member, onRefresh }) => {
   const onSuccess = React.useCallback(() => {
     setSelectedIds([]);
     refreshRef.current();
-    onRefresh();
+    onRefresh("Task claimed. When you finish the work, select it in My Active Claims and choose Mark Complete.");
   }, [onRefresh]);
 
   const { call: claimTask, isRequesting: claiming, error: claimError } =
@@ -333,6 +341,11 @@ const TasksTableInner: React.FC<TasksTableProps> = ({ member, onRefresh }) => {
           <Typography variant='caption' color='textSecondary'>{row.description}</Typography>
           {row.shopName && (
             <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>{row.shopName}</Typography>
+          )}
+          {row.prerequisiteToolNames?.length > 0 && (
+            <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>
+              Required checkouts: {row.prerequisiteToolNames.join(', ')}
+            </Typography>
           )}
           {row.status === 'recurring' && row.days != null && (
             <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>
@@ -376,7 +389,7 @@ const TasksTableInner: React.FC<TasksTableProps> = ({ member, onRefresh }) => {
             <>
               <Button variant='contained' color='primary' size='small'
                 disabled={claiming} startIcon={<AssignmentIcon />}
-                onClick={() => claimTask({ id: selectedTask.id })}>
+                onClick={() => { onActionStart(); claimTask({ id: selectedTask.id }); }}>
                 Claim Task
               </Button>
               {claimError && <ErrorMessage error={claimError} />}
@@ -393,7 +406,7 @@ const TasksTableInner: React.FC<TasksTableProps> = ({ member, onRefresh }) => {
         <Grid size={{ xs: 12 }}>
           <Button variant='contained' color='primary' size='small'
             disabled={claiming} startIcon={<AssignmentIcon />}
-            onClick={() => claimTask({ id: selectedTask.id })}>
+            onClick={() => { onActionStart(); claimTask({ id: selectedTask.id }); }}>
             Claim Task
           </Button>
           {claimError && <ErrorMessage error={claimError} />}
@@ -424,10 +437,11 @@ const TasksTable = withQueryContext(TasksTableInner);
 
 interface EventsTableProps {
   member: Member;
-  onRefresh: () => void;
+  onRefresh: (notice?: string) => void;
+  onActionStart: () => void;
 }
 
-const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh }) => {
+const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh, onActionStart }) => {
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
 
   const { isRequesting, data: events = [], response, error, refresh } =
@@ -436,14 +450,16 @@ const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh }) => 
   const refreshRef = React.useRef(refresh);
   React.useEffect(() => { refreshRef.current = refresh; }, [refresh]);
 
-  const onSuccess = React.useCallback(() => {
+  const onSuccess = React.useCallback((notice: string) => {
     setSelectedIds([]);
     refreshRef.current();
-    onRefresh();
+    onRefresh(notice);
   }, [onRefresh]);
 
-  const { call: checkin,       isRequesting: checkingIn,    error: checkinError } = useWriteTransaction(checkinVolunteerEvent, onSuccess);
-  const { call: removeCheckin, isRequesting: removingCheckin, error: removeError } = useWriteTransaction(removeCheckinVolunteerEvent, onSuccess);
+  const { call: checkin,       isRequesting: checkingIn,    error: checkinError } = useWriteTransaction(checkinVolunteerEvent,
+    () => onSuccess('Checked in to the event. Event credits are issued after staff closes the event.'));
+  const { call: removeCheckin, isRequesting: removingCheckin, error: removeError } = useWriteTransaction(removeCheckinVolunteerEvent,
+    () => onSuccess('Check-in removed.'));
 
   const selectedEvent = selectedIds.length === 1
     ? (events as VolunteerEvent[]).find(e => e.id === selectedIds[0])
@@ -463,6 +479,16 @@ const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh }) => 
         <div>
           <Typography variant='body2'><strong>E{row.eventNumber} — {row.title}</strong></Typography>
           {row.description && <Typography variant='caption' color='textSecondary'>{row.description}</Typography>}
+          {row.shopName && (
+            <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>
+              {row.shopName}
+            </Typography>
+          )}
+          {row.prerequisiteToolNames?.length > 0 && (
+            <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>
+              Required checkouts: {row.prerequisiteToolNames.join(', ')}
+            </Typography>
+          )}
           {row.eventDate && (
             <Typography variant='caption' color='textSecondary' style={{ display: 'block' }}>
               {new Date(row.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -500,7 +526,7 @@ const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh }) => 
         <Grid size={{ xs: 12 }}>
           <Button variant='contained' color='primary' size='small'
             disabled={checkingIn} startIcon={<EventIcon />}
-            onClick={() => checkin({ id: selectedEvent.id })}>
+            onClick={() => { onActionStart(); checkin({ id: selectedEvent.id }); }}>
             Check In
           </Button>
           {checkinError && <ErrorMessage error={checkinError} />}
@@ -522,7 +548,7 @@ const EventsTableInner: React.FC<EventsTableProps> = ({ member, onRefresh }) => 
             <Grid>
               <Button variant='outlined' color='secondary' size='small'
                 disabled={removingCheckin} startIcon={<CancelIcon />}
-                onClick={() => removeCheckin({ id: selectedEvent.id })}>
+                onClick={() => { onActionStart(); removeCheckin({ id: selectedEvent.id }); }}>
                 Remove Check-in
               </Button>
             </Grid>
@@ -586,13 +612,29 @@ const SummaryBanner: React.FC<{ summary: VolunteerSummary }> = ({ summary }) => 
 
 const MemberVolunteerTab: React.FC<Props> = ({ member }) => {
   const [refreshKey, setRefreshKey] = React.useState(0);
-  const triggerRefresh = React.useCallback(() => setRefreshKey(k => k + 1), []);
+  const [successNotice, setSuccessNotice] = React.useState('');
+  const clearNotice = React.useCallback(() => setSuccessNotice(''), []);
+  const triggerRefresh = React.useCallback((notice?: string) => {
+    if (notice) setSuccessNotice(notice);
+    setRefreshKey(k => k + 1);
+  }, []);
 
   const { data: summary } = useReadTransaction(getVolunteerSummary, {}, undefined, `volunteer-summary-${refreshKey}`);
   const s = summary as VolunteerSummary | undefined;
 
   return (
     <Grid container spacing={3}>
+      <Grid size={{ xs: 12 }}>
+        <Alert severity='info'>
+          <Typography>{VOLUNTEER_CREDIT_TIMING_MESSAGE}</Typography>
+          <Typography sx={{ mt: 1 }}>{VOLUNTEER_REVIEW_MESSAGE}</Typography>
+        </Alert>
+      </Grid>
+      {successNotice && <Grid size={{ xs: 12 }}>
+        <Alert severity='success' role='status' onClose={() => setSuccessNotice('')}>
+          {successNotice}
+        </Alert>
+      </Grid>}
       {s && (
         <Grid size={{ xs: 12 }}>
           <SummaryBanner summary={s} />
@@ -601,16 +643,16 @@ const MemberVolunteerTab: React.FC<Props> = ({ member }) => {
       )}
 
       <Grid size={{ xs: 12 }}>
-        <EventsTable member={member} onRefresh={triggerRefresh} />
+        <EventsTable member={member} onRefresh={triggerRefresh} onActionStart={clearNotice} />
       </Grid>
 
       {/* Active claims section — only renders if the member has claimed/pending tasks */}
       <Grid size={{ xs: 12 }}>
-        <MyClaims member={member} onRefresh={triggerRefresh} />
+        <MyClaims member={member} onRefresh={triggerRefresh} onActionStart={clearNotice} />
       </Grid>
 
       <Grid size={{ xs: 12 }}>
-        <TasksTable member={member} onRefresh={triggerRefresh} />
+        <TasksTable member={member} onRefresh={triggerRefresh} onActionStart={clearNotice} />
       </Grid>
 
       <Grid size={{ xs: 12 }}>
