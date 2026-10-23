@@ -29,15 +29,13 @@ import {
 import { Routing } from "app/constants";
 import { withQueryContext, useQueryContext } from "ui/common/Filters/QueryContext";
 import extractTotalItems from "ui/utils/extractTotalItems";
-import { numberAsCurrency } from "ui/utils/numberAsCurrency";
+import { formatBillingAmount } from "ui/utils/billingInterval";
+import { withCurrentOptionIncluded } from "ui/utils/selectableInvoiceOptions";
+import { compactWarningBoxSx } from "ui/common/statusColors";
+import Box from "@mui/material/Box";
 
 const rowId = (t: RentalType) => t.id;
 const emptyType = (): Partial<RentalType> => ({ displayName: "", active: true, invoiceOptionId: null });
-
-const warningBoxStyle: React.CSSProperties = {
-  padding: "8px", backgroundColor: "#fff3e0",
-  borderRadius: "4px", border: "1px solid #ffcc02", marginTop: "8px"
-};
 
 const AdminRentalTypes: React.FC = () => {
   const [modalOpen,    setModalOpen]    = React.useState(false);
@@ -49,9 +47,31 @@ const AdminRentalTypes: React.FC = () => {
 
   const { data: invoiceOptions = [] } = useReadTransaction(
     listInvoiceOptions,
-    { types: [InvoiceableResource.Rental] },
+    { types: [InvoiceableResource.Rental], onlyEnabled: true },
     undefined,
     "rental-invoice-options-for-types"
+  );
+
+  // The active-only list above won't include a type's current plan once that
+  // plan is disabled -- keep it selectable (labeled) so editing doesn't look
+  // like the plan silently reset to "None".
+  const selectableInvoiceOptions: InvoiceOption[] = React.useMemo(
+    () => withCurrentOptionIncluded(invoiceOptions as InvoiceOption[], {
+      id: editTarget.invoiceOptionId,
+      name: editTarget.invoiceOptionName,
+      amount: editTarget.invoiceOptionAmount,
+      quantity: editTarget.invoiceOptionQuantity,
+      planId: editTarget.invoiceOptionPlanId,
+      resourceClass: InvoiceableResource.Rental,
+    }),
+    [
+      invoiceOptions,
+      editTarget.invoiceOptionId,
+      editTarget.invoiceOptionName,
+      editTarget.invoiceOptionAmount,
+      editTarget.invoiceOptionQuantity,
+      editTarget.invoiceOptionPlanId,
+    ]
   );
 
   const { isRequesting, data: rentalTypes = [], response, refresh, error } = useReadTransaction(
@@ -98,12 +118,12 @@ const AdminRentalTypes: React.FC = () => {
       id: "invoiceOption", label: "Billing Plan",
       cell: (row: RentalType) => {
         if (row.invoiceOptionName) {
-          return `${row.invoiceOptionName} (${numberAsCurrency(row.invoiceOptionAmount)}/mo)`;
+          return `${row.invoiceOptionName} (${formatBillingAmount(row.invoiceOptionAmount, row.invoiceOptionQuantity, !!row.invoiceOptionPlanId)})`;
         }
         return (
-          <span style={{ color: "#f57c00" }}>
+          <Box component="span" sx={{ color: "warning.main" }}>
             ⚠ Not configured — <Link to={billingPath}>Set up Invoice Option →</Link>
-          </span>
+          </Box>
         );
       },
     },
@@ -118,7 +138,7 @@ const AdminRentalTypes: React.FC = () => {
   return (
     <Grid container spacing={3}>
       <Grid size={{ xs: 12 }}>
-        <Grid container justifyContent="space-between" alignItems="center">
+        <Grid container justifyContent="space-between" alignItems="center" sx={{ columnGap: 2, rowGap: 1.5 }}>
           <div>
             <Typography variant="h6">Rental Types</Typography>
             <Typography variant="body2" color="textSecondary" style={{ marginTop: "8px" }}>
@@ -178,8 +198,8 @@ const AdminRentalTypes: React.FC = () => {
               <FormLabel component="legend" style={{ marginBottom: "8px" }}>
                 Billing Plan (Invoice Option)
               </FormLabel>
-              {(invoiceOptions as InvoiceOption[]).length === 0 ? (
-                <Typography variant="body2" style={warningBoxStyle}>
+              {selectableInvoiceOptions.length === 0 ? (
+                <Typography variant="body2" sx={compactWarningBoxSx}>
                   No rental invoice options found.{" "}
                   <Link to={billingPath}>Create one in Billing Options →</Link>
                 </Typography>
@@ -189,9 +209,9 @@ const AdminRentalTypes: React.FC = () => {
                   onChange={e => setField("invoiceOptionId", (e.target as HTMLSelectElement).value || null)}
                 >
                   <option value="">None (set up later)</option>
-                  {(invoiceOptions as InvoiceOption[]).map((opt: InvoiceOption) => (
+                  {selectableInvoiceOptions.map((opt: InvoiceOption) => (
                     <option key={opt.id} value={opt.id}>
-                      {opt.name} — {numberAsCurrency(opt.amount)}/mo
+                      {opt.name} — {formatBillingAmount(opt.amount, opt.quantity, !!opt.planId)}
                     </option>
                   ))}
                 </Select>
@@ -223,7 +243,7 @@ const AdminRentalTypes: React.FC = () => {
             <Typography gutterBottom>
               Are you sure you want to delete the <strong>{deleteTarget.displayName}</strong> type?
             </Typography>
-            <Typography variant="body2" style={warningBoxStyle}>
+            <Typography variant="body2" sx={compactWarningBoxSx}>
               Any spots assigned this type will lose their type link. Existing rentals are not affected.
             </Typography>
           </>

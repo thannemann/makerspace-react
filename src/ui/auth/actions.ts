@@ -103,7 +103,11 @@ export const loginUserAction = (
     }
   } else {
     const body = await res.json().catch(() => ({}));
-    dispatch({ type: AuthAction.AuthUserFailure, error: body?.error?.message || body?.message || 'Invalid email or password.' });
+    // Backend error responses are { error: "some string" } (the convention
+    // used almost everywhere in this API), not { error: { message } } --
+    // body?.error?.message never matched anything real and silently
+    // swallowed messages like "TOTP verification required.".
+    dispatch({ type: AuthAction.AuthUserFailure, error: body?.error || body?.message || 'Invalid email or password.' });
   }
 }
 
@@ -122,6 +126,11 @@ export const sessionLoginUserAction = (): ThunkAction<Promise<void>, {}, {}, Any
     },
     body: JSON.stringify({}),
   });
+
+  if (res.status === 202) {
+    dispatch({ type: AuthAction.TotpRequired });
+    return;
+  }
 
   if (!res.ok) {
     // Not signed in — silently fail (expected on fresh page load)
@@ -164,7 +173,8 @@ export const logoutUserAction = (
 }
 
 export const firebaseLoginAction = (
-  idToken: string
+  idToken: string,
+  rememberMe: boolean = false
 ): ThunkAction<Promise<void>, {}, {}, AnyAction> => async (dispatch) => {
   dispatch({ type: AuthAction.StartAuthRequest });
 
@@ -178,21 +188,38 @@ export const firebaseLoginAction = (
         return match ? decodeURIComponent(match[1]) : '';
       })(),
     },
-    body: JSON.stringify({ id_token: idToken }),
+    body: JSON.stringify({ id_token: idToken, rememberMe }),
   });
+
+  if (response.status === 202) {
+    dispatch({ type: AuthAction.TotpRequired });
+    return;
+  }
 
   if (response.ok) {
     const member = await response.json();
+    if (member.totp_enrollment_required) {
+      const permissionsResponse = await listMembersPermissions({ id: member.id });
+      if (isApiErrorResponse(permissionsResponse)) {
+        dispatch({ type: AuthAction.AuthUserFailure, error: permissionsResponse.error.message });
+      } else {
+        dispatch({ type: AuthAction.AuthEnrollmentRequired,
+          data: { member, permissions: permissionsResponse.data } });
+      }
+      return;
+    }
     await handleAuthWithPermissions(
       { data: member, response } as any,
       dispatch
     );
   } else {
     const body = await response.json().catch(() => ({}));
+    const error = body?.message || 'Firebase login failed. Please try again.';
     dispatch({
       type: AuthAction.AuthUserFailure,
-      error: body?.message || 'Firebase login failed. Please try again.',
+      error,
     });
+    throw new Error(error);
   }
 };
 
@@ -214,11 +241,12 @@ export const totpLoginSuccessAction = (
 
 export const submitSignUpAction = (
   signUpForm: SignUpForm
-): ThunkAction<Promise<void>, {}, {}, AnyAction> => async (dispatch) => {
+): ThunkAction<Promise<ApiErrorResponse | ApiDataResponse<Member>>, {}, {}, AnyAction> => async (dispatch) => {
   dispatch({ type: AuthAction.StartAuthRequest });
 
   const response = await registerMember({ body: signUpForm });
   await handleAuthWithPermissions(response, dispatch);
+  return response;
 }
 
 const defaultState: AuthState = {
@@ -233,6 +261,10 @@ const defaultState: AuthState = {
     isAdmin: false,
     isBoardMember: false,
     isResourceManager: false,
+    isCheckoutApprover: false,
+    checkoutApproverShopIds: [],
+    checkoutApproverToolIds: [],
+    resourceManagerShopIds: [],
   } as AuthMember,
   permissions: {},
   isRequesting: false,
@@ -258,6 +290,10 @@ export const authReducer = (state: AuthState = defaultState, action: AnyAction) 
           isAdmin: memberIsAdmin(member),
           isBoardMember: memberIsBoardMember(member),
           isResourceManager: memberIsResourceManager(member),
+          isCheckoutApprover: !!(member as any).isCheckoutApprover,
+          checkoutApproverShopIds: (member as any).checkoutApproverShopIds || [],
+          checkoutApproverToolIds: (member as any).checkoutApproverToolIds || [],
+          resourceManagerShopIds: (member as any).resourceManagerShopIds || [],
           totpEnabled: !!(member as any).totpEnabled,
         },
         permissions,
@@ -315,6 +351,10 @@ export const authReducer = (state: AuthState = defaultState, action: AnyAction) 
           isAdmin: memberIsAdmin(enrollMember),
           isBoardMember: memberIsBoardMember(enrollMember),
           isResourceManager: memberIsResourceManager(enrollMember),
+          isCheckoutApprover: !!(enrollMember as any).isCheckoutApprover,
+          checkoutApproverShopIds: (enrollMember as any).checkoutApproverShopIds || [],
+          checkoutApproverToolIds: (enrollMember as any).checkoutApproverToolIds || [],
+          resourceManagerShopIds: (enrollMember as any).resourceManagerShopIds || [],
           totpEnabled: !!(enrollMember as any).totpEnabled,
         },
         permissions: enrollPermissions,

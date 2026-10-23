@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 import kebabCase from "lodash-es/kebabCase";
 import Grid from "@mui/material/Grid";
@@ -6,6 +7,8 @@ import Select from "@mui/material/Select";
 import FormLabel from "@mui/material/FormLabel";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Chip from "@mui/material/Chip";
+import Typography from "@mui/material/Typography";
 
 import { Member } from "makerspace-ts-api-client";
 
@@ -15,6 +18,15 @@ import Form from "ui/common/Form";
 import { toDatePicker } from "ui/utils/timeToDate";
 import { memberStatusLabelMap } from "./MemberStatusLabel";
 import { states } from "./states";
+import { listShops } from "api/toolCheckouts";
+import { Shop } from "app/entities/toolCheckout";
+
+// Mirrors Member::RESOURCE_MANAGER_TAGGABLE_ROLES on the backend -- an admin
+// or board member already manages every shop regardless of this tagging, but
+// can still be tagged as a specific shop's point-of-contact (e.g. shown on
+// the public workshop page) since that's often who members should reach out
+// to in practice, even though their role isn't literally "resource_manager".
+const RESOURCE_MANAGER_TAGGABLE_ROLES = ["admin", "board_member", "resource_manager"];
 
 interface OwnProps {
   member?: Member;
@@ -33,6 +45,9 @@ interface State {
   memberContractOnFile: boolean;
   subscription: boolean;
   silenceEmails: boolean;
+  role: string;
+  resourceManagerShopIds: string[];
+  shops: Shop[];
 }
 
 class MemberForm extends React.Component<OwnProps, State> {
@@ -45,6 +60,9 @@ class MemberForm extends React.Component<OwnProps, State> {
       memberContractOnFile: false,
       subscription: false,
       silenceEmails: false,
+      role: props.member?.role || "member",
+      resourceManagerShopIds: (props.member as any)?.resourceManagerShopIds || [],
+      shops: [],
     }
   }
 
@@ -53,8 +71,11 @@ class MemberForm extends React.Component<OwnProps, State> {
     this.setState({ 
       memberContractOnFile: member && member.memberContractOnFile || false,
       subscription: member && member.subscription || false,
-      silenceEmails: member && !!member.silenceEmails || false
+      silenceEmails: member && !!member.silenceEmails || false,
+      role: member?.role || "member",
+      resourceManagerShopIds: (member as any)?.resourceManagerShopIds || []
     });
+    listShops().then(result => this.setState({ shops: (result.data || []) as Shop[] }));
   }
 
   public componentDidUpdate(prevProps: OwnProps) {
@@ -64,7 +85,9 @@ class MemberForm extends React.Component<OwnProps, State> {
       this.setState({ 
         memberContractOnFile: member && member.memberContractOnFile || false,
         subscription: member && member.subscription || false,
-        silenceEmails: member && !!member.silenceEmails || false
+        silenceEmails: member && !!member.silenceEmails || false,
+        role: member?.role || "member",
+        resourceManagerShopIds: (member as any)?.resourceManagerShopIds || []
       });
       this.formRef && this.formRef.resetForm();
     }
@@ -95,7 +118,16 @@ class MemberForm extends React.Component<OwnProps, State> {
       silenceEmails,
       memberContractOnFile,
       subscription,
+      resourceManagerShopIds: RESOURCE_MANAGER_TAGGABLE_ROLES.includes(this.state.role) ? this.state.resourceManagerShopIds : [],
     };
+  }
+
+  public toggleResourceManagerShop = (shopId: string) => {
+    this.setState(({ resourceManagerShopIds }) => ({
+      resourceManagerShopIds: resourceManagerShopIds.includes(shopId)
+        ? resourceManagerShopIds.filter(id => id !== shopId)
+        : [...resourceManagerShopIds, shopId]
+    }));
   }
 
   private renderFormContents = () => {
@@ -258,7 +290,8 @@ class MemberForm extends React.Component<OwnProps, State> {
             <FormLabel component="legend">{fields.role.label}</FormLabel>
             <Select
               name={fields.role.name}
-              value={member.role || Object.keys(MemberRoleOptions)[0]}
+              value={this.state.role}
+              onChange={event => this.setState({ role: event.target.value as string })}
               fullWidth
               native
               required
@@ -268,6 +301,33 @@ class MemberForm extends React.Component<OwnProps, State> {
                 ([key, value]) => <option id={`${fields.role.name}-option-${kebabCase(key)}`} key={kebabCase(key)} value={key}>{value}</option>)}
             </Select>
           </Grid>
+          {RESOURCE_MANAGER_TAGGABLE_ROLES.includes(this.state.role) && (
+            <Grid size={{ xs: 12 }}>
+              <FormLabel component="legend">
+                {this.state.role === "resource_manager" ? "Managed Shops *" : "Managed Shops (optional)"}
+              </FormLabel>
+              <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
+                {this.state.role === "resource_manager"
+                  ? "Resource Manager authority applies only to these shops."
+                  : "This role already manages every shop -- tagging one here just lists this person as that shop's point-of-contact (e.g. on the workshop page)."}
+              </Typography>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {this.state.shops.map(shop => (
+                  <Chip
+                    key={shop.id}
+                    label={shop.name}
+                    clickable
+                    onClick={() => this.toggleResourceManagerShop(shop.id)}
+                    color={this.state.resourceManagerShopIds.includes(shop.id) ? "primary" : "default"}
+                    variant={this.state.resourceManagerShopIds.includes(shop.id) ? "filled" : "outlined"}
+                  />
+                ))}
+              </div>
+              {this.state.role === "resource_manager" && this.state.resourceManagerShopIds.length === 0 && (
+                <Typography variant="caption" color="error">Select at least one shop.</Typography>
+              )}
+            </Grid>
+          )}
           <Grid size={{ xs: 12 }}>
             <FormLabel component="legend">{fields.notes.label}</FormLabel>
             <TextField

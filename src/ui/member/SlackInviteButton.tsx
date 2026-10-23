@@ -3,7 +3,9 @@ import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 import { Member } from 'makerspace-ts-api-client';
+import { apiErrorMessage } from 'ui/common/apiErrors';
 
 // Slack logo mark SVG
 const SlackIcon: React.FC = () => (
@@ -21,9 +23,11 @@ const SlackIcon: React.FC = () => (
 
 interface Props {
   member: Member;
+  onProvisioned?: () => void;
 }
 
-const SlackInviteButton: React.FC<Props> = ({ member }) => {
+const SlackInviteButton: React.FC<Props> = (props) => {
+  const { member, onProvisioned } = props;
   const [loading, setLoading] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
   const [error,   setError]   = React.useState<string | null>(null);
@@ -46,9 +50,10 @@ const SlackInviteButton: React.FC<Props> = ({ member }) => {
       });
       if (res.ok) {
         setSuccess(true);
+        onProvisioned?.();
       } else {
         const body = await res.json().catch(() => ({}));
-        setError(body?.message || 'Failed to send Slack invite.');
+        setError(apiErrorMessage(body, 'Failed to send Slack invite.'));
       }
     } catch {
       setError('Network error — please try again.');
@@ -57,14 +62,19 @@ const SlackInviteButton: React.FC<Props> = ({ member }) => {
     }
   };
 
+  const statusBlocked = member.status === 'revoked' || member.status === 'inactive';
+  const tooltip = statusBlocked
+    ? 'Slack invites are unavailable for revoked or inactive members'
+    : `(Re)send Slack invite to ${member.email}`;
+
   return (
     <>
-      <Tooltip title={`(Re)send Slack invite to ${member.email}`}>
+      <Tooltip title={tooltip}>
         <span>
           <Button
             key='slack-invite'
             variant='outlined'
-            disabled={loading}
+            disabled={loading || statusBlocked}
             onClick={handleInvite}
             style={{ marginRight: '.25em' }}
             startIcon={loading ? <CircularProgress size={16} /> : <SlackIcon />}
@@ -84,11 +94,13 @@ const SlackInviteButton: React.FC<Props> = ({ member }) => {
 
       <Snackbar
         open={!!error}
-        autoHideDuration={5000}
         onClose={() => setError(null)}
-        message={error}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      />
+      >
+        <Alert severity='error' onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      </Snackbar>
     </>
   );
 };

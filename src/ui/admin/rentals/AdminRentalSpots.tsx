@@ -1,3 +1,4 @@
+import { createShortLink } from "api/shortcodes";
 import * as React from "react";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
@@ -11,8 +12,15 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import QrCodeIcon from "@mui/icons-material/QrCode";
+import LabelIcon from "@mui/icons-material/Label";
 
-import { Routing } from "app/constants";
+import RentalSpotQrCodeModal from "./RentalSpotQrCodeModal";
+import RentalSpotLabelModal from "./RentalSpotLabelModal";
+import RentalSpotBulkLabelModal from "./RentalSpotBulkLabelModal";
+import {
+  SPOT_NUMBER_HINT, duplicateSpotNumber, friendlyRentalSpotError, spotNumberProblem, validateSpotForm,
+} from "./rentalSpotErrors";
 
 import { RentalSpot, RentalType } from "app/entities/rentalSpot";
 import StatefulTable from "ui/common/table/StatefulTable";
@@ -31,6 +39,8 @@ import {
 } from "api/rentals";
 import { withQueryContext, useQueryContext } from "ui/common/Filters/QueryContext";
 import extractTotalItems from "ui/utils/extractTotalItems";
+import { formatBillingAmount } from "ui/utils/billingInterval";
+import { compactWarningBoxSx } from "ui/common/statusColors";
 
 const rowId = (spot: RentalSpot) => spot.id;
 
@@ -40,27 +50,74 @@ const emptySpot = (): Partial<RentalSpot> => ({
   active: true, parentNumber: null, notes: null,
 });
 
-const warningBoxStyle: React.CSSProperties = {
-  padding: "8px", backgroundColor: "#fff3e0",
-  borderRadius: "4px", border: "1px solid #ffcc02", marginTop: "8px"
-};
-
 const AdminRentalSpots: React.FC = () => {
   const [modalOpen,    setModalOpen]    = React.useState(false);
   const [deleteTarget, setDeleteTarget] = React.useState<RentalSpot | null>(null);
   const [editTarget,   setEditTarget]   = React.useState<Partial<RentalSpot>>(emptySpot());
   const [isEditing,    setIsEditing]    = React.useState(false);
-  const [selectedId,   setSelectedId]   = React.useState<string>(undefined);
+  // Ticking several spots is for bulk actions (labels); exactly one selected spot keeps the single-spot actions.
+  const [selectedIds,  setSelectedIds]  = React.useState<string[]>([]);
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : undefined;
   const [linkCopied,   setLinkCopied]   = React.useState(false);
+  const [qrSpot, setQrSpot] = React.useState<RentalSpot | null>(null);
+  const [labelSpot, setLabelSpot] = React.useState<RentalSpot | null>(null);
+  const [bulkLabelOpen, setBulkLabelOpen] = React.useState(false);
+  const [formError, setFormError] = React.useState("");
+  const [linkError, setLinkError] = React.useState("");
+  const [copyableLink, setCopyableLink] = React.useState("");
+  const [copyingLink, setCopyingLink] = React.useState(false);
+  const [preparedLink, setPreparedLink] = React.useState<{ spotId: string; url: string; fallback: boolean } | null>(null);
+  const linkReady = preparedLink?.spotId === selectedId && !!preparedLink?.url;
+  const copyPending = React.useRef(false);
+  const selectedIdRef = React.useRef(selectedId);
+  selectedIdRef.current = selectedId;
+  const mounted = React.useRef(true);
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  React.useEffect(() => {
+    let cancelled = false;
+    setPreparedLink(null);
+    setLinkError(""); setCopyableLink(""); setLinkCopied(false);
+    if (selectedId) {
+      const target = `/rentals/spots/${selectedId}`;
+      createShortLink(target).then(link => {
+        if (!cancelled) setPreparedLink({ spotId: selectedId, url: link.short_url, fallback: false });
+      }).catch(() => {
+        if (!cancelled) {
+          const url = `${window.location.origin}/rentals/spots/${encodeURIComponent(selectedId)}`;
+          setPreparedLink({ spotId: selectedId, url, fallback: true });
+          setCopyableLink(url);
+          setLinkError("Short link unavailable. Use the full link below.");
+        }
+      });
+    }
+    return () => { cancelled = true; };
+  }, [selectedId]);
   const { params, changePage } = useQueryContext();
 
-  const copyDeepLink = React.useCallback((spotNumber: string) => {
-    const path = Routing.RentalSpotDeepLink.replace(Routing.PathPlaceholder.SpotId, spotNumber);
-    const url = `${window.location.origin}${path}`;
-    navigator.clipboard?.writeText(url);
-    setLinkCopied(true);
-    window.setTimeout(() => setLinkCopied(false), 2000);
-  }, []);
+  const copyDeepLink = React.useCallback(async (spotId: string) => {
+    if (copyPending.current || preparedLink?.spotId !== spotId) return;
+    const { url, fallback } = preparedLink;
+    copyPending.current = true;
+    setCopyingLink(true);
+    setLinkError(fallback ? "Short link unavailable. Use the full link below." : "");
+    setLinkCopied(false); setCopyableLink(url);
+    const current = () => mounted.current && selectedIdRef.current === spotId;
+    try {
+      // Invoke the clipboard during the click, before yielding to any promise.
+      try {
+        await navigator.clipboard.writeText(url);
+        if (current()) {
+          setLinkCopied(true);
+          window.setTimeout(() => { if (current()) setLinkCopied(false); }, 2000);
+        }
+      } catch {
+        if (current()) setLinkError("Could not copy automatically. Select and copy the link below.");
+      }
+    } finally {
+      copyPending.current = false;
+      if (mounted.current) setCopyingLink(false);
+    }
+  }, [preparedLink]);
 
   const { data: rentalTypes = [] } = useReadTransaction(
     adminListRentalTypes, {}, undefined, "admin-rental-types-for-spots"
@@ -71,14 +128,15 @@ const AdminRentalSpots: React.FC = () => {
   );
 
   const selectedSpot = (spots as RentalSpot[]).find(s => s.id === selectedId);
+  const selectedSpots = (spots as RentalSpot[]).filter(s => selectedIds.includes(s.id));
 
   const onSaveSuccess = React.useCallback(() => {
     setModalOpen(false); setEditTarget(emptySpot()); setIsEditing(false);
-    setSelectedId(undefined); refresh();
+    setSelectedIds([]); refresh();
   }, [refresh]);
 
   const onDeleteSuccess = React.useCallback(() => {
-    setDeleteTarget(null); setSelectedId(undefined); refresh(); changePage(0);
+    setDeleteTarget(null); setSelectedIds([]); refresh(); changePage(0);
   }, [refresh, changePage]);
 
   const { call: createSpot, isRequesting: creating, error: createError } = useWriteTransaction(adminCreateRentalSpot, onSaveSuccess);
@@ -86,17 +144,23 @@ const AdminRentalSpots: React.FC = () => {
   const { call: deleteSpot, isRequesting: deleting, error: deleteError } = useWriteTransaction(adminDeleteRentalSpot, onDeleteSuccess);
   const isSaving = creating || updating;
 
-  const openCreate = () => { setEditTarget(emptySpot()); setIsEditing(false); setModalOpen(true); };
-  const openEdit   = (spot: RentalSpot) => { setEditTarget({ ...spot }); setIsEditing(true); setModalOpen(true); };
-  const setField   = (field: keyof RentalSpot, value: any) => setEditTarget(prev => ({ ...prev, [field]: value }));
+  const openCreate = () => { setEditTarget(emptySpot()); setIsEditing(false); setFormError(""); setModalOpen(true); };
+  const openEdit   = (spot: RentalSpot) => { setEditTarget({ ...spot }); setIsEditing(true); setFormError(""); setModalOpen(true); };
+  const setField   = (field: keyof RentalSpot, value: any) => { setFormError(""); setEditTarget(prev => ({ ...prev, [field]: value })); };
+  const allSpots = Object.values(spots) as RentalSpot[];
+  const numberProblem = spotNumberProblem(editTarget.number || "")
+    || duplicateSpotNumber(editTarget.number || "", allSpots, isEditing ? editTarget.id : undefined);
 
   const handleSave = React.useCallback(() => {
+    // Tell the admin what is wrong before calling the server; the server still enforces the same rules.
+    const problem = validateSpotForm(editTarget, allSpots, isEditing ? editTarget.id : undefined);
+    if (problem) { setFormError(problem); return; }
     if (isEditing && editTarget.id) {
       updateSpot({ id: editTarget.id, body: editTarget as RentalSpot });
     } else {
       createSpot({ body: editTarget as RentalSpot });
     }
-  }, [isEditing, editTarget, createSpot, updateSpot]);
+  }, [isEditing, editTarget, allSpots, createSpot, updateSpot]);
 
   const columns: Column<RentalSpot>[] = [
     {
@@ -117,7 +181,7 @@ const AdminRentalSpots: React.FC = () => {
     {
       id: "billing", label: "Billing Plan",
       cell: (row: RentalSpot) => row.invoiceOptionName
-        ? `${row.invoiceOptionName} ($${row.invoiceOptionAmount})`
+        ? `${row.invoiceOptionName} (${formatBillingAmount(row.invoiceOptionAmount, row.invoiceOptionQuantity, !!row.invoiceOptionPlanId)})`
         : <Typography variant="caption" color="textSecondary">Not set</Typography>,
     },
     {
@@ -143,14 +207,22 @@ const AdminRentalSpots: React.FC = () => {
   return (
     <Grid container spacing={3}>
       <Grid size={{ xs: 12 }}>
-        <Grid container justifyContent="space-between" alignItems="center">
+        <Grid container justifyContent="space-between" alignItems="center" sx={{ columnGap: 2, rowGap: 1.5 }}>
           <Typography variant="h6">Rental Spots</Typography>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {selectedSpot && (
               <>
                 <Button variant="outlined" color="primary" startIcon={<ContentCopyIcon />}
-                  onClick={() => copyDeepLink(selectedSpot.number)}>
-                  {linkCopied ? "Copied!" : "Copy Link"}
+                  disabled={!linkReady || copyingLink} aria-busy={!linkReady || copyingLink} onClick={() => copyDeepLink(selectedSpot.id)}>
+                  {!linkReady ? "Loading link…" : copyingLink ? "Copying…" : linkCopied ? "Copied!" : "Copy Link"}
+                </Button>
+                <Button variant="outlined" color="primary" startIcon={<QrCodeIcon />}
+                  onClick={() => setQrSpot(selectedSpot)}>
+                  QR Code
+                </Button>
+                <Button variant="outlined" color="primary" startIcon={<LabelIcon />}
+                  onClick={() => setLabelSpot(selectedSpot)}>
+                  Label
                 </Button>
                 <Button variant="outlined" color="primary" startIcon={<EditIcon />}
                   onClick={() => openEdit(selectedSpot)}>
@@ -162,11 +234,22 @@ const AdminRentalSpots: React.FC = () => {
                 </Button>
               </>
             )}
+            {selectedSpots.length > 1 && (
+              <Button variant="outlined" color="primary" startIcon={<LabelIcon />} onClick={() => setBulkLabelOpen(true)}>
+                Labels ({selectedSpots.length})
+              </Button>
+            )}
             <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={openCreate}>
               Add Spot
             </Button>
           </div>
         </Grid>
+      {linkError && <div role="alert">
+        <Typography color="error">{linkError}</Typography>
+        {copyableLink && <Typography sx={{ overflowWrap: "anywhere" }}>
+          <a href={copyableLink} target="_blank" rel="noopener noreferrer">{copyableLink}</a>
+        </Typography>}
+      </div>}
       </Grid>
 
       <Grid size={{ xs: 12 }}>
@@ -174,7 +257,7 @@ const AdminRentalSpots: React.FC = () => {
           id="admin-rental-spots-table" title="Rental Spots"
           loading={isRequesting} data={Object.values(spots)} error={error}
           totalItems={extractTotalItems(response)}
-          selectedIds={selectedId} setSelectedIds={setSelectedId}
+          selectedIds={selectedIds} setSelectedIds={setSelectedIds}
           columns={columns} rowId={rowId} renderSearch={true}
         />
       </Grid>
@@ -186,12 +269,13 @@ const AdminRentalSpots: React.FC = () => {
           closeHandler={() => { setModalOpen(false); setEditTarget(emptySpot()); }}
           onSubmit={handleSave}
           submitText={isEditing ? "Save Changes" : "Create Spot"}
-          loading={isSaving} error={createError || updateError}
+          loading={isSaving} error={formError || friendlyRentalSpotError(createError || updateError)}
         >
           <Grid container spacing={2}>
             <Grid size={{ xs: 6 }}>
               <TextField fullWidth required label="Spot Number"
                 placeholder="e.g. Shelf-1a, LR-Tote-1"
+                error={!!numberProblem} helperText={numberProblem || SPOT_NUMBER_HINT}
                 value={editTarget.number || ""}
                 onChange={e => setField("number", e.target.value)}
               />
@@ -264,12 +348,16 @@ const AdminRentalSpots: React.FC = () => {
             <Typography gutterBottom>
               Are you sure you want to delete spot <strong>{deleteTarget.number}</strong>?
             </Typography>
-            <Typography variant="body2" style={warningBoxStyle}>
+            <Typography variant="body2" sx={compactWarningBoxSx}>
               This only removes the spot from the catalog. Existing rentals are not affected.
             </Typography>
           </>
         )}
       </FormModal>
+
+      <RentalSpotQrCodeModal spot={qrSpot} onClose={() => setQrSpot(null)} />
+      <RentalSpotLabelModal spot={labelSpot} onClose={() => setLabelSpot(null)} />
+      {bulkLabelOpen && <RentalSpotBulkLabelModal spots={selectedSpots} onClose={() => setBulkLabelOpen(false)} />}
     </Grid>
   );
 };

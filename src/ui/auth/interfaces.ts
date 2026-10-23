@@ -14,6 +14,7 @@ export interface AuthState {
 export interface AuthForm {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface SignUpForm {
@@ -21,6 +22,7 @@ export interface SignUpForm {
   lastname: string;
   email: string;
   password: string;
+  "cf-turnstile-response": string;
   address: {
     street: string;
     unit?: string;
@@ -34,5 +36,9 @@ export type AuthMember = Member & {
   isAdmin: boolean;
   isBoardMember: boolean;
   isResourceManager: boolean;
+  isCheckoutApprover?: boolean;
+  checkoutApproverShopIds?: string[];
+  checkoutApproverToolIds?: string[];
+  resourceManagerShopIds?: string[];
   totpEnabled?: boolean;
 };

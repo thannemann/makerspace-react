@@ -1,23 +1,133 @@
+export interface DurationFee {
+  invoiceOptionId: string;
+  minimumHours: number;
+  maximumHours: number;
+  fullDay: boolean;
+}
+
 export interface Shop {
+  canGenerateCheckoutRequiredSheet?: boolean;
+  requestorAnnotation?: string | null;
   id: string;
+  floorName?: string;
   name: string;
+  wikiUrl: string;
+  wikiUrlOverride?: string;
+  gdriveId?: string;
   slackChannel: string;
   disabled: boolean;
   toolCount: number;
+  reservable: boolean;
+  maxConcurrentReservations: number;
+  reservationHorizonDays: number;
+  minimumAdvanceNoticeHours?: number;
+  prohibitSameDayReservations?: boolean;
+  reservationFullDay?: boolean;
+  durationFees?: DurationFee[];
+  maxReservationDurationHours: number;
+  reservationRequiresApproval: boolean;
+  reservationPrerequisiteToolIds: string[];
+  reservationPrerequisiteNames?: string[];
+  colorId?: string;
+  googleResourceId?: string;
+  resourceEmail?: string;
+  resourceManagers?: ShopResourceManager[];
+  resourceManagerIds?: string[];
+}
+
+export interface ShopResourceManager {
+  id: string;
+  name: string;
+}
+
+export interface Location {
+  id: string;
+  name: string;
+  kind?: string;
+  parentId?: string;
+  shopId: string;
+  svgElementId?: string;
+  xPct?: number;
+  yPct?: number;
+  shapePoints?: { x: number; y: number }[];
+  // Floor plan this location is drawn on (B, 1 or 2); the server fills in
+  // the shop's own floor when none was set.
+  floorName?: string;
+  // Marker glyph key (see markerIcons.tsx); blank draws the default pin.
+  icon?: string;
+  toolNames?: string[];
+  // Index-aligned with toolNames (both derive from the same server-side
+  // fetch, not two separate queries, so a given index always names/ids the
+  // same tool).
+  toolIds?: string[];
+}
+
+export interface GoogleCalendarColor {
+  id: string;
+  name: string;
+  backgroundColor: string;
+  foregroundColor: string;
 }
 
 export interface Tool {
+  checkoutExpirationYears?: number | null;
+  canManageCheckoutExpiration?: boolean;
+  checkoutTrainingPlanUrl?: string | null;
+  canGenerateCheckoutRequiredSheet?: boolean;
+  allowPending?: boolean;
+  outOfService?: boolean;
+  requestorAnnotation?: string | null;
+  open?: boolean;
   id: string;
   name: string;
+  wikiUrl: string;
+  wikiUrlOverride?: string;
+  gdriveId?: string;
   description?: string;
-  disabled: boolean;
+  // Sensitive (e.g. lock combo) -- only present when the API includes it for
+  // this viewer (privileged, a checkout approver for the tool, or a member
+  // with an active checkout on it).
+  notes?: string;
+  disabled?: boolean;
+  announce?: boolean;
+  announceChannel?: string;
+  usersChannel?: string;
   shopId: string;
   shopName: string;
+  locationId?: string;
+  locationName?: string;
   prerequisiteIds: string[];
   prerequisiteNames: string[];
+  unmetPrerequisiteIds?: string[];
+  unmetPrerequisiteNames?: string[];
+  requestable?: boolean;
+  requestPending?: boolean;
+  reservable?: boolean;
+  maxConcurrentReservations?: number;
+  reservationHorizonDays?: number;
+  minimumAdvanceNoticeHours?: number;
+  prohibitSameDayReservations?: boolean;
+  reservationFullDay?: boolean;
+  durationFees?: DurationFee[];
+  maxReservationDurationHours?: number;
+  reservationRequiresApproval?: boolean;
+  reservationPrerequisiteToolIds?: string[];
+  effectiveReservationPrerequisiteIds?: string[];
+  reservationPrerequisiteNames?: string[];
+  googleResourceId?: string;
+  resourceEmail?: string;
 }
 
 export interface ToolCheckout {
+  expiresOn?: string | null;
+  expirationRevision?: number;
+  expirationStatus?: 'active' | 'expired' | 'revoked' | 'history';
+  checkoutTrainingPlanUrl?: string | null;
+  renewedFromId?: string | null;
+  supersededById?: string | null;
+  canManageExpiration?: boolean;
+  canRenew?: boolean;
+  outOfService?: boolean;
   id: string;
   memberId: string;
   memberName: string;
@@ -26,20 +136,114 @@ export interface ToolCheckout {
   toolName: string;
   shopName: string;
   shopId: string;
+  shopWikiUrl?: string;
   checkedOutAt: string;
   revokedAt?: string;
+  // Set on a checkout created by reinstating a revoked one (the revoked record's id).
+  reinstatedFromId?: string;
+  // Derived by the server: this revoked checkout has been superseded by an active reinstated
+  // checkout (reinstatedByCheckoutId). The revoked record itself is never edited.
+  reinstated?: boolean;
+  reinstatedByCheckoutId?: string | null;
+  // Internal notes. The server sends these only to approvers of the tool, RMs, board members and
+  // admins -- never to the member the checkout belongs to or to other members.
   revocationReason?: string;
+  revokedById?: string;
+  revokedByName?: string;
+  requestNote?: string;
+  reinstatementReason?: string;
+  reinstatedById?: string;
+  reinstatedByName?: string;
+  reinstatedAt?: string;
   signedOffVia: "portal" | "slack";
   approvedById?: string;
   approvedByName?: string;
   active: boolean;
+  // Only present while the checkout is active and approved -- see Tool.notes.
+  toolNotes?: string;
 }
 
 export interface CheckoutApprover {
+  toolGroups?: { id: string; name: string; shopId: string }[];
+  toolGroupIds?: string[];
+  tools?: { id: string; name: string; shopId: string; outOfService: boolean }[];
+  outOfServiceToolNames?: string[];
   id: string;
   memberId: string;
   memberName: string;
   memberEmail: string;
   shopIds: string[];
   shopNames: string[];
+  toolIds: string[];
+  toolNames: string[];
+}
+
+export interface FobMemberPreview {
+  memberId: string;
+  name: string;
+  status: string;
+  expirationTime?: number | null;
+  eligible: boolean;
+  error?: string | null;
+  unmetPrerequisites: string[];
+}
+
+export interface ToolCheckoutRequest {
+  checkoutTrainingPlanUrl?: string | null;
+  toolGroupId?: string;
+  targetType?: 'tool' | 'group';
+  targetName?: string;
+  groupRevision?: number;
+  includedToolIds?: string[];
+  outOfService?: boolean;
+  requestorAnnotation?: string | null;
+  id: string;
+  memberId: string;
+  memberName: string;
+  memberEmail: string;
+  memberSlackUrl?: string;
+  toolId?: string;
+  toolName?: string;
+  shopId: string;
+  shopName: string;
+  note?: string;
+  requestDate: string;
+  status: "open" | "closed" | "deleted" | "declined";
+  messageId?: string;
+  checkedOutId?: string;
+  decidedAt?: string | null;
+  decisionReason?: string | null;
+  decidedByName?: string | null;
+}
+
+export interface ToolGroup {
+  checkoutTrainingPlanUrl?: string | null;
+  id: string;
+  shopId: string;
+  name: string;
+  description?: string;
+  prerequisiteIds: string[];
+  includedToolIds: string[];
+  includedTools: Tool[];
+  reservable: boolean;
+  requestable: boolean;
+  announce: boolean;
+  announceChannel?: string;
+  archived: boolean;
+  revision: number;
+  targetType: 'group';
+  canManage: boolean;
+  canApprove: boolean;
+  canRequest: boolean;
+}
+
+export interface GroupCheckoutReview {
+  group: ToolGroup;
+  prerequisiteNames: string[];
+  revision: number;
+  includedToolIds: string[];
+  heldToolIds: string[];
+  createToolIds: string[];
+  prerequisiteIds: string[];
+  missingPrerequisiteIds: string[];
 }

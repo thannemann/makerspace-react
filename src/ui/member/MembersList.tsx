@@ -13,8 +13,14 @@ import { SortDirection } from 'ui/common/table/constants';
 import { Column } from 'ui/common/table/Table';
 import MemberStatusLabel from 'ui/member/MemberStatusLabel';
 import { EmailStatusIcon, SlackStatusIcon, TotpStatusIcon, RoleBadge } from 'ui/common/ContactStatusIcons';
+import {
+  DriveProvisioningIcon,
+  MemberProvisioning,
+  SlackProvisioningIcon,
+} from 'ui/member/ProvisioningStatus';
 
-import { listMembers, MemberSummary } from 'makerspace-ts-api-client';
+import { MemberSummary } from 'makerspace-ts-api-client';
+import { listMembersWithDeleted } from 'api/members';
 import CreateMember from 'ui/member/CreateMember';
 import RenewMember from 'ui/member/RenewMember';
 import extractTotalItems from '../utils/extractTotalItems';
@@ -24,13 +30,47 @@ import { useQueryContext, withQueryContext } from '../common/Filters/QueryContex
 import { useAuthState } from 'ui/reducer/hooks';
 import { useCapabilities } from 'app/permissions';
 
+interface HouseholdSummary {
+  displayName?: string;
+  display_name?: string;
+  role?: 'primary' | 'secondary';
+  primaryMemberName?: string;
+  primary_member_name?: string;
+  memberCount?: number;
+  member_count?: number;
+}
+
+interface MemberSummaryHouseholdFields extends MemberSummary {
+  groupName?: string;
+  householdRole?: 'primary' | 'secondary';
+  household?: HouseholdSummary;
+  provisioning?: MemberProvisioning;
+}
+
 // Columns defined individually so getFields can weave them into the correct order.
 
 const nameColumn: Column<MemberSummary> = {
   id: 'lastname',
   label: 'Name',
   cell: (row: MemberSummary) => (
-    <Link to={`/members/${row.id}`}>{row.firstname} {row.lastname}</Link>
+    <span style={(row as any).mergedAt ? { color: '#888' } : undefined}>
+      <Link to={`/members/${row.id}`}>{row.firstname} {row.lastname}</Link>
+      {(row as any).mergedAt && (
+        <span
+          style={{
+            marginLeft: 6,
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            color: '#555',
+            border: '1px solid #999',
+            borderRadius: 4,
+            padding: '1px 4px',
+          }}
+        >
+          DELETED
+        </span>
+      )}
+    </span>
   ),
   defaultSortDirection: SortDirection.Desc,
 };
@@ -71,35 +111,115 @@ const slackStatusColumn: Column<MemberSummary> = {
   label: 'Slack',
   cell: (row: MemberSummary) => {
     const slack = (row as any).slack;
+    const provisioning = (row as MemberSummaryHouseholdFields).provisioning;
+    const content = (
+      <>
+        {provisioning
+          ? <SlackProvisioningIcon provisioning={provisioning} fallbackLinkedName={slack?.name} />
+          : <SlackStatusIcon slack={slack} />
+        }
+        {slack && <span style={{ fontSize: '0.8rem', color: '#555' }}>{slack.name}</span>}
+      </>
+    );
+
+    if (slack?.url) {
+      return (
+        <a href={slack.url} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
+          {content}
+        </a>
+      );
+    }
+
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-        <SlackStatusIcon slack={slack} />
-        {slack && <span style={{ fontSize: '0.8rem', color: '#555' }}>{slack.name}</span>}
+        {content}
       </span>
     );
+  },
+};
+
+const driveStatusColumn: Column<MemberSummary> = {
+  id: 'driveStatus',
+  label: 'Drive',
+  cell: (row: MemberSummary) => {
+    const provisioning = (row as MemberSummaryHouseholdFields).provisioning;
+    return provisioning ? <DriveProvisioningIcon provisioning={provisioning} /> : null;
   },
 };
 
 const notesColumn: Column<MemberSummary> = {
   id: 'notes',
   label: 'Notes',
-  cell: (row: MemberSummary) => row.notes ? (
-    <Tooltip title={row.notes} classes={{ tooltip: 'preformatted' }}>
-      <IconButton aria-label={row.notes} size='small'>
-        <InfoOutlined fontSize='small' />
-      </IconButton>
-    </Tooltip>
-  ) : null,
+  cell: (row: MemberSummary) => {
+    const member = row as MemberSummaryHouseholdFields;
+    const household = member.household;
+    const householdRole = household?.role || member.householdRole;
+    const householdLabel = householdRole === 'primary' ? 'H' : householdRole === 'secondary' ? 'h' : '';
+    const householdName = household?.displayName || household?.display_name || member.groupName || 'Household';
+    const primaryMemberName = household?.primaryMemberName || household?.primary_member_name;
+    const memberCount = household?.memberCount || household?.member_count;
+
+    if (!row.notes && !householdLabel) return null;
+
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {row.notes && (
+          <Tooltip title={row.notes} classes={{ tooltip: 'preformatted' }}>
+            <IconButton aria-label={row.notes} size='small'>
+              <InfoOutlined fontSize='small' />
+            </IconButton>
+          </Tooltip>
+        )}
+        {householdLabel && (
+          <Tooltip
+            title={
+              <>
+                <div>{householdName}</div>
+                <div>Role: {householdRole === 'primary' ? 'Primary member' : 'Additional member'}</div>
+                {primaryMemberName && <div>Primary: {primaryMemberName}</div>}
+                {memberCount !== undefined && <div>Total members: {memberCount}</div>}
+              </>
+            }
+          >
+            <span
+              aria-label={`${householdName} household ${householdRole} member`}
+              style={{
+                alignItems: 'center',
+                backgroundColor: '#fdd835',
+                borderRadius: '50%',
+                color: '#3e2723',
+                display: 'inline-flex',
+                fontSize: 12,
+                fontWeight: 700,
+                height: 20,
+                justifyContent: 'center',
+                lineHeight: '20px',
+                width: 20,
+              }}
+            >
+              {householdLabel}
+            </span>
+          </Tooltip>
+        )}
+      </span>
+    );
+  },
 };
 
-// Column order: Name | [Portal Role] | Expiration | Status | [2FA | Email Status | Slack | Notes]
+// Column order: Name | [Portal Role] | Expiration | Status | [2FA | Email Status | Slack | Drive | Notes]
 // Privileged columns visible to anyone with canViewAll (admin, RM, board).
-const getFields = (showPrivileged: boolean): Column<MemberSummary>[] => [
+const getFields = (showPrivileged: boolean, showProvisioning: boolean): Column<MemberSummary>[] => [
   nameColumn,
   ...(showPrivileged ? [roleColumn] : []),
   expirationColumn,
   statusColumn,
-  ...(showPrivileged ? [totpColumn, emailStatusColumn, slackStatusColumn, notesColumn] : []),
+  ...(showPrivileged ? [
+    totpColumn,
+    emailStatusColumn,
+    slackStatusColumn,
+    ...(showProvisioning ? [driveStatusColumn] : []),
+    notesColumn
+  ] : []),
 ];
 
 const rowId = (member: MemberSummary) => member.id;
@@ -107,17 +227,29 @@ const rowId = (member: MemberSummary) => member.id;
 const MembersList: React.FC = () => {
   const [selectedId, setSelectedId] = React.useState<string>();
   const navigate = useNavigate();
-  const { params, setParam } = useQueryContext({ currentMembers: true });
+  const { params, setParam } = useQueryContext();
   useAuthState(); // required for auth context
   const caps = useCapabilities();
   const canViewAll = caps.canViewAllMembers;
-  const updateFilter = React.useCallback(
-    () => setParam('currentMembers', !params.currentMembers),
-    [params, setParam]
-  );
+  const canViewProvisioning = caps.canViewAuditLog;
+  // "Show deleted accounts" is a distinct view, not a filter that composes
+  // with "current members" -- a member can't be both currently active and
+  // soft-deleted (soft-delete refuses to run on an active/unexpired
+  // member), so combining them would just always show nothing. Checking
+  // one clears the other rather than letting both be checked at once.
+  const updateFilter = React.useCallback(() => {
+    const next = !params.currentMembers;
+    setParam('currentMembers', next);
+    if (next) setParam('showDeleted', false);
+  }, [params, setParam]);
+  const updateShowDeleted = React.useCallback(() => {
+    const next = !params.showDeleted;
+    setParam('showDeleted', next);
+    if (next) setParam('currentMembers', false);
+  }, [params, setParam]);
 
   const { isRequesting, data: members = [], response, refresh, error } = useReadTransaction(
-    listMembers,
+    listMembersWithDeleted,
     { ...params }
   );
 
@@ -137,6 +269,10 @@ const MembersList: React.FC = () => {
               control={<Checkbox color='primary' value='true' checked={!!params.currentMembers} onChange={updateFilter} />}
               label='View only current members'
             />
+            <FormControlLabel
+              control={<Checkbox color='primary' value='true' checked={!!params.showDeleted} onChange={updateShowDeleted} />}
+              label='Show deleted accounts'
+            />
           </Grid>
         )}
         {canViewAll && !caps.canCreateMembers && (
@@ -155,7 +291,7 @@ const MembersList: React.FC = () => {
           totalItems={extractTotalItems(response)}
           selectedIds={selectedId}
           setSelectedIds={canViewAll ? setSelectedId : undefined}
-          columns={getFields(canViewAll)}
+          columns={getFields(canViewAll, canViewProvisioning)}
           rowId={rowId}
           renderSearch={canViewAll}
         />
@@ -164,4 +300,9 @@ const MembersList: React.FC = () => {
   );
 };
 
-export default withQueryContext(MembersList);
+export default withQueryContext(MembersList, {
+  currentMembers: false,
+  showDeleted: false,
+  orderBy: 'startDate',
+  order: SortDirection.Desc,
+});

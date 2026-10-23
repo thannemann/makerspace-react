@@ -1,0 +1,108 @@
+export interface SlackChannelDetails {
+  id: string;
+  name: string;
+  topic?: string;
+  purpose?: string;
+  slackUrl?: string;
+}
+
+export interface WorkshopResourceManager {
+  id: string;
+  name: string;
+  slackUrl?: string;
+}
+
+export interface WorkshopCheckout {
+  checkoutTrainingPlanUrl?: string | null;
+  expiresOn?: string | null;
+  expirationStatus?: string;
+  id: string;
+  active: boolean;
+  checkedOutAt?: string;
+  revokedAt?: string;
+  approvedByName?: string;
+}
+
+export interface WorkshopCheckoutRequest {
+  id: string;
+  note?: string;
+  requestDate?: string;
+  status: string;
+}
+
+export interface WorkshopTool {
+  checkoutTrainingPlanUrl?: string | null;
+  canGenerateCheckoutRequiredSheet?: boolean;
+  outOfService?: boolean;
+  open?: boolean;
+  id: string;
+  name: string;
+  wikiUrl: string;
+  gdriveId?: string;
+  description?: string;
+  disabled: boolean;
+  reservable: boolean;
+  locationName?: string;
+  prerequisiteIds: string[];
+  prerequisiteNames: string[];
+  unmetPrerequisiteIds: string[];
+  unmetPrerequisiteNames: string[];
+  checkout?: WorkshopCheckout;
+  checkoutRequest?: WorkshopCheckoutRequest;
+  checkoutRequestable: boolean;
+  // The viewer may check a member out on this tool (server rule; also enforced on submit).
+  canCheckoutMember?: boolean;
+  reservationAvailable: boolean;
+  usersChannel?: string;
+  usersChannelDetails?: SlackChannelDetails;
+}
+
+export interface WorkshopVolunteerEvent {
+  id: string;
+  title: string;
+  description?: string;
+  creditValue: number;
+  eventDate: string;
+}
+
+export interface WorkshopVolunteerTask {
+  ticketId?: string;
+  id: string;
+  taskNumber: number;
+  title: string;
+  description: string;
+  creditValue: number;
+  status: string;
+  prerequisiteToolNames: string[];
+  missingPrerequisiteToolNames: string[];
+  eligible: boolean;
+}
+
+export interface Workshop {
+  canGenerateCheckoutRequiredSheet?: boolean;
+  outOfService?: boolean;
+  outOfServiceNote?: string;
+  id: string;
+  name: string;
+  wikiUrl: string;
+  wikiUrlOverride?: string;
+  gdriveId?: string;
+  slackChannel?: string;
+  slackChannelDetails?: SlackChannelDetails;
+  disabled: boolean;
+  reservable: boolean;
+  reservationsAvailable: boolean;
+  resourceManagersWikiUrl: string;
+  resourceManagers: WorkshopResourceManager[];
+  upcomingVolunteerEvents: WorkshopVolunteerEvent[];
+  volunteerTasks: WorkshopVolunteerTask[];
+  canAddTool: boolean;
+  canCreateVolunteerTask: boolean;
+  isShopManager: boolean;
+  tools: WorkshopTool[];
+}
+
+export interface WorkshopsResponse {
+  canAddShop: boolean;
+  workshops: Workshop[];
+}
