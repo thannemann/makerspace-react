@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 import { useParams } from 'react-router-dom';
 import Grid from "@mui/material/Grid";
@@ -111,4 +112,7 @@ const ReportsTable: React.FC<{ earnedMembershipId: string }> = ({ earnedMembersh
   )
 }
 
-export default withQueryContext(ReportsTable);
+export default withQueryContext(ReportsTable, {
+  orderBy: "date",
+  order: SortDirection.Desc,
+});

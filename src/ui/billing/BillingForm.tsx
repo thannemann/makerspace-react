@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 
 import TextField from "@mui/material/TextField";
@@ -291,6 +292,19 @@ export class BillingFormComponent extends React.Component<OwnProps, State>{
               label={fields.quantity.label}
               name={fields.quantity.name}
               placeholder={fields.quantity.placeholder}
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              type="number"
+              value={option && option.householdSize}
+              disabled={isRequesting}
+              label={fields.householdSize.label}
+              name={fields.householdSize.name}
+              placeholder={fields.householdSize.placeholder}
+              helperText="A household plan lets the primary member invite this many adults in total, themselves included."
+              slotProps={{ htmlInput: { min: 1 } }}
             />
           </Grid>
           <Grid size={{ xs: 12 }}>

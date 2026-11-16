@@ -1,0 +1,155 @@
+import axios from "axios";
+import {
+  Reservation, ReservationBlackout, ReservationBlackoutInput,
+  ReservationBlackoutOccurrence,
+  ReservationCatalog, ReservationInput, ReservationPreview,
+  SubscriptionCancellationImpact
+} from "app/entities/reservation";
+import { apiErrorMessage } from "ui/common/apiErrors";
+import { attachGlobalAuthInterceptor } from "ui/common/globalAuthInterceptor";
+
+const token = () => {
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : "";
+};
+
+const api = attachGlobalAuthInterceptor(axios.create({ withCredentials: true }));
+api.interceptors.request.use(config => {
+  config.headers.set("X-XSRF-TOKEN", token());
+  config.headers.set("Content-Type", "application/json");
+  return config;
+});
+
+const wrap = async <T>(request: Promise<any>) => {
+  try {
+    const response = await request;
+    return { data: response.data, response };
+  } catch (err: any) {
+    return {
+      error: { message: apiErrorMessage(err.response?.data, err.message || "Request failed") },
+      response: err.response
+    };
+  }
+};
+
+const body = (input: ReservationInput) => ({
+  full_day: input.fullDay,
+  fee_confirmation: input.feeConfirmation,
+  title: input.title,
+  shop_id: input.shopId,
+  reservation_scope: input.reservationScope,
+  ...(input.preserveResourceSelection ? {} : { tool_ids: input.toolIds, tool_group_ids: input.toolGroupIds || [] }),
+  start_at: input.startAt,
+  end_at: input.endAt,
+});
+
+export const getReservationCatalog = (_params?: any) =>
+  wrap<ReservationCatalog>(api.get("/api/reservation_catalog", { params: { include_groups: true } }));
+
+export const listReservations = (params?: {
+  shopId?: string; startAt?: string; endAt?: string; mine?: boolean; status?: string;
+}) => wrap<Reservation[]>(api.get("/api/reservations", { params: {
+  shop_id: params?.shopId,
+  start_at: params?.startAt,
+  end_at: params?.endAt,
+  mine: params?.mine,
+  status: params?.status,
+} }));
+
+export const getReservationAvailability = (params: { date: string; shopId?: string }) =>
+  wrap<Reservation[]>(api.get("/api/reservations/availability", { params: {
+    date: params.date,
+    shop_id: params.shopId,
+  } }));
+
+export const getReservationBlackouts = (params: { date: string; shopId: string }) =>
+  wrap<ReservationBlackoutOccurrence[]>(api.get("/api/reservations/blackouts", {
+    params: { date: params.date, shop_id: params.shopId }
+  }));
+
+export const previewReservation = ({ body: input }: { body: ReservationInput }) =>
+  wrap<ReservationPreview>(api.post("/api/reservations/preview", body(input)));
+
+export const previewReservationUpdate = ({ id, body: input }: { id: string; body: ReservationInput }) =>
+  wrap<ReservationPreview>(api.post(`/api/reservations/${id}/preview`, body(input)));
+
+export const createReservation = ({ body: input }: { body: ReservationInput }) =>
+  wrap<Reservation>(api.post("/api/reservations", body(input)));
+
+export const previewManagedReservationCreation = ({
+  memberId, body: input
+}: { memberId: string; body: ReservationInput }) =>
+  wrap<ReservationPreview>(api.post("/api/admin/reservations/preview", {
+    ...body(input), member_id: memberId
+  }));
+
+export const createManagedReservation = ({
+  memberId, body: input
+}: { memberId: string; body: ReservationInput }) =>
+  wrap<Reservation>(api.post("/api/admin/reservations", {
+    ...body(input), member_id: memberId
+  }));
+
+export const updateReservation = ({ id, body: input }: { id: string; body: ReservationInput }) =>
+  wrap<Reservation>(api.put(`/api/reservations/${id}`, body(input)));
+
+export const previewManagedReservation = ({ id, body: input }: { id: string; body: ReservationInput }) =>
+  wrap<ReservationPreview>(api.post(`/api/admin/reservations/${id}/preview`, body(input)));
+
+export const updateManagedReservation = ({ id, body: input }: { id: string; body: ReservationInput }) =>
+  wrap<Reservation>(api.put(`/api/admin/reservations/${id}`, body(input)));
+
+export const cancelReservation = ({ id }: { id: string }) =>
+  wrap<Reservation>(api.delete(`/api/reservations/${id}`));
+
+export const listManagedReservations = (params?: { shopId?: string; status?: string; future?: boolean }) =>
+  wrap<Reservation[]>(api.get("/api/admin/reservations", { params: {
+    shop_id: params?.shopId,
+    status: params?.status,
+    future: params?.future,
+  } }));
+
+export const approveReservation = ({ id, body: value }: { id: string; body?: { decisionNote?: string } }) =>
+  wrap<Reservation>(api.post(`/api/admin/reservations/${id}/approve`, {
+    decision_note: value?.decisionNote
+  }));
+
+export const denyReservation = ({ id, body: value }: { id: string; body?: { decisionNote?: string } }) =>
+  wrap<Reservation>(api.post(`/api/admin/reservations/${id}/deny`, {
+    decision_note: value?.decisionNote
+  }));
+
+export const cancelManagedReservation = ({ id }: { id: string }) =>
+  wrap<Reservation>(api.delete(`/api/admin/reservations/${id}`));
+
+export const reservationBlackoutBody = (input: ReservationBlackoutInput) => ({
+  title: input.title,
+  shop_id: input.shopId,
+  recurrence: input.recurrence,
+  weekday: input.recurrence === "weekly" ? input.weekday : null,
+  start_time: input.startTime,
+  end_time: input.endTime,
+  start_date: input.startDate || null,
+  end_date: input.endDate || null,
+});
+
+export const listReservationBlackouts = (params?: { shopId?: string }) =>
+  wrap<ReservationBlackout[]>(api.get("/api/admin/reservation_blackouts", {
+    params: { shop_id: params?.shopId }
+  }));
+
+export const createReservationBlackout = ({ body: input }: { body: ReservationBlackoutInput }) =>
+  wrap<ReservationBlackout>(api.post("/api/admin/reservation_blackouts", reservationBlackoutBody(input)));
+
+export const updateReservationBlackout = ({
+  id, body: input
+}: { id: string; body: ReservationBlackoutInput }) =>
+  wrap<ReservationBlackout>(api.put(`/api/admin/reservation_blackouts/${id}`, reservationBlackoutBody(input)));
+
+export const deleteReservationBlackout = ({ id }: { id: string }) =>
+  wrap<{}>(api.delete(`/api/admin/reservation_blackouts/${id}`));
+
+export const getSubscriptionCancellationImpact = ({ id, admin = false }: { id: string; admin?: boolean }) =>
+  wrap<SubscriptionCancellationImpact>(
+    api.get(`/api/${admin ? "admin/" : ""}billing/subscriptions/${id}/cancellation_impact`)
+  );

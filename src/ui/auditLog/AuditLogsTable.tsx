@@ -1,25 +1,23 @@
 import * as React from 'react';
 import Typography from '@mui/material/Typography';
-import Collapse from '@mui/material/Collapse';
+import Chip from '@mui/material/Chip';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 
 import { AuditLog } from 'api/auditLogs';
-import { adminListAuditLogs } from 'api/auditLogs';
+import { adminListAuditLogs, adminListAuditLogFilters } from 'api/auditLogs';
 import { Column } from 'ui/common/table/Table';
 import { SortDirection } from 'ui/common/table/constants';
 import StatefulTable from 'ui/common/table/StatefulTable';
 import { useQueryContext, withQueryContext } from 'ui/common/Filters/QueryContext';
 import useReadTransaction from 'ui/hooks/useReadTransaction';
 import extractTotalItems from 'ui/utils/extractTotalItems';
-import { timeToDate } from 'ui/utils/timeToDate';
-import { EVENT_TYPE_OPTIONS } from './AuditLogFilters';
-import AuditLogFilters from './AuditLogFilters';
+import { timeToDateAndTime } from 'ui/utils/timeToDate';
+import AuditLogFilters, { ALL_CATEGORIES, DEFAULT_CATEGORY, eventTypeLabel } from './AuditLogFilters';
 import AuditLogDetail from './AuditLogDetail';
-
-const friendlyEventType = (eventType: string): string =>
-  EVENT_TYPE_OPTIONS[eventType] || eventType;
 
 const AuditLogsTable: React.FC = () => {
   const { params, setParam } = useQueryContext({
+    category:  DEFAULT_CATEGORY,
     logType:   undefined,
     eventType: undefined,
     actorId:   undefined,
@@ -35,7 +33,21 @@ const AuditLogsTable: React.FC = () => {
     params
   );
 
+  const { data: choices } = useReadTransaction(adminListAuditLogFilters, {});
+  const categoryLabels = React.useMemo(
+    () => Object.fromEntries((choices?.categories || []).map(option => [option.value, option.label])),
+    [choices]
+  );
+
   const rowId = React.useCallback((log: AuditLog) => log.id, []);
+
+  // The default view leaves Slack messages out, which is easy to miss: say so, and make showing them one click.
+  const hidingSlackMessages = (params.category || DEFAULT_CATEGORY) === DEFAULT_CATEGORY;
+  const showSlackMessages = React.useCallback(() => {
+    setParam('category', ALL_CATEGORIES);
+    setParam('eventType', undefined);
+    refresh();
+  }, [setParam, refresh]);
 
   const handleSelect = React.useCallback((id: string) => {
     setExpandedId(prev => (prev === id ? undefined : id));
@@ -47,7 +59,7 @@ const AuditLogsTable: React.FC = () => {
       label: 'Date / Time',
       cell: (row: AuditLog) => (
         <Typography variant='body2' style={{ whiteSpace: 'nowrap' }}>
-          {timeToDate(row.createdAt)}
+          {timeToDateAndTime(row.createdAt)}
         </Typography>
       ),
       defaultSortDirection: SortDirection.Desc,
@@ -55,7 +67,14 @@ const AuditLogsTable: React.FC = () => {
     {
       id: 'eventType',
       label: 'Event',
-      cell: (row: AuditLog) => friendlyEventType(row.eventType),
+      cell: (row: AuditLog) => (
+        <>
+          <Typography variant='body2'>{eventTypeLabel(row.eventType)}</Typography>
+          {categoryLabels[row.category] && (
+            <Typography variant='caption' color='textSecondary'>{categoryLabels[row.category]}</Typography>
+          )}
+        </>
+      ),
       defaultSortDirection: SortDirection.Desc,
     },
     {
@@ -98,35 +117,39 @@ const AuditLogsTable: React.FC = () => {
     },
   ];
 
-  // Inject expanded detail rows after each matching row
-  const dataWithExpansions = React.useMemo(() => data, [data]);
+  const renderExpandedContent = React.useCallback(
+    (log: AuditLog) => <AuditLogDetail log={log} />,
+    []
+  );
 
   return (
     <>
-      <AuditLogFilters onChange={refresh} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <AuditLogFilters onChange={refresh} choices={choices} />
+        {hidingSlackMessages && (
+          <Chip
+            id='audit-log-hiding-slack'
+            size='small'
+            variant='outlined'
+            icon={<VisibilityOffIcon />}
+            label='Hiding Slack messages. Click to show them.'
+            onClick={showSlackMessages}
+          />
+        )}
+      </div>
 
       <StatefulTable
         id='audit-logs-table'
         title='Audit Log'
         loading={isRequesting}
-        data={dataWithExpansions}
+        data={data}
         error={error}
         columns={columns}
         rowId={rowId}
         totalItems={extractTotalItems(response)}
-        selectedIds={expandedId}
-        setSelectedIds={handleSelect}
+        expandedRowId={expandedId}
+        renderExpandedContent={renderExpandedContent}
       />
-
-      {/* Render detail expansion below the table for the selected row */}
-      {expandedId && (() => {
-        const log = data.find(l => l.id === expandedId);
-        return log ? (
-          <Collapse in={true} timeout='auto' unmountOnExit>
-            <AuditLogDetail log={log} />
-          </Collapse>
-        ) : null;
-      })()}
     </>
   );
 };

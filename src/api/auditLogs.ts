@@ -1,10 +1,12 @@
 import axios from 'axios';
 import { ApiDataResponse, ApiErrorResponse } from 'makerspace-ts-api-client';
+import { attachGlobalAuthInterceptor } from 'ui/common/globalAuthInterceptor';
 
 export interface AuditLog {
   id:              string;
   logType:         string;
   eventType:       string;
+  category:        string;
   actorId:         string | null;
   actorName:       string | null;
   subjectId:       string | null;
@@ -22,6 +24,7 @@ export interface AuditLog {
 }
 
 export interface AuditLogQueryParams {
+  category?:   string;
   logType?:    string;
   eventType?:  string;
   actorId?:    string;
@@ -60,7 +63,7 @@ const getCsrfToken = () => {
   return match ? decodeURIComponent(match[1]) : '';
 };
 
-const api = axios.create({ withCredentials: true });
+const api = attachGlobalAuthInterceptor(axios.create({ withCredentials: true }));
 api.interceptors.request.use(config => {
   config.headers.set('X-XSRF-TOKEN', getCsrfToken());
   config.headers.set('Content-Type', 'application/json');
@@ -69,3 +72,13 @@ api.interceptors.request.use(config => {
 
 export const adminListAuditLogs = (params: AuditLogQueryParams) =>
   buildResponse<AuditLog[]>(api.get('/api/admin/audit_logs', { params }));
+
+export interface AuditLogFilterChoices {
+  categories: { value: string; label: string }[];
+  eventTypes: { value: string; category: string }[];
+}
+
+// The filter choices come from the server: the categories, and the event
+// types that actually occur in the log, so the lists cannot go stale.
+export const adminListAuditLogFilters = () =>
+  buildResponse<AuditLogFilterChoices>(api.get('/api/admin/audit_logs/filters'));

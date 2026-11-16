@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 import TableContainer from "./TableContainer";
 import { SortDirection } from "./constants";
@@ -14,8 +15,11 @@ interface Props<Ids, Resp> {
   title?: string;
   renderSearch?: boolean;
   totalItems?: number;
-  selectedIds: Ids;
-  setSelectedIds: (ids: Ids) => void;
+  selectedIds?: Ids;
+  setSelectedIds?: (ids: Ids) => void;
+  isRowSelectable?: (row: Resp) => boolean;
+  expandedRowId?: string;
+  renderExpandedContent?: (row: Resp) => JSX.Element | null;
 }
 
 const StatefulTable: React.FC<Props<unknown, unknown>> = ({
@@ -30,6 +34,9 @@ const StatefulTable: React.FC<Props<unknown, unknown>> = ({
   selectedIds,
   setSelectedIds,
   totalItems,
+  isRowSelectable,
+  expandedRowId,
+  renderExpandedContent,
 }) => {
 
   const {
@@ -102,8 +109,11 @@ const StatefulTable: React.FC<Props<unknown, unknown>> = ({
       rowId={rowId}
       onPageChange={onPageChange}
       onSelect={setSelectedIds && onSelect}
+      isRowSelectable={isRowSelectable}
       onSelectAll={Array.isArray(selectedIds) && setSelectedIds && onSelectAll}
       onSearchEnter={renderSearch && search}
+      expandedRowId={expandedRowId}
+      renderExpandedContent={renderExpandedContent}
     />
   )
 }

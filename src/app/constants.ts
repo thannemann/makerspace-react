@@ -10,8 +10,11 @@ export namespace Routing {
   }
 
   export const Root = '/';
+  export const Home = '/home';
   export const Login = '/login';
   export const SignUp = '/signup';
+  // The page the emailed household invitation opens (public: it asks you to sign in or create a free account first)
+  export const HouseholdJoin = '/household/join';
   export const Members = '/members';
   export const Documents = `/agreements/${Routing.PathPlaceholder.Resource}/${Routing.PathPlaceholder.ResourceId}${Routing.PathPlaceholder.Optional}`;
   export const Profile = `${Members}/${PathPlaceholder.MemberId}`;
@@ -24,10 +27,16 @@ export namespace Routing {
   export const RentalSpotDeepLink = `${Rentals}/spots/${PathPlaceholder.SpotId}`;
   export const ShopFees = '/shop-fees';
   export const ToolCheckouts = '/tool-checkouts';
+  export const Workshops = '/workshops';
+  export const ToolCheckoutRequests = `${ToolCheckouts}?mode=self-service`;
+  export const Reservations = '/reservations';
   export const Analytics = '/admin/analytics';
   export const Volunteer = '/volunteer';
+  export const IssueFob = '/issue-fob';
   export const SystemSettings = '/admin/system-settings';
+  export const SlackIdentityConflicts = '/admin/slack-identity-conflicts';
   export const AuditLog = '/admin/audit-log';
+  export const Eventbrite = '/admin/eventbrite';
   export const Checkout = '/checkout';
   export const Receipt = `${Checkout}/receipt/${PathPlaceholder.InvoiceId}`;
   export const PasswordReset = '/resetPassword';

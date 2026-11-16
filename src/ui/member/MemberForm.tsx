@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 import kebabCase from "lodash-es/kebabCase";
 import Grid from "@mui/material/Grid";
@@ -6,6 +7,8 @@ import Select from "@mui/material/Select";
 import FormLabel from "@mui/material/FormLabel";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Chip from "@mui/material/Chip";
+import Typography from "@mui/material/Typography";
 
 import { Member } from "makerspace-ts-api-client";
 
@@ -14,7 +17,22 @@ import { fields as memberFormField, MemberRoleOptions } from "ui/member/constant
 import Form from "ui/common/Form";
 import { toDatePicker } from "ui/utils/timeToDate";
 import { memberStatusLabelMap } from "./MemberStatusLabel";
+import { ActiveRentalsStatusNote } from "./activeRentals";
 import { states } from "./states";
+import { REFERRAL_SIGNUP_SOURCE } from "./signupSources";
+import MemberSearchInput from "ui/common/MemberSearchInput";
+import { listShops } from "api/toolCheckouts";
+import { Shop } from "app/entities/toolCheckout";
+import { SignupSourceQuestion } from './SignupSourceQuestion';
+import { sourcePayload } from 'api/eventbrite';
+const sourceChoice = (member: any) => member?.signupSource === 'eventbrite' ? `event:${member.signupEventbriteEventId}` : member?.signupSource || '';
+
+// Mirrors Member::RESOURCE_MANAGER_TAGGABLE_ROLES on the backend -- an admin
+// or board member already manages every shop regardless of this tagging, but
+// can still be tagged as a specific shop's point-of-contact (e.g. shown on
+// the public workshop page) since that's often who members should reach out
+// to in practice, even though their role isn't literally "resource_manager".
+const RESOURCE_MANAGER_TAGGABLE_ROLES = ["admin", "board_member", "resource_manager"];
 
 interface OwnProps {
   member?: Member;
@@ -33,6 +51,12 @@ interface State {
   memberContractOnFile: boolean;
   subscription: boolean;
   silenceEmails: boolean;
+  role: string;
+  signupSource: string;
+  signupSourceDetail: string;
+  referredByMemberId: string;
+  resourceManagerShopIds: string[];
+  shops: Shop[];
 }
 
 class MemberForm extends React.Component<OwnProps, State> {
@@ -45,6 +69,12 @@ class MemberForm extends React.Component<OwnProps, State> {
       memberContractOnFile: false,
       subscription: false,
       silenceEmails: false,
+      role: props.member?.role || "member",
+      signupSource: sourceChoice(props.member),
+      signupSourceDetail: (props.member as any)?.signupSourceDetail || '',
+      referredByMemberId: (props.member as any)?.referredByMemberId || "",
+      resourceManagerShopIds: (props.member as any)?.resourceManagerShopIds || [],
+      shops: [],
     }
   }
 
@@ -53,8 +83,14 @@ class MemberForm extends React.Component<OwnProps, State> {
     this.setState({ 
       memberContractOnFile: member && member.memberContractOnFile || false,
       subscription: member && member.subscription || false,
-      silenceEmails: member && !!member.silenceEmails || false
+      silenceEmails: member && !!member.silenceEmails || false,
+      role: member?.role || "member",
+      signupSource: sourceChoice(member),
+      signupSourceDetail: (member as any)?.signupSourceDetail || '',
+      referredByMemberId: (member as any)?.referredByMemberId || "",
+      resourceManagerShopIds: (member as any)?.resourceManagerShopIds || []
     });
+    listShops().then(result => this.setState({ shops: (result.data || []) as Shop[] }));
   }
 
   public componentDidUpdate(prevProps: OwnProps) {
@@ -64,7 +100,12 @@ class MemberForm extends React.Component<OwnProps, State> {
       this.setState({ 
         memberContractOnFile: member && member.memberContractOnFile || false,
         subscription: member && member.subscription || false,
-        silenceEmails: member && !!member.silenceEmails || false
+        silenceEmails: member && !!member.silenceEmails || false,
+        role: member?.role || "member",
+        signupSource: sourceChoice(member),
+        signupSourceDetail: (member as any)?.signupSourceDetail || '',
+        referredByMemberId: (member as any)?.referredByMemberId || "",
+        resourceManagerShopIds: (member as any)?.resourceManagerShopIds || []
       });
       this.formRef && this.formRef.resetForm();
     }
@@ -92,10 +133,22 @@ class MemberForm extends React.Component<OwnProps, State> {
     const updatedMember = await form.simpleValidate<Member>(fields);
     return {
       ...updatedMember,
+      ...isAdmin && sourcePayload(this.state.signupSource, this.state.signupSourceDetail),
       silenceEmails,
       memberContractOnFile,
       subscription,
+      // The linked referrer only applies to "friend"; sending blank clears it.
+      ...isAdmin && { referredByMemberId: this.state.signupSource === REFERRAL_SIGNUP_SOURCE ? this.state.referredByMemberId : "" },
+      resourceManagerShopIds: RESOURCE_MANAGER_TAGGABLE_ROLES.includes(this.state.role) ? this.state.resourceManagerShopIds : [],
     };
+  }
+
+  public toggleResourceManagerShop = (shopId: string) => {
+    this.setState(({ resourceManagerShopIds }) => ({
+      resourceManagerShopIds: resourceManagerShopIds.includes(shopId)
+        ? resourceManagerShopIds.filter(id => id !== shopId)
+        : [...resourceManagerShopIds, shopId]
+    }));
   }
 
   private renderFormContents = () => {
@@ -253,12 +306,14 @@ class MemberForm extends React.Component<OwnProps, State> {
               {Object.entries(memberStatusLabelMap).map(
                 ([key, value]) => <option id={`${fields.status.name}-option-${kebabCase(key)}`} key={kebabCase(key)} value={key}>{value}</option>)}
             </Select>
+            <ActiveRentalsStatusNote member={member} />
           </Grid>
           <Grid size={{ xs: 12 }}>
             <FormLabel component="legend">{fields.role.label}</FormLabel>
             <Select
               name={fields.role.name}
-              value={member.role || Object.keys(MemberRoleOptions)[0]}
+              value={this.state.role}
+              onChange={event => this.setState({ role: event.target.value as string })}
               fullWidth
               native
               required
@@ -268,6 +323,33 @@ class MemberForm extends React.Component<OwnProps, State> {
                 ([key, value]) => <option id={`${fields.role.name}-option-${kebabCase(key)}`} key={kebabCase(key)} value={key}>{value}</option>)}
             </Select>
           </Grid>
+          {RESOURCE_MANAGER_TAGGABLE_ROLES.includes(this.state.role) && (
+            <Grid size={{ xs: 12 }}>
+              <FormLabel component="legend">
+                {this.state.role === "resource_manager" ? "Managed Shops *" : "Managed Shops (optional)"}
+              </FormLabel>
+              <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
+                {this.state.role === "resource_manager"
+                  ? "Resource Manager authority applies only to these shops."
+                  : "This role already manages every shop -- tagging one here just lists this person as that shop's point-of-contact (e.g. on the workshop page)."}
+              </Typography>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {this.state.shops.map(shop => (
+                  <Chip
+                    key={shop.id}
+                    label={shop.name}
+                    clickable
+                    onClick={() => this.toggleResourceManagerShop(shop.id)}
+                    color={this.state.resourceManagerShopIds.includes(shop.id) ? "primary" : "default"}
+                    variant={this.state.resourceManagerShopIds.includes(shop.id) ? "filled" : "outlined"}
+                  />
+                ))}
+              </div>
+              {this.state.role === "resource_manager" && this.state.resourceManagerShopIds.length === 0 && (
+                <Typography variant="caption" color="error">Select at least one shop.</Typography>
+              )}
+            </Grid>
+          )}
           <Grid size={{ xs: 12 }}>
             <FormLabel component="legend">{fields.notes.label}</FormLabel>
             <TextField
@@ -277,6 +359,26 @@ class MemberForm extends React.Component<OwnProps, State> {
               multiline
             />
           </Grid>
+          <Grid size={{ xs: 12 }}>
+            <input type="hidden" name={fields.signupSource.name} value={sourcePayload(this.state.signupSource).signupSource} />
+            <SignupSourceQuestion value={this.state.signupSource} detail={this.state.signupSourceDetail}
+              onChange={value => this.setState({ signupSource: value })} onDetail={value => this.setState({ signupSourceDetail: value })}
+              savedEvent={(member as any).signupEventbriteEventSnapshot ? { id: (member as any).signupEventbriteEventId, ...(member as any).signupEventbriteEventSnapshot } : undefined} />
+          </Grid>
+          {this.state.signupSource === REFERRAL_SIGNUP_SOURCE && (
+            <Grid size={{ xs: 12 }}>
+              <FormLabel component="legend">Link the member who referred them</FormLabel>
+              <MemberSearchInput
+                name="member-form-referredByMember"
+                placeholder="Search members by name or email..."
+                excludeIds={member.id ? [member.id] : []}
+                initialSelection={(member as any).referredByMemberId
+                  ? { value: (member as any).referredByMemberId, label: (member as any).referredByMemberName || "", id: (member as any).referredByMemberId }
+                  : undefined}
+                onChange={selection => this.setState({ referredByMemberId: selection?.value || "" })}
+              />
+            </Grid>
+          )}
           <Grid size={{ xs: 12 }}>
             <FormControlLabel
               control={

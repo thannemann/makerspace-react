@@ -13,6 +13,10 @@ import { AuthMember } from 'ui/auth/interfaces';
  * Zero component changes needed.
  */
 export interface UserCapabilities {
+  canViewEventbriteHistory: boolean;
+  canScanNfc: boolean;
+  canManageNfcCards: boolean;
+  canIssueFobs: boolean; // holds the fob-issuer checkout (Rails decides; the server enforces it)
   // Member management
   canViewAllMembers:           boolean; // admin, board, rm
   canEditMembers:              boolean; // admin, board
@@ -35,6 +39,7 @@ export interface UserCapabilities {
   // Shop operations
   canManageShopFees:           boolean; // admin, board, rm
   canManageCheckouts:          boolean; // admin, board, rm, checkoutApprover
+  canViewShopQrCodes:         boolean; // admin, board, rm
   canManageCheckoutApprovers:  boolean; // admin, board
   canManageVolunteer:          boolean; // admin, board, rm
   canDeleteVolunteerRecords:   boolean; // admin, board
@@ -54,10 +59,16 @@ export const computeCapabilities = (user: AuthMember): UserCapabilities => {
   const board    = !!user?.isBoardMember;
   const rm       = !!user?.isResourceManager;
   const approver = !!(user as any)?.isCheckoutApprover;
+  const fobIssuer = !!(user as any)?.isFobIssuer;
+  const managesShops = rm && ((user as any)?.resourceManagerShopIds || []).length > 0;
 
   const privileged = admin || board;
 
   return {
+    canViewEventbriteHistory: privileged || rm,
+    canScanNfc: !!user?.id && user.status === 'activeMember' && Number(user.expirationTime) > Date.now(),
+    canManageNfcCards: privileged && !!user?.id && user.status === 'activeMember' && Number(user.expirationTime) > Date.now(),
+    canIssueFobs: fobIssuer && !!user?.id && user.status === 'activeMember' && Number(user.expirationTime) > Date.now(),
     canViewAllMembers:           privileged || rm,
     canEditMembers:              privileged,
     canCreateMembers:            privileged,
@@ -75,7 +86,8 @@ export const computeCapabilities = (user: AuthMember): UserCapabilities => {
     canDeleteRentals:            privileged,
 
     canManageShopFees:           privileged || rm,
-    canManageCheckouts:          privileged || rm || approver,
+    canManageCheckouts:          privileged || managesShops || approver,
+    canViewShopQrCodes:         privileged || rm,
     canManageCheckoutApprovers:  privileged,
     canManageVolunteer:          privileged || rm,
     canDeleteVolunteerRecords:   privileged,

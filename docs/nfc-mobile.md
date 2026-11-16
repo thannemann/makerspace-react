@@ -1,0 +1,139 @@
+# NFC, PWA and native builds
+
+## Phone login persistence
+
+On `/login`, iPhone and Android phone clients see **Stay logged in (uncheck this
+on a shared computer)** checked by default. The option is hidden on desktops,
+iPads, Android tablets, and unknown user agents. Detection uses the user agent,
+not screen width; desktop-mode phone browsers may receive ordinary sessions.
+
+Unchecking or rechecking saves a one-year `makerspace_stay_logged_in` preference
+cookie immediately. Logout preserves the preference; clearing browser/app data
+removes it. Web cookies use path `/`, SameSite=Lax, and Secure on HTTPS. Native
+preferences use Capacitor's cookie API at the remote HTTPS portal origin with
+the same path and expiry. Android uses the app-owned `MakerspaceCookies` bridge:
+Capacitor 8's built-in Android getter reads the local WebView instead of its URL
+argument. The bridge exposes only `XSRF-TOKEN` and the preference, sets the
+preference with Secure/SameSite=Lax, and flushes it to disk. iOS uses Capacitor's
+URL-aware cookie API, whose platform implementation manages cookie attributes. Storage failures
+do not block login or change the selection for the current attempt.
+
+The selection applies to password and all provider buttons and survives provider
+redirects through a per-attempt sessionStorage snapshot. If that snapshot cannot
+be stored, redirect completion defaults to no persistence. TOTP challenge or
+required enrollment must finish before Rails issues a remember cookie. Cancelling
+the TOTP screen logs out the pending session. Provider responses honor the same
+TOTP gates as password login.
+
+Rails grants a two-week remember cookie, renewed when it restores a session.
+Phone users with a valid cookie bypass the ordinary idle timeout. Desktop and
+opted-out phone sessions retain the configured idle timeout. Logout, password
+changes/resets, and session-token rotation invalidate remembered credentials;
+existing global logout invalidation is preserved. Native HTTP supplies the WebView
+user agent so Rails can distinguish phones from tablets; credentials remain in
+the native cookie jar, never localStorage. The same Android bridge fixes remote
+CSRF-token lookup for the existing transport without exposing HttpOnly credentials.
+
+Deploy Rails first, followed by the complete React web build and updated native
+builds. No environment changes or generated API client release are required.
+Rails contracts are documented in the companion `docs/authentication.md`.
+Keep `tests/fixtures/mobile_session_clients.json` identical to Rails' fixture.
+Validate real Android/iPhone browser and native app restarts, background/resume,
+provider callbacks, TOTP, logout, and password invalidation before distribution.
+
+Camera-based QR scanning is also available across all three platforms. See
+[QR scanning](qr-scanning.md) for supported links, camera permissions, and checks.
+
+The account menu offers **SCAN NFC** to signed-in `activeMember` users whose expirationTime is in the future. Ordinary members receive NDEF content only. Admin/board members also get UID lookup, optional member details, and eligible card release. Register/Replace Fob offers NFC next to front-door import on supported devices; scanning fills the identifier and does not submit the form.
+
+UIDs are uppercase hexadecimal ASCII byte pairs, without separators or prefix. Byte order and leading zeroes are preserved: `1b:1a:4d:2f` becomes `1B1A4D2F`. Both browser and native readings use the same codec. Existing front-door identifiers remain unchanged; compare representative cards before enabling NFC enrollment if historical database identifiers use another format.
+
+Browser NFC requires Android Chrome with NFC hardware enabled, HTTPS, permission, and a visible foreground page. Browser serial numbers may be absent; non-NDEF MIFARE fobs require the native Android reader. Installation as a PWA does not change those limits. Reading never writes or formats a card. UID possession is not identity verification.
+
+Approvers (admin, board, the shop's resource manager, assigned approvers) can also tap a member's fob in the
+Check Out Member dialog on a tool's Workshops entry, or in the Tool Checkouts roster dialog for tools and
+groups. The fob UID is read in inspect mode and sent to `POST /api/admin/tool_checkouts/lookup_card`, which
+names the member and says whether they can be checked out; the approver must confirm before anything is
+recorded, the sign-off is recorded as `fob`, every lookup is audit-logged, and a fob reported lost or stolen is
+refused. The existing admin/board-only card lookup is unchanged.
+
+Shop/tool public links route to the selected resource in Workshops; bounty links route to the existing task view. Portal shortcodes reuse `GET /api/shortcodes/:code`. Other HTTP(S) URLs require an explicit open action. Unsafe schemes are displayed but not executed. Card APIs are never called for ordinary-member NDEF scans.
+
+## Deploying the web/PWA feature
+
+Deploy the companion Rails change first. It supplies lookup, conditional release and transactional assignment, plus `/manifest.webmanifest`, `/service-worker.js`, `/offline.html` and `/pwa-icon.png`. Serve those public files at the origin root (Rails static serving or the existing reverse proxy). The app registers the worker on secure web origins. No worker runs inside Capacitor.
+
+The service worker caches only the generic offline page and icon. It never stores authenticated pages, card/member responses, or offline mutations. Worker updates wait until existing clients close; users are not reloaded during fob operations. Use the browser's Install/Add to home screen action.
+
+The Rails database must be a MongoDB replica set supporting transactions. Ensure the existing unique `cards.uid` index is deployed. No unsafe standalone-database fallback exists. Release is conditional on the lookup version and fresh membership status, and writes an audit in the same transaction. Missing or failed lookups cannot authorize enrollment. Do not migrate or reinterpret legacy UIDs without a separate collision/data audit.
+
+## Android
+
+Prerequisites: Node 22+, Yarn classic, **JDK 21**, Android SDK platform 36/build tools 35, and Android Studio. Android Studio's bundled JDK can be newer than Gradle supports; explicitly select JDK 21 if needed. The generated Android project targets API 36 and supports API 24+. The app ID is `org.manchestermakerspace.portal`.
+
+PowerShell:
+
+```powershell
+yarn install --frozen-lockfile
+$env:JAVA_HOME = 'C:\path\to\jdk-21'
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+$env:NATIVE_API_ORIGIN = 'https://members.manchestermakerspace.org'
+yarn android:sync
+yarn android:debug
+# Optional:
+yarn android:open
+```
+
+The origin must be HTTPS without a path or trailing slash. `dist-native` contains a local HTML shell/assets, not a remotely loaded website. The app's native HTTP/cookie transport rewrites portal API requests, bootstraps CSRF through `/api/config`, and obtains the remote XSRF cookie for each mutation. The Rails session remains cookie based; CSRF is not disabled and no credentialed wildcard CORS is introduced. Never store session cookies in localStorage.
+
+Agreement and receipt frames fetch their API content through that session transport.
+The profile's View Member Contract action opens an in-app dialog on native devices
+and fetches the saved contract through the same transport. Browser profiles retain
+the normal new-tab link. Closing the native dialog cancels pending loading and
+releases downloaded document URLs.
+HTML renders locally in a sandboxed frame with scripts disabled and a portal base
+URL for relative assets/links, preserving receipt sizing and print access without
+depending on cross-origin iframe cookies. Failed loads offer Retry; changed or
+closed views abort pending loads and release binary object URLs. Android Back
+sends Escape only to the topmost visible dialog, so closing NFC enrollment returns
+to the existing fob form. Footer icons are bundled MUI SVGs and need no remote font.
+
+The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. Build an AAB with `yarn android:release` after syncing. For a signed release supply `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` through the environment; otherwise the release bundle is unsigned. Never commit signing files/passwords. Distribution and device installation are separate steps.
+
+Native APIs are provided by the app-owned `MakerspaceNfcPlugin` using foreground reader mode, `Tag.getId`, and optional NDEF. NFC is optional hardware: unsupported devices can still run the portal. The app must remain in the foreground. Technology support varies by phone; test actual access fobs.
+
+## Optional iOS on macOS
+
+Use macOS and Xcode 26+, Node 22+, and an Apple signing team with NFC Tag Reading capability. Set `NATIVE_API_ORIGIN` as above using the shell's environment syntax, then:
+
+```sh
+yarn build:native
+yarn ios:add
+yarn ios:sync
+yarn ios:open
+```
+
+`configure-ios.js` installs the tracked Core NFC plugin/view controller, description and entitlement into the generated project. Select the signing team and confirm the NFC capability in Xcode, then build/archive normally. iOS sources are maintained under `native/ios`; the generated `ios` directory is ignored. Supported MIFARE/ISO14443 and ISO15693 tags can be scanned; MIFARE Classic parity is not promised. No arbitrary ISO7816 AID probing is configured. Native iOS compilation and physical tag testing require a Mac/iPhone and cannot be validated on Windows.
+
+## Checks and rollout
+
+```sh
+yarn typecheck
+yarn test --runInBand tests/unit/nfc tests/unit/app/permissions.spec.ts
+yarn build
+node tests/browser/nfc.cjs
+```
+
+The browser check uses mocked APIs and NFC, asserts role separation, normalized lookup, release, safe external-link handling and layouts at 320/600/900/1280 px. It saves screenshots under `tmp/nfc-browser`. Hardware validation must cover NDEF text/URI/Smart Posters, actual non-NDEF MIFARE cards, empty UID, NFC disabled, cancellations, background/resume, and repeated reads. Verify normalization against the front-door reader and card reuse after release.
+
+Before distributing a native build, exercise real password login, TOTP, logout/session expiry, cookie persistence, and any enabled Firebase provider callbacks against the intended deployment. Automated native-transport tests cover request mapping and CSRF behavior; provider-specific OAuth behavior and real-device cookie integration still require deployment/device acceptance.
+
+See [the original plan](nfc-capacitor-plan.md) for design rationale. The implementation reuses the already-existing shortcode resolver rather than adding a second endpoint.
+
+### Local validation (2026-09-26)
+
+- TypeScript checking passed; 52 selected React tests passed across 9 suites.
+- 78 selected Rails examples passed against an isolated MongoDB replica set, with external Slack delivery stubbed. Swagger contracts were regenerated.
+- Mocked browser NFC/member/admin flows passed at 320, 600, 900 and 1280 px, including visual inspection of settled dialogs.
+- Web and native production assets, Android debug APK and unsigned release AAB built successfully. The native assets use `https://members.manchestermakerspace.org`.
+- iOS project configuration was checked for repeatable generation on Windows; compilation was not performed. No physical NFC or production authentication acceptance testing was performed, and nothing was deployed.

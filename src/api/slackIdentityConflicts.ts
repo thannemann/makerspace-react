@@ -1,0 +1,78 @@
+import axios from 'axios';
+import { attachGlobalAuthInterceptor } from 'ui/common/globalAuthInterceptor';
+
+const getCsrfToken = () => {
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+};
+
+const api = attachGlobalAuthInterceptor(axios.create({ withCredentials: true }));
+api.interceptors.request.use(config => {
+  config.headers.set('X-XSRF-TOKEN', getCsrfToken());
+  config.headers.set('Content-Type', 'application/json');
+  return config;
+});
+
+const wrapHeaders = (axiosHeaders: any) => ({
+  get: (key: string) => axiosHeaders[key.toLowerCase()] ?? null,
+  has: (key: string) => key.toLowerCase() in axiosHeaders,
+});
+
+const buildResponse = async <T>(request: Promise<any>) => {
+  try {
+    const res = await request;
+    return { data: res.data, response: { ...res, headers: wrapHeaders(res.headers) } };
+  } catch (err) {
+    const error = err.response?.data?.error || { message: err.message };
+    return { error, response: err.response };
+  }
+};
+
+export interface SlackIdentityConflict {
+  slack_id: string;
+  slack_name: string;
+  slack_email: string;
+  member_id: string;
+  member_name: string;
+  conflicting_slack_id: string;
+  conflicting_slack_name: string;
+  conflicting_slack_email: string;
+}
+
+export type SlackLiveCheck = 'fresh' | 'cached' | 'scanning' | 'unavailable';
+
+export interface SlackScanProgress {
+  checked: number;
+  // Null until a scan has finished once, so there is nothing to compare with yet.
+  estimated_total: number | null;
+  // Seconds Slack asked us to wait before the next piece (0 when not waiting).
+  waiting_seconds: number;
+}
+
+export interface SlackIdentityConflictsResponse {
+  conflicts: SlackIdentityConflict[];
+  live_check?: SlackLiveCheck;
+  // Slack accounts one piece of the check looks at (the slack_conflict_scan_size setting).
+  scan_size?: number;
+  // Present while live_check is "scanning".
+  progress?: SlackScanProgress;
+}
+
+export const getSlackIdentityConflicts = () =>
+  buildResponse<SlackIdentityConflictsResponse>(
+    api.get('/api/admin/slack_identity_conflicts')
+  );
+
+export const resolveSlackIdentityConflict = ({ slackId, memberId }: { slackId: string; memberId: string }) =>
+  buildResponse<{ message: string; member_id: string }>(
+    api.post('/api/admin/slack_identity_conflicts/reassign', { slack_id: slackId, member_id: memberId })
+  );
+
+export const dismissSlackIdentityConflict = ({
+  slackId, memberId, slackEmail, slackName
+}: { slackId: string; memberId: string; slackEmail?: string; slackName?: string }) =>
+  buildResponse<{ message: string; member_id: string }>(
+    api.post('/api/admin/slack_identity_conflicts/dismiss', {
+      slack_id: slackId, member_id: memberId, slack_email: slackEmail, slack_name: slackName
+    })
+  );

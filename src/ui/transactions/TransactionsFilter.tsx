@@ -69,6 +69,11 @@ export const transactionStatuses = {
 
 const TransactionFilters: React.FC<{ close: () => void, onChange: () => void }> = ({ close, onChange }) => {
   const { params, setParam } = useQueryContext();
+  const [dateDrafts, setDateDrafts] = React.useState(() => ({
+    startDate: toDatePicker(params.startDate) || "",
+    endDate: toDatePicker(params.endDate) || "",
+  }));
+  const keyboardEditingDate = React.useRef({ startDate: false, endDate: false });
 
   const setType =  React.useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,12 +100,30 @@ const TransactionFilters: React.FC<{ close: () => void, onChange: () => void }> 
       close();
     }, [setParam, onChange, close, params]);
 
-  const onDateChange = React.useCallback((param: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { value } = event.currentTarget;
+  const applyDate = React.useCallback((param: "startDate" | "endDate", value: string) => {
+    if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
     setParam(param, dateToMidnight(value));
     onChange();
     close();
   }, [setParam, onChange, close]);
+
+  const onDateChange = React.useCallback((param: "startDate" | "endDate") => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = event.currentTarget;
+    setDateDrafts(current => ({ ...current, [param]: value }));
+    if (!keyboardEditingDate.current[param]) applyDate(param, value);
+  }, [applyDate]);
+
+  const onDateKeyDown = React.useCallback((param: "startDate" | "endDate") => (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      applyDate(param, event.currentTarget.value);
+    } else if (event.key !== "Tab" && event.key !== "Escape") {
+      keyboardEditingDate.current[param] = true;
+    }
+  }, [applyDate]);
+
+  const onDatePointerDown = React.useCallback((param: "startDate" | "endDate") => () => {
+    keyboardEditingDate.current[param] = false;
+  }, []);
 
   const onCheckboxChange = React.useCallback((param: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const { value, checked } = event.currentTarget;
@@ -120,6 +143,12 @@ const TransactionFilters: React.FC<{ close: () => void, onChange: () => void }> 
     close();
   }, [setParam, onChange, close]);
 
+  const onNumberChange = React.useCallback((param: "minAmount" | "maxAmount" | "limit") => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = event.currentTarget;
+    setParam(param, value === "" ? undefined : Number(value));
+    onChange();
+  }, [setParam, onChange]);
+
   const {
     response,
   } = useReadTransaction(listBillingDiscounts, { orderBy: "amount" })
@@ -133,6 +162,48 @@ const TransactionFilters: React.FC<{ close: () => void, onChange: () => void }> 
   return (
     <>
       <Typography variant="subtitle1" gutterBottom>Transaction Filters</Typography>
+      <Grid size={{ xs: 12 }} style={{ marginBottom: "1em" }}>
+        <FormControl component="fieldset" fullWidth>
+          <FormLabel component="legend">Filter by Dollar Amount</FormLabel>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                fullWidth
+                label="Minimum amount"
+                name="minimum-amount-filter"
+                type="number"
+                slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+                value={params.minAmount ?? ""}
+                onChange={onNumberChange("minAmount")}
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                fullWidth
+                label="Maximum amount"
+                name="maximum-amount-filter"
+                type="number"
+                slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+                value={params.maxAmount ?? ""}
+                onChange={onNumberChange("maxAmount")}
+              />
+            </Grid>
+          </Grid>
+        </FormControl>
+      </Grid>
+      <Grid size={{ xs: 12 }} style={{ marginBottom: "1em" }}>
+        <FormControl component="fieldset" fullWidth>
+          <FormLabel component="legend">Maximum Transactions Returned</FormLabel>
+          <TextField
+            name="transaction-limit-filter"
+            type="number"
+            slotProps={{ htmlInput: { min: 1, step: 1 } }}
+            value={params.limit ?? ""}
+            onChange={onNumberChange("limit")}
+            helperText="Leave blank to use the default limit."
+          />
+        </FormControl>
+      </Grid>
       <Grid size={{ xs: 12 }} style={{ marginBottom: "1em" }}>
         <FormControl component="fieldset">
           <FormLabel component="legend">Filter by Transaction Type</FormLabel>
@@ -157,11 +228,13 @@ const TransactionFilters: React.FC<{ close: () => void, onChange: () => void }> 
         <FormControl component="fieldset">
           <FormLabel component="legend">Filter by Transaction Start Due</FormLabel>
           <TextField
-              value={toDatePicker(params.startDate)}
+              value={dateDrafts.startDate}
               name="start-date-filter"
               id="start-date-filter"
               type="date"
               onChange={onDateChange("startDate")}
+              onKeyDown={onDateKeyDown("startDate")}
+              onPointerDown={onDatePointerDown("startDate")}
             />
         </FormControl>
       </Grid>
@@ -169,11 +242,13 @@ const TransactionFilters: React.FC<{ close: () => void, onChange: () => void }> 
         <FormControl component="fieldset">
           <FormLabel component="legend">Filter by Transaction End Due</FormLabel>
           <TextField
-              value={toDatePicker(params.endDate)}
+              value={dateDrafts.endDate}
               name="end-date-filter"
               id="end-date-filter"
               type="date"
               onChange={onDateChange("endDate")}
+              onKeyDown={onDateKeyDown("endDate")}
+              onPointerDown={onDatePointerDown("endDate")}
             />
         </FormControl>
       </Grid>

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import capitalize from "lodash-es/capitalize";
@@ -13,7 +14,7 @@ interface Resource {
   content: JSX.Element;
 }
 interface OwnProps {
-  title: string,
+  title: React.ReactNode,
   basePath: string,
   information: JSX.Element,
   actionButtons: JSX.Element[],

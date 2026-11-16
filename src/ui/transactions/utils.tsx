@@ -2,18 +2,26 @@ import * as React from "react";
 import { Status } from "ui/constants";
 import StatusLabel from "ui/common/StatusLabel";
 import { Transaction, TransactionStatusEnum } from "makerspace-ts-api-client";
-import { numberAsCurrency } from "ui/utils/numberAsCurrency";
 
 export const renderTransactionStatus = (transaction: Transaction) => {
+  // Valid status strings are:
+  //       authorizing, authorized, gateway_rejected, failed, processor_declined
+  //       settled, settlement_failed, submitted_for_settlement, and voided.
+  //
+  // See https://developer.paypal.com/braintree/articles/get-started/transaction-lifecycle
+  //
   let label = "Pending";
   let color = Status.Info;
-  console.error("transaction.stat", transaction.status);
-
   switch (transaction.status) {
     case TransactionStatusEnum.Settled:
       color = Status.Success;
       label = "Successful";
       break;
+    case "settling" as TransactionStatusEnum:
+      color = Status.Info;
+      label = "Pending Settlement";
+      break;
+    case "authorizing" as TransactionStatusEnum:
     case "submitted_for_settlement" as TransactionStatusEnum:
       color = Status.Warn;
       label = "Pending";
@@ -23,6 +31,7 @@ export const renderTransactionStatus = (transaction: Transaction) => {
     case TransactionStatusEnum.SettlementDeclined:
     case TransactionStatusEnum.GatewayRejected:
     case TransactionStatusEnum.Voided:
+    case "settlement_failed" as TransactionStatusEnum:
       color = Status.Danger;
       label = "Failed";
       break;
@@ -54,9 +63,17 @@ export const getTransactionDescription = (transaction: Transaction) => {
   return description;
 }
 
-const sumColumn = (data: Array<string[]>, index: number) => {
+type CsvValue = string | number | null | undefined;
+
+export const populatedTransactionNumberParams = ({ minAmount, maxAmount, limit }: Record<string, unknown>) => ({
+  ...(typeof minAmount === "number" && Number.isFinite(minAmount) && { minAmount }),
+  ...(typeof maxAmount === "number" && Number.isFinite(maxAmount) && { maxAmount }),
+  ...(typeof limit === "number" && Number.isFinite(limit) && { limit }),
+});
+
+const sumColumn = (data: Array<CsvValue[]>, index: number) => {
   return data.reduce((total, row) => {
-    return total + Number(row[index]);
+    return total + (Number(row[index]) || 0);
   }, 0);  
 }
 
@@ -66,15 +83,26 @@ const titleRows = [
 
 const headerRow = [
   "ID",
+  "Customer ID",
   "Member Name",
   "Date",
-  "Amount"
+  "Amount",
+  "Status",
+  "Gateway Rejection Reason",
+  "Invoice Name",
+  "Invoice Resource Class",
 ];
 
 const numDiscountColumns = 2;
-const numStaticColumns = 3;
+const amountColumn = 4;
 
-export const writeReport = (transactions: Transaction[], reportName: string) => {
+export const escapeCsvValue = (value: CsvValue) =>
+  `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+const serializeCsvRows = (rows: CsvValue[][]) =>
+  rows.map(row => row.map(escapeCsvValue).join(",")).join("\r\n");
+
+export const buildTransactionReport = (transactions: Transaction[]) => {
   let maxDiscounts = 0;
 
   const transactionRows = transactions.map((transaction) => {
@@ -86,10 +114,15 @@ export const writeReport = (transactions: Transaction[], reportName: string) => 
 
     return [
       transaction.id,
+      transaction.customerDetails?.id,
       transaction.memberName,
-      new Date(transaction.createdAt).toLocaleString().replace(",", ""),
+      new Date(transaction.createdAt).toLocaleString(),
       transaction.amount,
-      ...(numDiscounts ? transaction.discounts.reduce((discountColumns, discount) => {
+      transaction.status,
+      transaction.gatewayRejectionReason,
+      transaction.invoice?.name,
+      transaction.invoice?.resourceClass,
+      ...(numDiscounts ? transaction.discounts.reduce<CsvValue[]>((discountColumns, discount) => {
         return [
           ...discountColumns,
           discount.name,
@@ -101,9 +134,9 @@ export const writeReport = (transactions: Transaction[], reportName: string) => 
 
   const maxDiscountArray = new Array(maxDiscounts * numDiscountColumns).fill(undefined);
 
-  const csv = [
-    [titleRows.join(",")],
-    ["Date Run:", new Date().toLocaleString().replace(",", "")],
+  const rows: CsvValue[][] = [
+    titleRows[0],
+    ["Date Run:", new Date().toLocaleString()],
     [],
     [...headerRow, ...maxDiscounts ? maxDiscountArray.map((_, index) => {
       const discountColumn = Math.round((index + 1) / numDiscountColumns);
@@ -113,25 +146,34 @@ export const writeReport = (transactions: Transaction[], reportName: string) => 
       }
 
       return `Discount ${discountColumn} Name`
-    }): []].join(","),
-    transactionRows.join(","),
+    }): []],
+    ...transactionRows.map(row => [
+      ...row,
+      ...new Array(maxDiscounts * numDiscountColumns - (row.length - headerRow.length)).fill(undefined),
+    ]),
     [],
-    `TOTAL:,,,${sumColumn(transactionRows, numStaticColumns)},${
-      (maxDiscounts ? maxDiscountArray.map((_, index) => {
+    ["TOTAL:", ...new Array(amountColumn - 1).fill(undefined), sumColumn(transactionRows, amountColumn),
+      ...new Array(headerRow.length - amountColumn - 1).fill(undefined),
+      ...(maxDiscounts ? maxDiscountArray.map((_, index) => {
         if (index % 2) {
-          return sumColumn(transactionRows, numStaticColumns + maxDiscounts * numDiscountColumns);
+          return sumColumn(transactionRows, headerRow.length + index);
         }
         return "";
-      }) : []).join(",")
-    }`
-  ].join("\n");
+      }) : [])]
+  ];
 
-  var hiddenElement = document.createElement('a');  
-  hiddenElement.href = 'data:text/csv;charset=utf-8,' + encodeURI(csv);  
+  return `${serializeCsvRows(rows)}\r\n`;
+};
+
+export const writeReport = (transactions: Transaction[], reportName: string) => {
+  const csv = buildTransactionReport(transactions);
+
+  const hiddenElement = document.createElement('a');
+  hiddenElement.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   hiddenElement.target = '_blank';  
     
   //provide the name for the CSV file to be downloaded  
   const date = new Date();
-  hiddenElement.download = `${reportName}_${date.getMonth()}_${date.getDate()}_${date.getFullYear()}.csv`;  
+  hiddenElement.download = `${reportName}_${date.getMonth() + 1}_${date.getDate()}_${date.getFullYear()}.csv`;
   hiddenElement.click();  
 }

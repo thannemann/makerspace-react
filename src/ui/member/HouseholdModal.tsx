@@ -9,6 +9,8 @@ import IconButton from "@mui/material/IconButton";
 import DeleteIcon from "@mui/icons-material/Delete";
 import Divider from "@mui/material/Divider";
 import Button from "@mui/material/Button";
+import Alert from "@mui/material/Alert";
+import TextField from "@mui/material/TextField";
 
 import { Member } from "makerspace-ts-api-client";
 import { ActionButton } from "ui/common/ButtonRow";
@@ -18,22 +20,16 @@ import LoadingOverlay from "ui/common/LoadingOverlay";
 import useModal from "ui/hooks/useModal";
 import MemberSearchInput from "ui/common/MemberSearchInput";
 import { SelectOption } from "ui/common/AsyncSelect";
+import { StaffHousehold } from "api/household";
 
-interface HouseholdMember {
-  id: string;
-  firstname: string;
-  lastname: string;
-  email: string;
-}
+// primaryMember: the backend resolves this from a stored primary-member reference on the
+// group record, which can dangle on legacy household data — null means the
+// referenced member no longer exists, not a loading/error state.
+type Household = StaffHousehold;
 
-interface Household {
-  id: string;
-  groupName: string;
-  groupRep: string;
-  expiry: number;
-  primaryMember: HouseholdMember;
-  secondaryMembers: HouseholdMember[];
-}
+// The server refuses a second adult whose address does not match and says so with this prefix. Staff can override it
+// by typing a reason, which is recorded in the audit log.
+export const isAddressMismatch = (message: string) => message.startsWith("Address mismatch:");
 
 interface Props {
   member: Member;
@@ -57,9 +53,15 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
   const [error, setError] = React.useState<string>("");
   const [selectedMember, setSelectedMember] = React.useState<SelectOption | null>(null);
   const [addingMember, setAddingMember] = React.useState(false);
+  const [overrideReason, setOverrideReason] = React.useState("");
+  const [needsOverride, setNeedsOverride] = React.useState(false);
 
   const memberAny = member as any;
-  const isInHousehold = !!memberAny.groupName;
+  // Keyed off householdRole, not raw groupName -- groupName can hold a
+  // legacy, non-household value (see the rails household_role fix) even
+  // when this member isn't really in a household, which previously showed
+  // "Manage Household" and fetched/displayed an unrelated legacy group.
+  const isInHousehold = !!memberAny.householdRole;
   const isPrimary = memberAny.householdRole === "primary";
 
   const fetchHousehold = React.useCallback(async () => {
@@ -92,6 +94,8 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
   const handleClose = React.useCallback(() => {
     closeModal();
     setError("");
+    setOverrideReason("");
+    setNeedsOverride(false);
     setSelectedMember(null);
     setHousehold(null);
   }, [closeModal]);
@@ -128,15 +132,22 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
       const res = await fetch(`/api/admin/groups/${household.id}/add_member`, {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ secondary_member_id: selectedMember.value }),
+        body: JSON.stringify({
+          secondary_member_id: selectedMember.value,
+          ...(needsOverride && overrideReason.trim() ? { address_override_reason: overrideReason.trim() } : {}),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body?.message || body?.error?.message || "Failed to add member.");
+        const message = body?.message || body?.error?.message || "Failed to add member.";
+        setError(message);
+        setNeedsOverride(isAddressMismatch(message));
       } else {
         const body = await res.json();
         setHousehold(body);
         setSelectedMember(null);
+        setOverrideReason("");
+        setNeedsOverride(false);
         onUpdate();
       }
     } catch {
@@ -144,7 +155,7 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
     } finally {
       setAddingMember(false);
     }
-  }, [selectedMember, household, onUpdate]);
+  }, [selectedMember, household, onUpdate, needsOverride, overrideReason]);
 
   const removeSecondaryMember = React.useCallback(async (secondaryId: string) => {
     if (!household) return;
@@ -240,6 +251,10 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
                 <Typography variant="body2" color="textSecondary" style={{ marginTop: 8 }}>
                   The primary member must be on a household membership plan before a household can be created.
                 </Typography>
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  Most households are set up by the primary member from their home page, once their payment is accepted.
+                  If you create one before the payment is accepted, the household is marked unpaid and this is recorded in the audit log.
+                </Alert>
               </Grid>
               {error && (
                 <Grid size={{ xs: 12 }}>
@@ -260,19 +275,55 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
             </Grid>
           )}
 
+          {/* householdRole says this member really is a primary/secondary
+              (a real member exists at groupName), but the Group document
+              itself is missing -- e.g. deleted directly, bypassing the
+              cleanup Admin::GroupsController#destroy normally does. The
+              fetch fails and neither the "create" nor "exists" branch above
+              applies. FormModal/Form's own error display is gated behind
+              form.isDirty, which never becomes true here since there's no
+              editable field, so without this the modal would silently show
+              nothing but its title. */}
+          {isInHousehold && !household && !loading && error && (
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12 }}>
+                <ErrorMessage id="household-not-found-error" error={error} />
+              </Grid>
+            </Grid>
+          )}
+
           {/* Household exists */}
           {household && (
             <Grid container spacing={2}>
+
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="body2" id="household-seats">
+                  Covers up to {household.size} adults ({household.seatsUsed} of {household.size} used, counting open invitations).
+                </Typography>
+                {household.paymentAccepted === false && (
+                  <Alert severity="warning" id="household-unpaid" sx={{ mt: 1 }}>
+                    The household payment is not currently accepted, so this household is not paid. Access ends when the paid time runs out.
+                    It comes back by itself when a payment goes through.
+                  </Alert>
+                )}
+              </Grid>
 
               {/* Primary member */}
               <Grid size={{ xs: 12 }}>
                 <Typography variant="subtitle2" gutterBottom>Primary Member</Typography>
                 <List dense>
                   <ListItem>
-                    <ListItemText
-                      primary={`${household.primaryMember.firstname} ${household.primaryMember.lastname}`}
-                      secondary={household.primaryMember.email}
-                    />
+                    {household.primaryMember ? (
+                      <ListItemText
+                        primary={`${household.primaryMember.firstname} ${household.primaryMember.lastname}`}
+                        secondary={household.primaryMember.email}
+                      />
+                    ) : (
+                      <ListItemText
+                        primary="Primary member no longer exists"
+                        secondary="This household's primary member record could not be found."
+                      />
+                    )}
                   </ListItem>
                 </List>
               </Grid>
@@ -292,7 +343,7 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
                       <ListItem key={m.id}>
                         <ListItemText
                           primary={`${m.firstname} ${m.lastname}`}
-                          secondary={m.email}
+                          secondary={[m.email, m.fobIssued === false ? "needs a fob" : "", household.paymentAccepted === false ? "UNPAID" : ""].filter(Boolean).join(" · ")}
                         />
                         {isPrimary && (
                           <ListItemSecondaryAction>
@@ -312,6 +363,25 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
                 )}
               </Grid>
 
+              {(household.invitations || []).length > 0 && (
+                <Grid size={{ xs: 12 }}>
+                  <Typography variant="subtitle2" gutterBottom>Open invitations</Typography>
+                  <List dense id="household-invitations">
+                    {household.invitations.map(invitation => (
+                      <ListItem key={invitation.id}>
+                        <ListItemText
+                          primary={invitation.email}
+                          secondary={invitation.status === "expired" ? "Expired" : "Waiting for them to join"}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Typography variant="caption" color="textSecondary">
+                    The primary member sends, resends and cancels invitations from their own home page.
+                  </Typography>
+                </Grid>
+              )}
+
               {/* Add secondary member — only primary can do this */}
               {isPrimary && (
                 <>
@@ -325,18 +395,41 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
                       name="household-member-search"
                       placeholder="Search by name or email..."
                       excludeIds={excludeIds}
-                      onChange={(selection) => setSelectedMember(selection)}
+                      onChange={(selection) => {
+                        setSelectedMember(selection);
+                        setNeedsOverride(false);
+                        setOverrideReason("");
+                        setError("");
+                      }}
                     />
                   </Grid>
+                  {needsOverride && (
+                    <Grid size={{ xs: 12 }}>
+                      <Alert severity="warning" id="household-address-override">
+                        The addresses do not match. Only add this member anyway if you have checked in person and have a reason, such as
+                        a recent move that is not on the account yet. Your name and the reason are recorded in the audit log.
+                      </Alert>
+                      <TextField
+                        id="household-override-reason"
+                        fullWidth
+                        required
+                        size="small"
+                        sx={{ mt: 1 }}
+                        label="Reason for adding despite the address"
+                        value={overrideReason}
+                        onChange={(event) => setOverrideReason(event.target.value)}
+                      />
+                    </Grid>
+                  )}
                   <Grid size={{ xs: 12 }}>
                     <Button
                       id="add-household-member-button"
                       variant="contained"
                       color="primary"
-                      disabled={!selectedMember || addingMember}
+                      disabled={!selectedMember || addingMember || (needsOverride && !overrideReason.trim())}
                       onClick={addSecondaryMember}
                     >
-                      {addingMember ? "Adding..." : "Add Member"}
+                      {addingMember ? "Adding..." : needsOverride ? "Add anyway" : "Add Member"}
                     </Button>
                   </Grid>
 
@@ -347,7 +440,7 @@ const HouseholdModal: React.FC<Props> = ({ member, onUpdate }) => {
                     <Button
                       id="dissolve-household-button"
                       variant="outlined"
-                      style={{ color: "#c62828", borderColor: "#c62828" }}
+                      color="error"
                       disabled={loading}
                       onClick={dissolveHousehold}
                     >

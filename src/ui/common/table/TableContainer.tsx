@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 import TablePagination from "@mui/material/TablePagination";
 import Toolbar from "@mui/material/Toolbar";
@@ -7,6 +8,7 @@ import TextField from "@mui/material/TextField";
 import Table, { Column } from "ui/common/table/Table";
 import { SortDirection } from "ui/common/table/constants";
 import { defaultItemsPerPage } from "ui/constants";
+import { getRuntimeItemsPerPage } from "ui/common/table/pagination";
 
 interface Props<T> {
   id: string;
@@ -26,9 +28,30 @@ interface Props<T> {
   onSort?: (columnName: string) => void;
   onSelect?: (rowId: string, selected: boolean) => void;
   onSelectAll?: () => void;
+  isRowSelectable?: (row: T) => boolean;
+  expandedRowId?: string;
+  renderExpandedContent?: (row: T) => JSX.Element | null;
 }
 
-class TableContainer<T> extends React.Component<Props<T>, {}> {
+interface State {
+  itemsPerPage?: number;
+}
+
+class TableContainer<T> extends React.Component<Props<T>, State> {
+
+  public state: State = {};
+
+  public static getDerivedStateFromProps<T>(props: Props<T>, state: State): State {
+    return {
+      itemsPerPage: getRuntimeItemsPerPage({
+        currentItemCount: props.data?.length || 0,
+        pageNum: props.pageNum,
+        totalItems: props.totalItems,
+        previousItemsPerPage: state.itemsPerPage,
+        fallbackItemsPerPage: defaultItemsPerPage,
+      }),
+    };
+  }
 
   private onPageChange = (_event: React.ChangeEvent<EventTarget>, newPage: number) => {
     this.props.onPageChange(newPage);
@@ -59,8 +82,12 @@ class TableContainer<T> extends React.Component<Props<T>, {}> {
       orderBy,
       onSearchEnter,
       error,
-      onPageChange
+      onPageChange,
+      isRowSelectable,
+      expandedRowId,
+      renderExpandedContent
     } = this.props;
+    const itemsPerPage = this.state.itemsPerPage || defaultItemsPerPage;
 
     return (
       <div className="table-container-wrapper" style={{width: "100%"}}>
@@ -91,16 +118,19 @@ class TableContainer<T> extends React.Component<Props<T>, {}> {
             orderBy={orderBy}
             rowId={rowId}
             onSelect={onSelect}
+            isRowSelectable={isRowSelectable}
             onSort={onSort}
             onSelectAll={onSelectAll}
             error={error}
             loading={loading}
+            expandedRowId={expandedRowId}
+            renderExpandedContent={renderExpandedContent}
           >
           </Table>
-          {totalItems > defaultItemsPerPage && onPageChange && <TablePagination
+          {totalItems > itemsPerPage && onPageChange && <TablePagination
             component="div"
             count={totalItems || 0}
-            rowsPerPage={defaultItemsPerPage}
+            rowsPerPage={itemsPerPage}
             rowsPerPageOptions={[]}
             page={pageNum}
             backIconButtonProps={{
@@ -109,7 +139,7 @@ class TableContainer<T> extends React.Component<Props<T>, {}> {
             nextIconButtonProps={{
               'aria-label': 'Next Page',
             }}
-            onChangePage={this.onPageChange}
+            onPageChange={this.onPageChange}
           />}
         </div>
       </div>

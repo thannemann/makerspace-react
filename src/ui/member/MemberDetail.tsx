@@ -1,9 +1,12 @@
 import * as React from "react";
 import { useNavigate, useParams } from 'react-router-dom';
 import { Link } from "react-router-dom";
+import Button from "@mui/material/Button";
+import Box from "@mui/material/Box";
 import { Member, getMember, listRentals } from "makerspace-ts-api-client";
 
 import { displayMemberExpiration, memberIsResourceManager } from "ui/member/utils";
+import { timeToDate } from "ui/utils/timeToDate";
 import LoadingOverlay from "ui/common/LoadingOverlay";
 import KeyValueItem from "ui/common/KeyValueItem";
 import DetailView from "ui/common/DetailView";
@@ -13,6 +16,8 @@ import MemberRentalsTab from "ui/rentals/MemberRentalsTab";
 import { ActionButton } from "ui/common/ButtonRow";
 import { Whitelists, Routing } from "app/constants";
 import { getDetailsForMember } from "./constants";
+import { signupSourceSummary } from "./signupSources";
+import { eventLabel } from 'api/eventbrite';
 import AccessCardForm from "ui/accessCards/AccessCardForm";
 import ReportList from "ui/reports/ReportList";
 import TransactionsList from "ui/transactions/TransactionsList";
@@ -24,19 +29,31 @@ import RenewMember from "./RenewMember";
 import NotificationModal, { Notification } from "./NotificationModal";
 import AdminChangePasswordModal from "./AdminChangePasswordModal";
 import HouseholdModal from "./HouseholdModal";
+import { HouseholdSetupBanner } from "./householdSetup";
+import StaffHouseholdPanel from "./StaffHouseholdPanel";
+import { ActiveRentalsBanner } from "./activeRentals";
 import PreviewMemberContract from "../documents/PreviewMemberContract";
 import { SubRoutes } from "ui/settings/SettingsContainer";
 import { SubscriptionFilter } from "../subscriptions/SubscriptionFilters";
 import { useSearchQuery, useSetSearchQuery } from "hooks/useSearchQuery";
 import ChargeButton from "ui/shopFees/ChargeButton";
 import MemberCheckoutsTab from "ui/toolCheckouts/MemberCheckoutsTab";
+import MemberReservationsTab from "ui/reservations/MemberReservationsTab";
 import MemberVolunteerTab from "ui/volunteer/MemberVolunteerTab";
 import MemberCheckInActivity from "ui/member/MemberCheckInActivity";
 import MemberEmailLogTab from "ui/member/MemberEmailLogTab";
+import EventbriteBrowser from 'ui/eventbrite/EventbriteBrowser';
 import { EmailStatusIcon, SlackStatusIcon } from "ui/common/ContactStatusIcons";
 import GoogleDriveInviteButton from 'ui/member/GoogleDriveInviteButton';
+import GoogleDriveProvisioningBlockToggle from 'ui/member/GoogleDriveProvisioningBlockToggle';
 import SlackInviteButton from 'ui/member/SlackInviteButton';
+import MemberDeleteToggle from 'ui/member/MemberDeleteToggle';
 import FirebaseUnlinkButton from "ui/auth/FirebaseUnlinkButton";
+import {
+  MemberProvisioning,
+  ProvisioningStatusChip,
+  SlackProvisioningIcon,
+} from 'ui/member/ProvisioningStatus';
 
 
 const getCsrfToken = (): string => {
@@ -89,12 +106,15 @@ const MemberProfile: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser: { id: currentUserId, isAdmin }, permissions } = useAuthState();
   const {
+    canViewAllMembers,
     canEditMembers,
     canChangeOtherPasswords,
     canViewEmailStatus,
     canManageBilling,
     canManageShopFees,
     canManageCheckoutApprovers,
+    canViewAuditLog,
+    canViewEventbriteHistory,
   } = useCapabilities();
 
   const {
@@ -191,11 +211,86 @@ const MemberProfile: React.FC = () => {
   }
 
   const memberSubscription = getDetailsForMember(member);
+  const provisioning = (member as Member & { provisioning?: MemberProvisioning }).provisioning;
+  const memberDisplayName = `${member.firstname} ${member.lastname}`;
+  const memberTitle = (member as any).slack?.url
+    ? <a href={(member as any).slack.url}>{memberDisplayName}</a>
+    : memberDisplayName;
+  const showManualSlackDeactivationWarning =
+    canViewAllMembers &&
+    !isOwnProfile &&
+    member.status === "revoked" &&
+    !!(member as any).slackManualDeactivationRequired;
+  const expiringPaymentCardTypes = (member as any).expiringPaymentCardTypes as string | undefined;
+  const showExpiringPaymentWarning =
+    !!expiringPaymentCardTypes && (isOwnProfile || canManageBilling);
+  const paymentMethodsPath = `${Routing.Settings.replace(Routing.PathPlaceholder.MemberId, member.id)}/${SubRoutes.PaymentMethods}`;
+  const mergedAt = (member as any).mergedAt as string | undefined;
 
   return (
     <>
+      {mergedAt && canEditMembers && (
+        <div
+          id="member-detail-deleted-warning"
+          role="alert"
+          style={{
+            color: "#555",
+            fontWeight: 700,
+            border: "2px solid #555",
+            borderRadius: 4,
+            marginBottom: 16,
+            padding: "12px 16px",
+          }}
+        >
+          This account was deleted on {new Date(mergedAt).toLocaleDateString()}. It's hidden from member
+          lists and search, and its email is free for a new signup to reuse. Use "Restore Account" below to undo this.
+        </div>
+      )}
+      {showExpiringPaymentWarning && (
+        <Box
+          id="member-expiring-payment-method-warning"
+          role="alert"
+          sx={{
+            color: "error.main",
+            fontWeight: 700,
+            border: "2px solid",
+            borderColor: "error.main",
+            borderRadius: "4px",
+            marginBottom: 2,
+            padding: "12px 16px",
+          }}
+        >
+          {isOwnProfile ? (
+            <Link to={paymentMethodsPath} style={{ color: "inherit", textDecoration: "underline" }}>
+              Your {expiringPaymentCardTypes.toLowerCase()} payment card(s) expire this month
+            </Link>
+          ) : (
+            <span>{memberDisplayName}&apos;s {expiringPaymentCardTypes} payment card(s) expire this month.</span>
+          )}
+        </Box>
+      )}
+      {showManualSlackDeactivationWarning && (
+        <Box
+          id="member-slack-manual-deactivation-warning"
+          role="alert"
+          sx={{
+            color: "error.main",
+            fontWeight: 700,
+            border: "2px solid",
+            borderColor: "error.main",
+            borderRadius: "4px",
+            marginBottom: 2,
+            padding: "12px 16px",
+          }}
+        >
+          Slack was not deactivated automatically because SLACK_ADMIN_TOKEN is not configured.
+          You must manually deactivate this member in Slack.
+        </Box>
+      )}
+      {canEditMembers && <HouseholdSetupBanner member={member} />}
+      {canEditMembers && <ActiveRentalsBanner member={member} />}
       <DetailView
-        title={`${member.firstname} ${member.lastname}`}
+        title={memberTitle}
         basePath={`/members/${memberId}`}
         actionButtons={[
           ...isOwnProfile ? [
@@ -214,10 +309,14 @@ const MemberProfile: React.FC = () => {
             <AccessCardForm memberId={memberId} key="card-form"/>,
             <AdminChangePasswordModal member={member} key="change-password"/>,
             <HouseholdModal member={member} key="household" onUpdate={refreshMember}/>,
-            <GoogleDriveInviteButton member={member} key='google-drive-invite' />,
-            <SlackInviteButton member={member} key='slack-invite' />,
+            <GoogleDriveInviteButton member={member} key='google-drive-invite' onProvisioned={refreshMember} />,
+            <GoogleDriveProvisioningBlockToggle member={member} key='google-drive-block-toggle' onUpdated={refreshMember} />,
+            <SlackInviteButton member={member} key='slack-invite' onProvisioned={refreshMember} />,
             ...((member as any).totpEnabled ? [
               <Reset2FAButton key="reset-2fa" memberId={memberId} onReset={refreshMember} />
+            ] : []),
+            ...(!isOwnProfile ? [
+              <MemberDeleteToggle member={member} key="delete-toggle" onUpdated={refreshMember} />
             ] : [])
           ] : [],
           // Send Charge button — admin and RM, not on own profile
@@ -234,7 +333,10 @@ const MemberProfile: React.FC = () => {
                   <>
                     <EmailStatusIcon mailtrap={(member as any).mailtrap} />
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      <SlackStatusIcon slack={(member as any).slack} />
+                      {provisioning
+                        ? <SlackProvisioningIcon provisioning={provisioning} fallbackLinkedName={(member as any).slack?.name} />
+                        : <SlackStatusIcon slack={(member as any).slack} />
+                      }
                       {(member as any).slack && (
                         <span style={{ fontSize: "0.8rem", color: "#555" }}>{(member as any).slack.name}</span>
                       )}
@@ -243,9 +345,28 @@ const MemberProfile: React.FC = () => {
                 )}
               </span>
             </KeyValueItem>
-            <KeyValueItem  label="Membership Expiration">
-              <span id="member-detail-expiration">{displayMemberExpiration(member)}</span>
-            </KeyValueItem>
+            <div style={{ paddingBottom: "1em", display: "flex", flexWrap: "wrap" }}>
+              <span style={{ marginRight: "2.5em" }}>
+                <strong>Signed Up: </strong>
+                <span id="member-detail-signup-date">
+                  {(member as any).startDate ? timeToDate((member as any).startDate) : "N/A"}
+                </span>
+              </span>
+              <span>
+                <strong>Membership Expiration: </strong>
+                <span id="member-detail-expiration">{displayMemberExpiration(member)}</span>
+              </span>
+            </div>
+            {canViewAuditLog && provisioning && (
+              <>
+                <KeyValueItem label="Slack Provisioning">
+                  <ProvisioningStatusChip kind="slack" provisioning={provisioning} />
+                </KeyValueItem>
+                <KeyValueItem label="Google Drive Access">
+                  <ProvisioningStatusChip kind="drive" provisioning={provisioning} />
+                </KeyValueItem>
+              </>
+            )}
             <KeyValueItem label="Membership Status">
               <Link to={`/members/${memberId}/checkin-activity`} style={{ textDecoration: "none", color: "inherit" }}>
                 <MemberStatusLabel id="member-detail-status" member={member} />
@@ -253,6 +374,12 @@ const MemberProfile: React.FC = () => {
             </KeyValueItem>
             {billingEnabled && <KeyValueItem label="Membership Type">
               <span id="member-detail-type" style={{ marginRight: "1em" }}>{memberSubscription.type}</span>
+                {isOwnProfile && !member.subscriptionId && memberSubscription.allowMod && (
+                  <Button component={Link as React.ElementType} variant="contained" color="primary" size="small"
+                    to={`${Routing.Settings.replace(Routing.PathPlaceholder.MemberId, member.id)}/${SubRoutes.Subscriptions}`}>
+                    Create Subscription
+                  </Button>
+                )}
                 {member.subscriptionId && (
                   <span style={{ display: "inline-block", marginRight: "1em" }}>
                     {isOwnProfile && (
@@ -282,7 +409,19 @@ const MemberProfile: React.FC = () => {
             {member.notes && <KeyValueItem label="Notes">
               <div id="member-detail-notes" className="preformatted">{member.notes}</div>
             </KeyValueItem>}
-            {((member as any).groupName || canEditMembers) && (
+            {canEditMembers && (member as any).signupSource && <KeyValueItem label="How they found us">
+              <span id="member-detail-signup-source">
+                {(member as any).signupEventbriteEventSnapshot ? eventLabel((member as any).signupEventbriteEventSnapshot) : signupSourceSummary((member as any).signupSource, (member as any).signupSourceDetail)}
+              </span>
+              {(member as any).referredByMemberId && (member as any).referredByMemberName && (
+                <div>
+                  Referred by <Link id="member-detail-referred-by" to={`${Routing.Members}/${(member as any).referredByMemberId}`}>
+                    {(member as any).referredByMemberName}
+                  </Link>
+                </div>
+              )}
+            </KeyValueItem>}
+            {((member as any).householdRole || canEditMembers) && (
               <KeyValueItem label="Household">
                 {(member as any).householdRole === "primary" && (
                   <span id="member-detail-household-role">Primary Member</span>
@@ -290,9 +429,15 @@ const MemberProfile: React.FC = () => {
                 {(member as any).householdRole === "secondary" && (
                   <span id="member-detail-household-role">Secondary Member</span>
                 )}
-                {!(member as any).groupName && canEditMembers && (
+                {/* Keyed off householdRole, not raw groupName -- groupName can
+                    still hold a legacy, non-household value (see the rails
+                    household_role fix) even once this correctly resolves to
+                    no real household, so checking groupName here would leave
+                    this blank instead of showing "None". */}
+                {!(member as any).householdRole && canEditMembers && (
                   <span id="member-detail-household-role" style={{ color: "grey" }}>None</span>
                 )}
+                {canEditMembers && !!(member as any).householdRole && <StaffHouseholdPanel memberId={member.id} />}
               </KeyValueItem>
             )}
             {isOwnProfile && <PreviewMemberContract />}
@@ -319,6 +464,11 @@ const MemberProfile: React.FC = () => {
             displayName: "Checkouts",
             content: <MemberCheckoutsTab member={member} />
           },
+          {
+            name: "reservations",
+            displayName: "Reservations",
+            content: <MemberReservationsTab member={member} />
+          },
           ...billingEnabled && !!customerId ? [{
             name: "transactions",
             displayName: "Payment History",
@@ -339,6 +489,7 @@ const MemberProfile: React.FC = () => {
             displayName: "Email Log",
             content: <MemberEmailLogTab memberId={memberId} />
           }] : [],
+          ...canViewEventbriteHistory ? [{ name: 'eventbrite', displayName: 'Eventbrite', content: <EventbriteBrowser memberId={memberId} /> }] : [],
         ]}
       />
       {notification && <NotificationModal

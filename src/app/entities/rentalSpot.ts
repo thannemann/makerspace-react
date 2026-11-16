@@ -1,11 +1,12 @@
 export interface RentalType {
-  id:                  string;
-  displayName:         string;
-  active:              boolean;
-  invoiceOptionId:     string | null;
-  invoiceOptionName:   string | null;
-  invoiceOptionAmount: number | null;
-  invoiceOptionPlanId: string | null;
+  id:                    string;
+  displayName:           string;
+  active:                boolean;
+  invoiceOptionId:       string | null;
+  invoiceOptionName:     string | null;
+  invoiceOptionAmount:   number | null;
+  invoiceOptionQuantity: number | null;
+  invoiceOptionPlanId:   string | null;
 }
 
 export interface RentalSpot {
@@ -23,6 +24,7 @@ export interface RentalSpot {
   invoiceOptionId:       string | null;
   invoiceOptionName:     string | null;
   invoiceOptionAmount:   number | null;
+  invoiceOptionQuantity: number | null;
   invoiceOptionPlanId:   string | null;
 }
 
@@ -38,6 +40,8 @@ export interface RentalSpotPublic {
   available:             boolean;
   invoiceOptionName:     string | null;
   invoiceOptionAmount:   number | null;
+  invoiceOptionQuantity: number | null;
+  invoiceOptionPlanId:   string | null;
 }
 
 export enum RentalStatus {
@@ -45,6 +49,8 @@ export enum RentalStatus {
   PendingAgreement  = "pending_agreement",
   Active            = "active",
   Vacating          = "vacating",
+  // The member says they have vacated; the spot stays held until staff verify it is empty.
+  AwaitingVerification = "awaiting_verification",
   Cancelled         = "cancelled",
   Denied            = "denied",
   AgreementDenied   = "agreement_denied",
@@ -55,6 +61,7 @@ export const RentalStatusDisplay: Record<RentalStatus, string> = {
   [RentalStatus.PendingAgreement]: "Pending Agreement",
   [RentalStatus.Active]:           "Active",
   [RentalStatus.Vacating]:         "Vacating",
+  [RentalStatus.AwaitingVerification]: "Awaiting Verification",
   [RentalStatus.Cancelled]:        "Cancelled",
   [RentalStatus.Denied]:           "Denied",
   [RentalStatus.AgreementDenied]:  "Agreement Declined",

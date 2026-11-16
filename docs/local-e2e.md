@@ -1,0 +1,138 @@
+# Running the Playwright E2E tests locally
+
+The full suite uses real Rails APIs and resets/seeds its database. Use a disposable
+database whose name contains `test`, never a development or production database
+with data you want to keep.
+
+## Dependencies
+
+- Node.js 22 and Yarn; run `yarn install --frozen-lockfile --ignore-engines` here.
+- Ruby 3.4 and Bundler; run `bundle install` in the sibling Rails checkout.
+- MongoDB 7.0 configured as a replica set, and Redis 7. Docker Desktop with WSL2
+  support can supply these services on Windows. Keep the shell, Ruby, Node and
+  repository paths consistent if using WSL.
+- Playwright's Chromium: `npx playwright install chromium` on Windows;
+  `npx playwright install --with-deps chromium` on Linux.
+- Valid Braintree **sandbox** credentials: `BT_MERCHANT_ID`, `BT_PUBLIC_KEY`, and
+  `BT_PRIVATE_KEY`. The existing seed creates payment fixtures and requires these
+  even for the ticket-only E2E suite. Dummy credentials are not sufficient.
+
+## Prepare Rails and the UI
+
+Use the Rails `.github/workflows/ci.yml` **e2e** job's environment block as the
+local configuration reference, supplying sandbox credentials privately. In
+particular, set `RAILS_ENV=test`, `MLAB_URI` to your disposable test database with
+`?replicaSet=rs0`, `REQUIRE_MONGO_TRANSACTIONS=true`, `REDIS_URL`,
+`SKIP_EMAILVALIDATION=true`, `RAILS_SERVE_STATIC_FILES=true`, and the required
+Devise/OTP secrets. Set `APP_DOMAIN` and `APP_URL` to `http://localhost:3035`.
+These variables must be available both to Rails and to the Playwright seed process.
+
+In the Rails checkout, from a Docker-enabled Bash shell:
+
+```sh
+bash scripts/ci/start-mongo.sh
+docker run --detach --name makerspace-e2e-redis --publish 127.0.0.1:6379:6379 redis:7
+bundle exec ruby scripts/ci/verify-mongo-transactions.rb
+```
+
+In the React checkout, build the current code and copy the complete `dist/`
+contents into Rails' `app/assets/builds/`. Then run
+`bundle exec rails s -b 127.0.0.1 -p 3035` in a separate Rails terminal.
+
+Set `RAILS_DIR` to the absolute Rails checkout path. From the React checkout:
+
+```sh
+yarn build
+# Copy dist/* into ../makerspace-rails-2026/app/assets/builds/ before testing.
+npx playwright test tests/e2e/suites/14_fix_tickets.spec.ts --project=chromium
+npx playwright test
+```
+
+Playwright uses the root `playwright.config.ts`; no `yarn e2e` script is defined.
+Global setup runs `bundle exec rake db:db_reset`. Use `SKIP_DB_RESET=true` only
+when deliberately reusing an already prepared disposable fixture database.
+Screenshots, videos and retry traces are in `tmp/playwright-results`.
+
+## Member landing and page helpers
+
+`AuthPage.signIn` asserts the default destination from the signed-in member:
+regular members land on `/home` (`?newMember=true` for pending members), while
+admins, board members, and resource managers retain their own profile landing.
+Tests that need profile tabs must call `MemberPage.gotoOwnProfile()` explicitly.
+`waitForProfile()` waits for the profile URL and Membership Status, which remains
+visible with billing disabled; it never changes the login destination.
+Signup tests assert the welcome Home destination
+before opening the profile for follow-up checks. `SettingsPage.goto()` uses the
+Home Account Settings link or the existing profile button, not the dropdown.
+`AuthPage.logout()` waits for the public login or landing controls to render;
+an SPA URL change and an already-fired DOMContentLoaded event are insufficient.
+Signing in again reuses a canonical `/login` navigation already in progress,
+while explicit return targets are cleared for the default-landing assertion.
+Header navigation uses MUI menu items: page helpers select the exact accessible
+name with `getByRole('menu').getByRole('menuitem', ...)`. Links elsewhere on a page
+still use the `link` role. `node tests/browser/header-menu.cjs` exercises all seven
+menu navigation helpers against the built UI with mocked APIs, including member
+profile/list, generic navigation, billing, rentals, checkouts and volunteer pages.
+Run it after menu changes alongside `node tests/browser/home.cjs`, which checks
+the login-to-profile flows used by the member smoke suite.
+`MemberRentalsPage.clickProceed()` verifies that signing an agreement opens
+`/members/:id/dues` with the Dues tab selected, rather than falling back to Home.
+
+After building web assets, `node tests/browser/home.cjs` exercises these same
+page objects against the built UI with mocked APIs, including active/pending
+members, staff, restored sessions, explicit profile/settings navigation, and
+rental-agreement signing through to the rental invoice payment action. It also
+holds session restoration after an expired-session logout to check that the
+authentication helper waits for the login form and avoids a competing navigation.
+This check does not require backend credentials or reset a database; the full
+Rails/Braintree E2E suite remains a separate check.
+
+The self-service password test waits for the password update's `204` response
+and success message before logging out and signing in with the new password.
+An `afterEach` hook restores the seeded password using Playwright's isolated
+`request` fixture, so a navigation or assertion failure cannot leave the retry
+with changed credentials. Cleanup bootstraps its own session, reads the current
+CSRF cookie before each mutation, and verifies the API responses. If the changed
+password is rejected, cleanup confirms the original password still works.
+This uses the API because the seeded `password` value is too weak for the UI's
+current validation. These are test-only changes; portal behavior is unchanged.
+
+The rental suite can run independently of the admin rental-creation test. Each
+payment attempt provisions a unique member, rental type, and spot through the API,
+and gives that member its own Braintree sandbox customer and saved Visa using the
+same sandbox nonce as the Rails seed. Retries and `--repeat-each` never reuse an
+earlier attempt's invoices or subscriptions. Fixture setup requires `BT_ENV=sandbox`
+and has a 120-second budget. Records remain in the disposable database for failure
+inspection until its next reset; sandbox customers/subscriptions remain upstream.
+The admin creation test also uses unique type/spot names on every attempt. The
+cancellation test in `05_admin_rentals_lifecycle.spec.ts` uses this same isolated
+fixture rather than depending on a spot created by the preceding suite. Fixture
+members include complete contact information so profile notifications do not
+redirect the rental flow to Personal Information settings.
+
+Payment confirmation registers a response listener before clicking Confirm,
+allows up to 60 seconds for `POST /api/billing/transactions`, and checks for HTTP
+200 before asserting the matching invoice receipt URL and success heading. An
+error response fails immediately instead of becoming a missing-button timeout.
+To check attempt isolation with the Rails/Braintree prerequisites above:
+
+```sh
+npx playwright test tests/e2e/suites/04_rentals.spec.ts --project=chromium --repeat-each=2
+```
+
+## Ticket UI checks without backend credentials
+
+The Rails-backed reporter-anonymity and repair-bounty tests use separate browser
+contexts for the reporter, another member, and the admin. Each actor signs in
+normally. The anonymity test checks that an ordinary member cannot see the
+reporter or reveal control, while the admin explicitly reveals the reporter.
+The bounty test has the admin create a bounty for the reported ticket and a
+different member claim that same bounty. Separate cookie jars avoid an
+account-switching race where a late response restores the previous session after
+logout. Additional contexts close even if an assertion fails. Login/logout and
+session-restoration coverage remains in the authentication suites.
+
+`node scripts/check_fix_tickets.cjs --tickets-only` builds an isolated UI fixture
+and checks navigation, catalog loading/failure, cancellation, and the E2E page
+helper's note/resolution flow at four widths. This harness uses installed
+Microsoft Edge and mocked APIs; it does not replace the Rails-backed E2E suite.

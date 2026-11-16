@@ -1,6 +1,7 @@
 import axios from "axios";
 import { ApiDataResponse, ApiErrorResponse } from "makerspace-ts-api-client";
 import { RentalType, RentalSpot, RentalSpotPublic } from "app/entities/rentalSpot";
+import { attachGlobalAuthInterceptor } from "ui/common/globalAuthInterceptor";
 
 const wrapHeaders = (axiosHeaders: any) => ({
   get: (key: string) => axiosHeaders[key.toLowerCase()] ?? null,
@@ -29,7 +30,7 @@ const getCsrfToken = () => {
   return match ? decodeURIComponent(match[1]) : "";
 };
 
-const api = axios.create({ withCredentials: true });
+const api = attachGlobalAuthInterceptor(axios.create({ withCredentials: true }));
 api.interceptors.request.use(config => {
   config.headers.set("X-XSRF-TOKEN", getCsrfToken());
   config.headers.set("Content-Type", "application/json");
@@ -91,6 +92,11 @@ export const cancelRental = ({ id, body }: { id: string; body: { vacated: boolea
 // Called when a vacating rental is marked as fully vacated
 export const markRentalVacated = ({ id }: { id: string }) =>
   buildResponse<{}>(api.post(`/api/rentals/${id}/mark_vacated`));
+
+// Staff (resource manager, board or admin, not the rental's own member) confirm the space is empty and
+// release a rental the member says they have vacated
+export const verifyRentalVacated = ({ id }: { id: string }) =>
+  buildResponse<{}>(api.post(`/api/rentals/${id}/verify_vacated`));
 
 // Called when member declines the agreement — voids the rental
 export const declineRentalAgreement = ({ id }: { id: string }) =>

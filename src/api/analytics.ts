@@ -1,11 +1,12 @@
 import axios from 'axios';
+import { attachGlobalAuthInterceptor } from 'ui/common/globalAuthInterceptor';
 
 const getCsrfToken = () => {
   const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : '';
 };
 
-const api = axios.create({ withCredentials: true });
+const api = attachGlobalAuthInterceptor(axios.create({ withCredentials: true }));
 api.interceptors.request.use(config => {
   config.headers.set('X-XSRF-TOKEN', getCsrfToken());
   return config;
@@ -23,12 +24,19 @@ const buildResponse = async <T>(request: Promise<any>): Promise<{ data?: T; erro
 export interface AnalyticsSummary {
   totalMembers: number;
   newMembers: number;
+  lostMembers: number;
   subscribedMembers: number;
+  membersWithExpiringPaymentMethods: number;
   pastDueInvoices: number;
   refundsPending: number;
 }
 
 export interface MemberGrowthPoint {
+  month: string;   // "YYYY-MM"
+  count: number;
+}
+
+export interface MemberLossPoint {
   month: string;   // "YYYY-MM"
   count: number;
 }
@@ -69,6 +77,9 @@ export const getAnalyticsSummary = () =>
 
 export const getMemberGrowth = (params?: { year?: number; start_date?: string; end_date?: string }) =>
   buildResponse<MemberGrowthPoint[]>(api.get('/api/admin/analytics/member_growth', { params }));
+
+export const getMemberLosses = (params?: { year?: number; start_date?: string; end_date?: string }) =>
+  buildResponse<MemberLossPoint[]>(api.get('/api/admin/analytics/member_losses', { params }));
 
 export const getActiveMembers = (params?: { year?: number; month?: number; granularity?: 'day' | 'month' }) =>
   buildResponse<ActiveMemberPoint[]>(api.get('/api/admin/analytics/active_members', { params }));

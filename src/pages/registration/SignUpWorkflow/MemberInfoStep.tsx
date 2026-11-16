@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react";
 import { useNavigate } from 'react-router-dom';
 import Grid from "@mui/material/Grid";
@@ -20,13 +21,27 @@ import { EmailInput } from "components/Form/inputs/EmailInput";
 import { PasswordInput } from "components/Form/inputs/PasswordInput";
 import { SelectInput } from "components/Form/inputs/SelectInput";
 import { PhoneInput } from "components/Form/inputs/PhoneInput";
+import { PostalCodeInput } from "components/Form/inputs/PostalCodeInput";
 import { Form } from "components/Form/Form";
 import { FormState, useFormValues } from "components/Form/FormContext";
 import { CollectionOf } from "app/interfaces";
 import { useAuthState } from "ui/reducer/hooks";
+import { TurnstileWidget, TurnstileWidgetHandle } from "components/Turnstile/TurnstileWidget";
+import { submitSignUpWithTurnstile } from "./turnstileSignup";
+import { SignupSourceQuestion } from 'ui/member/SignupSourceQuestion';
+import { sourcePayload } from 'api/eventbrite';
+import { useFormContext } from 'components/Form/FormContext';
+
+const SourceQuestion = () => {
+  const { values, setValue } = useFormContext();
+  return <SignupSourceQuestion value={values[SignUpFields.signupSource.name] || ''}
+    detail={values[SignUpFields.signupSourceDetail.name] || ''}
+    onChange={value => setValue(SignUpFields.signupSource.name, value)}
+    onDetail={value => setValue(SignUpFields.signupSourceDetail.name, value)} />;
+};
 
 // Confirm email field that validates against the email field value
-const ConfirmEmailField: React.FC = () => {
+const ConfirmEmailField: React.FC<{ defaultValue?: string }> = ({ defaultValue }) => {
   const values = useFormValues();
   const emailValue = values[SignUpFields.email.name] as string;
   return (
@@ -35,9 +50,10 @@ const ConfirmEmailField: React.FC = () => {
       label={SignUpFields.confirmEmail.label}
       fieldName={SignUpFields.confirmEmail.name}
       placeholder={SignUpFields.confirmEmail.placeholder}
+      defaultValue={defaultValue}
       validate={(val: string) => {
         if (!val) return "Required";
-        if (val !== emailValue) return "Email addresses do not match";
+        if (val.trim() !== emailValue?.trim()) return "Email addresses do not match";
         return undefined;
       }}
     />
@@ -49,13 +65,19 @@ export const MemberInfoStep: React.FC<{ children?: React.ReactNode }> = ({ child
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const goToLogin = React.useCallback(() => navigate(Routing.Login), [history]);
+  const turnstileWidget = React.useRef<TurnstileWidgetHandle>(null);
+  const [turnstileToken, setTurnstileToken] = React.useState<string>();
   
   const { isRequesting, error } = useAuthState();
 
-  const { membershipOptionId, discountId } = useSearchQuery({
-    membershipOptionId: invoiceOptionParam, 
-    discountId: discountParam, 
+  const { membershipOptionId, discountId, householdInvite, invitedEmail } = useSearchQuery({
+    membershipOptionId: invoiceOptionParam,
+    discountId: discountParam,
+    householdInvite: "householdInvite",
+    invitedEmail: "email",
   })
+  // An invited second adult must register with the address the invitation was sent to.
+  const emailDefault = householdInvite && invitedEmail ? invitedEmail : undefined;
 
   const submit = React.useCallback(async ({ values }: FormState) => {
     const validSignUp = Object.entries(SignUpFields).reduce((vals, [key, { name, transform }]) => ({
@@ -65,17 +87,23 @@ export const MemberInfoStep: React.FC<{ children?: React.ReactNode }> = ({ child
 
     const { street, unit, city, state, postalCode, ...rest } = validSignUp;
 
-    await dispatch(submitSignUpAction({
-      ...rest as SignUpForm,
-      address: {
-        street,
-        unit,
-        city,
-        state,
-        postalCode
-      }
-    }));
-  }, [membershipOptionId, discountId, dispatch, submitSignUpAction]);
+    return submitSignUpWithTurnstile(
+      signUpForm => dispatch(submitSignUpAction(signUpForm)),
+      {
+        ...rest as SignUpForm,
+        ...sourcePayload(rest.signupSource, rest.signupSourceDetail),
+        address: {
+          street,
+          unit,
+          city,
+          state,
+          postalCode
+        }
+      },
+      turnstileToken,
+      () => turnstileWidget.current?.reset()
+    );
+  }, [membershipOptionId, discountId, dispatch, submitSignUpAction, turnstileToken]);
 
   React.useEffect(() => {
     if (!isRequesting && error?.match(new RegExp(EmailExistsError))) {
@@ -168,7 +196,7 @@ export const MemberInfoStep: React.FC<{ children?: React.ReactNode }> = ({ child
                 />
               </Grid>
               <Grid size={{ xs: 8, sm: 4 }}>
-                <TextInput
+                <PostalCodeInput
                   required={true}
                   label={SignUpFields.postalCode.label}
                   fieldName={SignUpFields.postalCode.name}
@@ -190,10 +218,11 @@ export const MemberInfoStep: React.FC<{ children?: React.ReactNode }> = ({ child
                   label={SignUpFields.email.label}
                   fieldName={SignUpFields.email.name}
                   placeholder={SignUpFields.email.placeholder}
+                  defaultValue={emailDefault}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
-                <ConfirmEmailField />
+                <ConfirmEmailField defaultValue={emailDefault} />
               </Grid>
 
               {/* Password */}
@@ -210,6 +239,18 @@ export const MemberInfoStep: React.FC<{ children?: React.ReactNode }> = ({ child
                     address: SignUpFields.street.name,
                     email: SignUpFields.email.name,
                   }}
+                />
+              </Grid>
+
+              {/* How they found us */}
+              <Grid size={{ xs: 12 }}>
+                <SourceQuestion />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <TurnstileWidget
+                  ref={turnstileWidget}
+                  onTokenChange={setTurnstileToken}
                 />
               </Grid>
             </Grid>

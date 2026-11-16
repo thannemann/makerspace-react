@@ -15,7 +15,10 @@ import { AnyPaymentMethod } from "app/entities/paymentMethod";
 import Form from "ui/common/Form";
 import ButtonRow, { ActionButtonProps } from "ui/common/ButtonRow";
 import PaymentMethodComponent from "ui/checkout/PaymentMethod";
-import { listPaymentMethods, isApiErrorResponse, deletePaymentMethod } from "makerspace-ts-api-client";
+import { listPaymentMethods, isApiErrorResponse, deletePaymentMethod, Subscription } from "makerspace-ts-api-client";
+import { getPaymentMethodCancellationImpact } from "api/paymentMethods";
+import { PaymentMethodCancellationImpact } from "app/entities/paymentMethod";
+import ChangePaymentMethodModal from "ui/membership/ChangePaymentMethodModal";
 
 interface OwnProps {
   onPaymentMethodChange?: (paymentMethod: AnyPaymentMethod) => void;
@@ -32,6 +35,8 @@ interface State {
   openAddPayment: boolean;
   openDeleteModal: boolean;
   selectedPaymentMethodId: string;
+  deleteImpactLoading: boolean;
+  deleteImpact: PaymentMethodCancellationImpact | null;
 }
 
 class PaymentMethodsContainer extends React.Component<Props, State> {
@@ -48,7 +53,9 @@ class PaymentMethodsContainer extends React.Component<Props, State> {
       error: "",
       openAddPayment: false,
       openDeleteModal: false,
-      selectedPaymentMethodId: paymentMethodToken
+      selectedPaymentMethodId: paymentMethodToken,
+      deleteImpactLoading: false,
+      deleteImpact: null
     };
   }
 
@@ -90,30 +97,80 @@ class PaymentMethodsContainer extends React.Component<Props, State> {
   };
 
   private renderDeletePaymentModal = () => {
-    const { isRequesting, isDeleting, error, openDeleteModal, selectedPaymentMethodId } = this.state;
+    const {
+      isRequesting, isDeleting, error, openDeleteModal, selectedPaymentMethodId,
+      deleteImpactLoading, deleteImpact
+    } = this.state;
     const selectedPaymentMethod = this.paymentMethodFromNonce(selectedPaymentMethodId);
     if (!selectedPaymentMethod) {
       return;
     }
+
+    // Only trust a positive impact result -- a loading or errored check falls
+    // back to the plain confirmation rather than blocking or guessing at
+    // consequences we couldn't actually verify.
+    const hasSubscriptionImpact = !!deleteImpact && (deleteImpact.membership || deleteImpact.rentalCount > 0);
+
     return (
       <FormModal
         id="delete-payment-method-confirm"
         formRef={this.setFormRef}
-        loading={isRequesting || isDeleting}
+        loading={isRequesting || isDeleting || deleteImpactLoading}
         isOpen={openDeleteModal}
         closeHandler={this.closeDeleteModal}
         title="Delete Payment Method"
         onSubmit={this.deletePaymentMethod}
-        submitText="Delete"
+        submitText={hasSubscriptionImpact ? "Delete Anyway" : "Delete"}
         error={error}
       >
         <Grid container justifyContent="center" spacing={2}>
           <Grid size={{ xs: 12 }}>
-            <Typography gutterBottom>
-              Are you sure you want to delete this payment method? 
-              <strong> If a membership or rental is attached to this payment method, it will be automatically canceled when the payment method is deleted. </strong>
-              This cannot be undone.
-            </Typography>
+            {hasSubscriptionImpact ? (
+              <>
+                <Typography gutterBottom color="error" id="delete-payment-method-subscription-warning">
+                  <strong>
+                    Deleting this payment method will immediately cancel {[
+                      deleteImpact.membership && "your membership subscription",
+                      deleteImpact.rentalCount > 0 &&
+                        `${deleteImpact.rentalCount} rental subscription${deleteImpact.rentalCount === 1 ? "" : "s"}`
+                    ].filter(Boolean).join(" and ")}.
+                  </strong>
+                  {" "}This cannot be undone.
+                </Typography>
+                <Typography gutterBottom>
+                  To keep {[
+                    deleteImpact.membership && "your membership",
+                    deleteImpact.rentalCount > 0 &&
+                      `${deleteImpact.rentalCount} rental${deleteImpact.rentalCount === 1 ? "" : "s"}`
+                  ].filter(Boolean).join(" and ")} active instead, switch it to a different payment
+                  method below, then come back and delete this one.
+                </Typography>
+                <Grid container spacing={1} id="delete-payment-method-switch-actions">
+                  {deleteImpact.membershipSubscriptionId && (
+                    <Grid size={{ xs: 12 }}>
+                      <ChangePaymentMethodModal
+                        subscription={{ id: deleteImpact.membershipSubscriptionId, paymentMethodToken: selectedPaymentMethodId } as Subscription}
+                        label="Switch Membership's Payment Method"
+                        onSuccess={this.refreshDeleteImpact}
+                      />
+                    </Grid>
+                  )}
+                  {deleteImpact.rentalSubscriptionIds.map((subscriptionId, index) => (
+                    <Grid size={{ xs: 12 }} key={subscriptionId}>
+                      <ChangePaymentMethodModal
+                        subscription={{ id: subscriptionId, paymentMethodToken: selectedPaymentMethodId } as Subscription}
+                        label={`Switch Rental${deleteImpact.rentalSubscriptionIds.length > 1 ? ` #${index + 1}` : ""}'s Payment Method`}
+                        onSuccess={this.refreshDeleteImpact}
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+              </>
+            ) : (
+              <Typography gutterBottom>
+                Are you sure you want to delete this payment method? This cannot be undone.
+              </Typography>
+            )}
           </Grid>
           <Grid size={{ xs: 12 }}>
             {this.renderPaymentMethod(selectedPaymentMethod)}
@@ -123,7 +180,18 @@ class PaymentMethodsContainer extends React.Component<Props, State> {
     );
   };
 
-  private openDeleteModal = () => this.setState({ openDeleteModal: true });
+  private refreshDeleteImpact = () => {
+    const { selectedPaymentMethodId } = this.state;
+    this.setState({ deleteImpactLoading: true });
+    getPaymentMethodCancellationImpact({ id: selectedPaymentMethodId }).then(result => {
+      this.setState({ deleteImpact: result.data || null, deleteImpactLoading: false });
+    });
+  };
+
+  private openDeleteModal = () => {
+    this.setState({ openDeleteModal: true, deleteImpact: null });
+    this.refreshDeleteImpact();
+  };
   private closeDeleteModal = () => this.setState({ openDeleteModal: false });
 
   private deletePaymentMethod = async () => {

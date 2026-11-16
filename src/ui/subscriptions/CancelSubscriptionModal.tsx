@@ -1,5 +1,6 @@
 import * as React from "react";
 import Typography from "@mui/material/Typography";
+import Alert from "@mui/material/Alert";
 
 import FormModal from "ui/common/FormModal";
 import { isCanceled } from "ui/subscriptions/utils";
@@ -11,6 +12,8 @@ import { ActionButton } from "../common/ButtonRow";
 import useModal from "../hooks/useModal";
 import { SubscriptionDetailsInner } from "./SubscriptionDetails";
 import { timeToDate } from "../utils/timeToDate";
+import { getSubscriptionCancellationImpact } from "api/reservations";
+import { SubscriptionCancellationImpact } from "app/entities/reservation";
 
 interface Props {
   subscription: Subscription;
@@ -22,17 +25,44 @@ const CancelSubscriptionModal: React.FC<Props> = ({ subscription, onSuccess }) =
   const { canCancelOtherSubscriptions } = useCapabilities();
   const { isOpen, openModal, closeModal } = useModal();
   const asAdmin = canCancelOtherSubscriptions && id !== subscription.memberId;
+  const isRental = subscription.resourceClass === "Rental";
+  const [impact, setImpact] = React.useState<SubscriptionCancellationImpact | null>(null);
+  const [impactLoading, setImpactLoading] = React.useState(false);
+  const [impactError, setImpactError] = React.useState("");
 
   const { isRequesting, error, call } = useWriteTransaction(asAdmin ? adminCancelSubscription : cancelSubscription, () => {
     closeModal();
     onSuccess();
   });
 
+  // Blocks submission only while the impact check is genuinely still in
+  // flight -- not when it's resolved with an error. `impact` alone can't
+  // tell those two apart (both leave it null), which meant a subscription
+  // whose impact check errored (e.g. a resource lookup mismatch) could
+  // never be cancelled at all: Submit would silently no-op forever with no
+  // feedback, even though the error is already shown to the user above.
   const onSubmit = React.useCallback(() => {
+    if (!isRental && impactLoading) return;
     call({ id: subscription.id });
-  }, [call, subscription.id]);
+  }, [call, subscription.id, isRental, impactLoading]);
 
-  const isRental = subscription.resourceClass === "Rental";
+  React.useEffect(() => {
+    if (!isOpen || isRental) {
+      setImpact(null);
+      setImpactLoading(false);
+      setImpactError("");
+      return;
+    }
+
+    setImpactLoading(true);
+    setImpactError("");
+    getSubscriptionCancellationImpact({ id: subscription.id, admin: asAdmin }).then(result => {
+      setImpact(result.data || null);
+      setImpactError(result.error?.message || "");
+      setImpactLoading(false);
+    });
+  }, [isOpen, isRental, subscription.id, asAdmin]);
+
   const disableButton = isCanceled(subscription);
   const whosSubscription = asAdmin ? (subscription.memberName ? `${subscription.memberName}'s` : "this") : "your";
 
@@ -65,7 +95,7 @@ const CancelSubscriptionModal: React.FC<Props> = ({ subscription, onSuccess }) =
       {isOpen && (
         <FormModal
           id="cancel-subscription"
-          loading={isRequesting}
+          loading={isRequesting || impactLoading}
           isOpen={isOpen}
           closeHandler={closeModal}
           title={isRental ? "Cancel Rental Subscription" : "Cancel Subscription"}
@@ -75,6 +105,31 @@ const CancelSubscriptionModal: React.FC<Props> = ({ subscription, onSuccess }) =
           error={error}
         >
           {warningText}
+          {impactError && (
+            <Alert severity="error" style={{ marginBottom: 16 }}>
+              Reservation impact could not be checked: {impactError}
+            </Alert>
+          )}
+          {impact && impact.reservationCount > 0 && (
+            <Alert severity="warning" style={{ marginBottom: 16 }}>
+              Cancelling this recurring membership will also cancel {impact.reservationCount} reservation
+              {impact.reservationCount === 1 ? "" : "s"} that extend beyond the current membership period:
+              <ul>
+                {impact.reservations.map(reservation => (
+                  <li key={reservation.id}>
+                    {reservation.calendarHtmlLink
+                      ? <a href={reservation.calendarHtmlLink} target="_blank" rel="noopener noreferrer">
+                          {reservation.title}
+                        </a>
+                      : reservation.title} — ends {new Date(reservation.endAt).toLocaleString(undefined, {
+                      hour12: false,
+                      timeZone: "America/New_York"
+                    })}
+                  </li>
+                ))}
+              </ul>
+            </Alert>
+          )}
           <SubscriptionDetailsInner subscription={subscription} />
         </FormModal>
       )}

@@ -18,13 +18,13 @@ import { useAuthState } from "ui/reducer/hooks";
 import useReadTransaction from "ui/hooks/useReadTransaction";
 import LoadingOverlay from "ui/common/LoadingOverlay";
 import ErrorMessage from "ui/common/ErrorMessage";
-import { timeToDate } from "ui/utils/timeToDate";
+import { timeToDateAndTime } from "ui/utils/timeToDate";
+import { getCheckInTimestamp } from "ui/member/checkInTimestamp";
 
 interface CheckInRecord {
   _id?: string;
-  timeOf?: number;
+  timeOf?: string | Date;
   time?: number;
-  dateOf?: Date;
   validity?: string;
   where?: string;
   [key: string]: any;
@@ -136,9 +136,8 @@ const MemberCheckInActivity: React.FC = () => {
           allRecords = allRecords.map((record) => {
             const filtered: CheckInRecord = {};
             if (record._id) filtered._id = record._id;
-            if (record.timeOf) filtered.timeOf = record.timeOf;
-            if (record.time) filtered.time = record.time;
-            if (record.dateOf) filtered.dateOf = record.dateOf;
+            if (record.timeOf !== undefined) filtered.timeOf = record.timeOf;
+            if (record.time !== undefined) filtered.time = record.time;
             if (record.validity) filtered.validity = record.validity;
             if (record.where) filtered.where = record.where;
             return filtered;
@@ -179,25 +178,10 @@ const MemberCheckInActivity: React.FC = () => {
     );
   }
 
-  // Checkin timestamps may be stored as either seconds or milliseconds since
-  // epoch, inconsistently, per record — mirrors CheckinTimeHelper on the
-  // backend. For any date between 1970 and ~2286, seconds values fall in
-  // 10^9..10^10 and ms values fall in 10^12..10^13 — a clean 1000x gap with
-  // no overlap, so this threshold reliably distinguishes them.
-  const SECONDS_MS_THRESHOLD = 10_000_000_000;
-  const normalizeToMs = (raw: number): number =>
-    raw > SECONDS_MS_THRESHOLD ? raw : raw * 1000;
-
   // Format timestamp
   const formatTimestamp = (record: CheckInRecord): string => {
-    if (record.dateOf) {
-      return timeToDate(new Date(record.dateOf).getTime());
-    }
-    const rawTime = record.timeOf || record.time;
-    if (rawTime) {
-      return timeToDate(normalizeToMs(rawTime));
-    }
-    return "-";
+    const timestamp = getCheckInTimestamp(record);
+    return timestamp === undefined ? "-" : timeToDateAndTime(timestamp);
   };
 
   // Filter out empty/zero/negative values
@@ -205,6 +189,13 @@ const MemberCheckInActivity: React.FC = () => {
     if (value === undefined || value === null || value === "") return false;
     if (typeof value === "number" && value <= 0) return false;
     return true;
+  };
+
+  // Fields already shown in their own column, plus raw identifiers not
+  // meaningful to a human reader (uid is a card identifier, not a name).
+  const HIDDEN_DETAIL_FIELDS = new Set(["_id", "timeOf", "time", "validity", "where", "uid"]);
+  const DETAIL_FIELD_LABELS: Record<string, string> = {
+    holder: "Card Holder",
   };
 
   return (
@@ -269,12 +260,7 @@ const MemberCheckInActivity: React.FC = () => {
               <TableBody>
                 {records.map((record, idx) => {
                   const visibleFields = Object.entries(record)
-                    .filter(([key, value]) => {
-                      if (key === "_id" || key === "timeOf" || key === "time" || key === "dateOf" || key === "validity" || key === "where") {
-                        return false;
-                      }
-                      return shouldDisplay(value);
-                    });
+                    .filter(([key, value]) => !HIDDEN_DETAIL_FIELDS.has(key) && shouldDisplay(value));
 
                   return (
                     <TableRow key={idx}>
@@ -285,7 +271,7 @@ const MemberCheckInActivity: React.FC = () => {
                             <div>
                               {visibleFields.map(([key, value]) => (
                                 <div key={key} style={{ fontSize: "0.85em", marginBottom: "4px" }}>
-                                  <strong>{key}:</strong> {String(value)}
+                                  <strong>{DETAIL_FIELD_LABELS[key] ?? key}:</strong> {String(value)}
                                 </div>
                               ))}
                               {record.validity && (

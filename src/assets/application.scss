@@ -1,6 +1,7 @@
 @import "../components/AppLoading/AppLoading.scss";
 @import "../pages/registration/MembershipOptions/MembershipOptions.scss";
 @import "../pages/registration/PaymentMethods/CreditCardForm.scss";
+@import "../pages/registration/SignUpWorkflow/SignUpFeedbackNotification.scss";
 
 @mixin flex {
   -webkit-flex-grow: 1;
@@ -10,15 +11,19 @@
 
 body {
   margin: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-h6 > svg {
+h6 > svg,
+h6 > img {
   height: 60px;
   width: 100%;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .error-message {
-  color: red;
+  color: var(--color-error);
   height: 8px;
   font-size: 0.8em;
   line-height: 1em;
@@ -59,7 +64,7 @@ h6 > svg {
 }
 
 #landing-page-graphic {
-  background: url("./FilledLaserableLogo.svg") no-repeat center;
+  background: url("/assets/FilledLaserableLogo.svg") no-repeat center;
   background-size: contain;
   height: 100%;
 }
@@ -93,7 +98,7 @@ h6 > svg {
   margin-bottom: 0.5em;
   &.label-float {
     text-overflow: ellipsis;
-    color: #2196F3;
+    color: var(--color-primary);
     transition: all .15s ease-out
   }
   &.filled {
@@ -102,7 +107,7 @@ h6 > svg {
   }
   &.invalid {
     @extend .label-float;
-    color: #F44336;
+    color: var(--color-error);
   }
 }
 
